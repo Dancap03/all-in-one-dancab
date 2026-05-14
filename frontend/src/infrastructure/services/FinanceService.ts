@@ -2,31 +2,62 @@ import { db } from '../firebase/config';
 import { doc, collection, onSnapshot, setDoc, addDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 
 export const FinanceService = {
-  // Escuchar cambios en el presupuesto y transacciones del mes
   subscribeToMonthData: (userId: string, monthId: string, callback: (data: any) => void) => {
     const monthRef = doc(db, `users/${userId}/finance_months/${monthId}`);
     const transRef = collection(db, `users/${userId}/finance_months/${monthId}/transactions`);
     const q = query(transRef, orderBy('date', 'desc'));
 
-    // Suscripción en tiempo real
-    return onSnapshot(monthRef, (monthSnap) => {
-      onSnapshot(q, (transSnap) => {
-        const transactions = transSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        callback({
-          budget: monthSnap.exists() ? monthSnap.data().budget : 0,
-          transactions
-        });
-      });
-    });
+    let currentBudget = 0;
+    let currentTransactions: any[] = [];
+    let monthLoaded = false;
+    let transLoaded = false;
+
+    // Función que comprueba si ambas peticiones ya han contestado
+    const checkAndCallback = () => {
+      if (monthLoaded && transLoaded) {
+        callback({ budget: currentBudget, transactions: currentTransactions });
+      }
+    };
+
+    // Escuchar el documento del mes (para el presupuesto)
+    const unsubMonth = onSnapshot(monthRef, 
+      (snap) => {
+        currentBudget = snap.exists() ? snap.data().budget : 0;
+        monthLoaded = true;
+        checkAndCallback();
+      }, 
+      (error) => {
+        console.error("Error al cargar el presupuesto:", error);
+        // Si hay error, forzamos a que deje de cargar devolviendo lo que tenga
+        monthLoaded = true; checkAndCallback();
+      }
+    );
+
+    // Escuchar la colección de transacciones (ingresos y gastos)
+    const unsubTrans = onSnapshot(q, 
+      (snap) => {
+        currentTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        transLoaded = true;
+        checkAndCallback();
+      }, 
+      (error) => {
+        console.error("Error al cargar transacciones:", error);
+        transLoaded = true; checkAndCallback();
+      }
+    );
+
+    // Al desmontar el componente, cancelamos ambas suscripciones a la vez
+    return () => {
+      unsubMonth();
+      unsubTrans();
+    };
   },
 
-  // Guardar nuevo presupuesto
   updateBudget: async (userId: string, monthId: string, amount: number) => {
     const monthRef = doc(db, `users/${userId}/finance_months/${monthId}`);
     await setDoc(monthRef, { budget: amount }, { merge: true });
   },
 
-  // Añadir ingreso o gasto
   addTransaction: async (userId: string, monthId: string, data: any) => {
     const transRef = collection(db, `users/${userId}/finance_months/${monthId}/transactions`);
     await addDoc(transRef, {

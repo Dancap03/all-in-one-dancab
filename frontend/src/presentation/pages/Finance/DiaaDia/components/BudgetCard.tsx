@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Edit2, Plus } from 'lucide-react';
 import { BudgetModal } from './modals/BudgetModal';
 import { TransactionModal } from './modals/TransactionModal';
+import { IncomeList } from './components/IncomeList';
 
 interface BudgetCardProps {
   budget: number;

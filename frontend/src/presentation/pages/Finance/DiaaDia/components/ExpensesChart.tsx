@@ -4,7 +4,7 @@ export const ExpensesChart = ({ transactions }: { transactions: any[] }) => {
   const expenses = transactions.filter(t => t.type === 'expense');
   const hasExpenses = expenses.length > 0;
 
-  return (
+  return ( 
     <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 min-h-[350px] flex flex-col">
       <h2 className="font-bold mb-4">Distribución de gastos</h2>
       {hasExpenses ? (

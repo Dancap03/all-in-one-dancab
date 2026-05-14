@@ -3,10 +3,11 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from './infrastructure/firebase/config';
 
-// Importación de Páginas
+// Importación de Páginas y Componentes
 import { Login } from './presentation/pages/Login/Login';
 import { Navbar } from './presentation/components/Navbar/Navbar';
-import { DiaDia } from './presentation/pages/Finance/DiaaDia/DiaaDia';
+import { Home } from './presentation/pages/Home/Home';
+import { DiaDia } from './presentation/pages/Finance/DiaDia/DiaDia';
 import { Patrimonio } from './presentation/pages/Finance/Patrimonio/Patrimonio';
 import { Ahorro } from './presentation/pages/Finance/Ahorro/Ahorro';
 import { Inversion } from './presentation/pages/Finance/Inversion/Inversion';
@@ -21,7 +22,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Escuchar el estado de autenticación de Firebase
+  // Escuchar el estado de sesión de Firebase
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -30,7 +31,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Pantalla de carga mientras Firebase verifica la sesión
+  // Spinner de carga inicial
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0c0c0c] flex items-center justify-center">
@@ -42,34 +43,33 @@ export default function App() {
   return (
     <HashRouter>
       <Routes>
-        {/* Ruta Pública: Login */}
+        {/* Ruta Pública */}
         <Route 
           path="/login" 
-          element={user ? <Navigate to="/finance/diadia" replace /> : <Login />} 
+          element={user ? <Navigate to="/" replace /> : <Login />} 
         />
 
-        {/* Rutas Privadas: Requieren usuario logueado */}
+        {/* Ecosistema Privado */}
         <Route
           path="/*"
           element={
             <ProtectedRoute user={user}>
               <div className="min-h-screen bg-[#0c0c0c]">
-                {/* El Navbar es persistente en todas las rutas privadas */}
+                {/* Navbar persistente y centrado */}
                 <Navbar />
                 
-                {/* Contenedor principal de contenido */}
                 <main className="max-w-7xl mx-auto p-4 md:p-6">
                   <Routes>
-                    {/* Redirección por defecto al entrar */}
-                    <Route path="/" element={<Navigate to="/finance/diadia" replace />} />
+                    {/* HOME: Ahora es la página inicial al pulsar el logo o entrar */}
+                    <Route path="/" element={<Home />} />
                     
-                    {/* Secciones de Finanzas */}
-                    <Route path="/finance/patrimonio" element={<Patrimonio />} />
+                    {/* FINANZAS: Cada sección en su ruta específica */}
                     <Route path="/finance/diadia" element={<DiaDia />} />
+                    <Route path="/finance/patrimonio" element={<Patrimonio />} />
                     <Route path="/finance/ahorro" element={<Ahorro />} />
                     <Route path="/finance/inversion" element={<Inversion />} />
 
-                    {/* Placeholder para otras secciones (Calendario, Salud) */}
+                    {/* SECCIONES ADICIONALES (Placeholders) */}
                     <Route path="/calendar" element={
                       <div className="text-white p-10 text-center opacity-50 italic">
                         Sección de Calendario en desarrollo...
@@ -80,6 +80,9 @@ export default function App() {
                         Sección de Salud en desarrollo...
                       </div>
                     } />
+
+                    {/* Redirección por defecto para rutas no encontradas */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </main>
               </div>

@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 
 interface ConfirmDeleteModalProps {
-  isOpen: boolean;
+  isOpen: boolean; 
   onClose: () => void;
   onConfirm: () => void;
   isDeleting: boolean;

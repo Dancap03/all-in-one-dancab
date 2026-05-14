@@ -4,7 +4,7 @@ interface VaultsListProps {
   vaults: any[];
   vaultBalances: Record<string, number>;
 }
-  
+   
 export const VaultsList = ({ vaults, vaultBalances }: VaultsListProps) => {
   if (vaults.length === 0) return null;
 

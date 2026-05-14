@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, ArrowRightLeft, Plus } from 'lucide-react';
 import { SavingsService, SavingsTransaction } from '../../../../infrastructure/services/SavingsService';
 import { auth } from '../../../../infrastructure/firebase/config';
 
-import { SavingsChart } from './components/SavingsChart';
+import { SavingsChart } from './components/SavingsChart'; 
 import { VaultsList } from './components/VaultsList';
 import { SavingsHistory } from './components/SavingsHistory';
 import { VaultModal } from './components/modals/VaultModal';

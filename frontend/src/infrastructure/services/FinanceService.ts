@@ -1,5 +1,5 @@
 import { db } from '../firebase/config';
-import { doc, collection, onSnapshot, setDoc, addDoc, query, orderBy, Timestamp } from 'firebase/firestore';
+import { doc, collection, onSnapshot, setDoc, addDoc, query, orderBy, Timestamp, deleteDoc, updateDoc } from 'firebase/firestore';
 
 export const FinanceService = {
   subscribeToMonthData: (userId: string, monthId: string, callback: (data: any) => void) => {
@@ -65,4 +65,16 @@ export const FinanceService = {
       date: Timestamp.now()
     });
   }
+  // ... (después de addTransaction)
+
+  updateTransaction: async (userId: string, monthId: string, transactionId: string, data: any) => {
+    const transRef = doc(db, `users/${userId}/finance_months/${monthId}/transactions/${transactionId}`);
+    await updateDoc(transRef, data);
+  },
+
+  deleteTransaction: async (userId: string, monthId: string, transactionId: string) => {
+    const transRef = doc(db, `users/${userId}/finance_months/${monthId}/transactions/${transactionId}`);
+    await deleteDoc(transRef);
+  }
+};
 };

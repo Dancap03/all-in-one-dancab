@@ -1,5 +1,5 @@
 import { db } from '../firebase/config';
-import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 
 export interface SavingsTransaction {
   id?: string;
@@ -69,6 +69,7 @@ export const SavingsService = {
     const vaultRef = doc(db, `users/${userId}/vaults/${vaultId}`);
     await deleteDoc(vaultRef);
   },
+
   updateSavingsTransaction: async (userId: string, transactionId: string, data: any) => {
     const transRef = doc(db, `users/${userId}/savings_transactions/${transactionId}`);
     await updateDoc(transRef, data);

@@ -4,7 +4,7 @@ import { SavingsService } from '../../../../../../infrastructure/services/Saving
 import { auth } from '../../../../../../infrastructure/firebase/config';
 
 interface SavingsTransactionModalProps {
-  isOpen: boolean;
+  isOpen: boolean; 
   onClose: () => void;
   type: 'to_vault' | 'from_vault' | 'withdrawal';
   vaults: any[];

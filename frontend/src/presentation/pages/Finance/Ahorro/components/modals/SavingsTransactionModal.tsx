@@ -1,23 +1,22 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { SavingsService } from '../../../../../../infrastructure/services/SavingsService';
+import { FinanceService } from '../../../../../../infrastructure/services/FinanceService';
 import { auth } from '../../../../../../infrastructure/firebase/config';
 
 interface SavingsTransactionModalProps {
-  isOpen: boolean; 
+  isOpen: boolean;
   onClose: () => void;
   type: 'to_vault' | 'from_vault' | 'withdrawal';
   vaults: any[];
   transaction?: any;
+  available: number;
+  vaultBalances: Record<string, number>;
 }
 
-const TITLES = {
-  to_vault: 'Mover a hucha',
-  from_vault: 'Mover de hucha',
-  withdrawal: 'Pasar a día a día'
-};
+const TITLES = { to_vault: 'Mover a hucha', from_vault: 'Mover de hucha', withdrawal: 'Pasar a día a día' };
 
-export const SavingsTransactionModal = ({ isOpen, onClose, type, vaults, transaction }: SavingsTransactionModalProps) => {
+export const SavingsTransactionModal = ({ isOpen, onClose, type, vaults, transaction, available, vaultBalances }: SavingsTransactionModalProps) => {
   const [vaultId, setVaultId] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
@@ -37,30 +36,44 @@ export const SavingsTransactionModal = ({ isOpen, onClose, type, vaults, transac
   const handleSave = async () => {
     const user = auth.currentUser;
     if (!user || !amount || (type !== 'withdrawal' && !vaultId)) return;
-    setIsSaving(true);
     
-    // Convertir el string de fecha (YYYY-MM-DD) a un objeto Date para Firestore
+    const numAmount = Number(amount);
+
+    // VALIDACIONES ANTIFRAUDE (Solo al crear nuevos, no al editar)
+    if (!transaction) {
+      if (type === 'to_vault' && numAmount > available) { alert("Saldo disponible insuficiente."); return; }
+      if (type === 'withdrawal' && numAmount > available) { alert("Saldo disponible insuficiente."); return; }
+      if (type === 'from_vault' && numAmount > (vaultBalances[vaultId] || 0)) { alert("La hucha no tiene suficiente dinero."); return; }
+    }
+
+    setIsSaving(true);
     const [year, month, day] = date.split('-').map(Number);
     const dateObj = new Date(year, month - 1, day, 12, 0, 0);
 
-    const data: any = { type, amount: Number(amount), date: dateObj };
-    
-    if (type !== 'withdrawal') {
-      data.vaultId = vaultId;
-      data.label = 'Transferencia de hucha'; // Se mostrará esto en el historial si no encontramos la hucha
-    } else {
-      data.label = 'Retiro a día a día';
-    }
+    const data: any = { type, amount: numAmount, date: dateObj };
+    if (type !== 'withdrawal') { data.vaultId = vaultId; data.label = 'Transferencia de hucha'; } 
+    else { data.label = 'Retiro a día a día'; }
 
     try {
-      if (transaction?.id) await SavingsService.updateSavingsTransaction(user.uid, transaction.id, data);
-      else await SavingsService.addSavingsTransaction(user.uid, data);
+      if (transaction?.id) {
+        await SavingsService.updateSavingsTransaction(user.uid, transaction.id, data);
+      } else {
+        await SavingsService.addSavingsTransaction(user.uid, data);
+        
+        // EL PUENTE DE VUELTA: Añade el dinero al Día a Día como "savings_return"
+        if (type === 'withdrawal') {
+          const currentMonthId = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+          await FinanceService.addTransaction(user.uid, currentMonthId, {
+            type: 'savings_return', // TIPO NUEVO (Los gráficos lo ignorarán)
+            amount: numAmount,
+            category: 'Desde Ahorro',
+            label: 'Recuperado de ahorro',
+            dateString: date
+          });
+        }
+      }
       onClose();
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (error) { console.error(error); } finally { setIsSaving(false); }
   };
 
   return (
@@ -88,7 +101,6 @@ export const SavingsTransactionModal = ({ isOpen, onClose, type, vaults, transac
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] focus:border-[#10b981] rounded-lg px-4 py-2.5 text-white outline-none color-scheme-dark" style={{ colorScheme: 'dark' }} />
           </div>
         </div>
-
         <div className="flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#1a1a1a] border border-[#2d2d2d] hover:bg-[#252525]">Cancelar</button>
           <button onClick={handleSave} disabled={isSaving || !amount || (type !== 'withdrawal' && !vaultId)} className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#10b981] hover:bg-[#059669] disabled:opacity-50">Confirmar</button>

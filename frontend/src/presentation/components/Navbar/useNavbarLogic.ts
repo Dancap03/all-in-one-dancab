@@ -6,7 +6,7 @@ export const useNavbarLogic = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   const toggleFinance = () => setIsFinanceOpen(!isFinanceOpen);
-  const toggleUserMenu = () => setIsUserMenuOpen(!isUserMenuOpen);
+  const toggleUserMenu = () => setIsUserMenuOpen(!isUserMenuOpen); 
 
   const handleLogout = async () => {
     try {

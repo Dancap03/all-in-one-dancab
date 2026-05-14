@@ -1,73 +1,97 @@
 import { db } from '../firebase/config';
-// AQUÍ ESTÁ EL ARREGLO: He añadido 'doc' y 'deleteDoc' en esta línea
-import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, deleteDoc } from 'firebase/firestore';
+import { doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 
-export interface SavingsTransaction {
-  id?: string;
-  type: 'deposit' | 'withdrawal' | 'to_vault' | 'from_vault';
-  amount: number;
-  label: string;
-  date: Timestamp;
-  vaultId?: string;
-}
-
-export const SavingsService = {
-  subscribeToSavings: (userId: string, callback: (data: { available: number, inVaults: number, transactions: SavingsTransaction[] }) => void) => {
-    const transRef = collection(db, `users/${userId}/savings_transactions`);
+export const FinanceService = {
+  subscribeToMonthData: (userId: string, monthId: string, callback: (data: any) => void) => {
+    const monthRef = doc(db, `users/${userId}/finance_months/${monthId}`);
+    const transRef = collection(db, `users/${userId}/finance_months/${monthId}/transactions`);
     const q = query(transRef, orderBy('date', 'desc'));
 
-    return onSnapshot(q, (snap) => {
-      const transactions = snap.docs.map(d => ({ id: d.id, ...d.data() } as SavingsTransaction));
-      
-      let available = 0;
-      let inVaults = 0;
+    let currentBudget = 0;
+    let currentTransactions: any[] = [];
+    let monthLoaded = false;
+    let transLoaded = false;
 
-      transactions.forEach(t => {
-        if (t.type === 'deposit') available += t.amount;
-        if (t.type === 'withdrawal') available -= t.amount;
-        
-        if (t.type === 'to_vault') {
-          available -= t.amount;
-          inVaults += t.amount;
-        }
-        if (t.type === 'from_vault') {
-          available += t.amount;
-          inVaults -= t.amount;
-        }
-      });
+    const checkAndCallback = () => {
+      if (monthLoaded && transLoaded) {
+        callback({ budget: currentBudget, transactions: currentTransactions });
+      }
+    };
 
-      callback({ available, inVaults, transactions });
-    }, (error) => {
-      console.error("Error al cargar ahorros:", error);
-    });
+    const unsubMonth = onSnapshot(monthRef, 
+      (snap) => {
+        currentBudget = snap.exists() ? snap.data().budget : 0;
+        monthLoaded = true;
+        checkAndCallback();
+      }, 
+      (error) => {
+        console.error("Error al cargar el presupuesto:", error);
+        monthLoaded = true; checkAndCallback();
+      }
+    );
+
+    const unsubTrans = onSnapshot(q, 
+      (snap) => {
+        currentTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        transLoaded = true;
+        checkAndCallback();
+      }, 
+      (error) => {
+        console.error("Error al cargar transacciones:", error);
+        transLoaded = true; checkAndCallback();
+      }
+    );
+
+    return () => {
+      unsubMonth();
+      unsubTrans();
+    };
   },
 
-  addSavingsTransaction: async (userId: string, data: Omit<SavingsTransaction, 'id' | 'date'>) => {
-    const transRef = collection(db, `users/${userId}/savings_transactions`);
-    await addDoc(transRef, {
+  updateBudget: async (userId: string, monthId: string, amount: number) => {
+    const monthRef = doc(db, `users/${userId}/finance_months/${monthId}`);
+    await setDoc(monthRef, { budget: amount }, { merge: true });
+  },
+
+  addTransaction: async (userId: string, monthId: string, data: any) => {
+    const transRef = collection(db, `users/${userId}/finance_months/${monthId}/transactions`);
+    const newDoc = await addDoc(transRef, {
       ...data,
       date: Timestamp.now()
     });
+
+    if (data.type === 'transfer' && data.category === 'Ahorro') {
+      const savingsRef = doc(db, `users/${userId}/savings_transactions/${newDoc.id}`);
+      await setDoc(savingsRef, {
+        type: 'deposit',
+        amount: data.amount,
+        label: data.label || 'Desde Día a Día',
+        date: Timestamp.now()
+      });
+    }
   },
 
-  subscribeToVaults: (userId: string, callback: (vaults: any[]) => void) => {
-    const vaultsRef = collection(db, `users/${userId}/vaults`);
-    const q = query(vaultsRef, orderBy('createdAt', 'asc'));
-    return onSnapshot(q, (snap) => {
-      callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+  updateTransaction: async (userId: string, monthId: string, transactionId: string, data: any) => {
+    const transRef = doc(db, `users/${userId}/finance_months/${monthId}/transactions/${transactionId}`);
+    await updateDoc(transRef, data);
+
+    const savingsRef = doc(db, `users/${userId}/savings_transactions/${transactionId}`);
+    if (data.type === 'transfer' && data.category === 'Ahorro') {
+      await setDoc(savingsRef, {
+        type: 'deposit',
+        amount: data.amount,
+        label: data.label || 'Desde Día a Día'
+      }, { merge: true });
+    } else {
+      try { await deleteDoc(savingsRef); } catch (e) {}
+    }
   },
 
-  addVault: async (userId: string, data: any) => {
-    const vaultsRef = collection(db, `users/${userId}/vaults`);
-    await addDoc(vaultsRef, {
-      ...data,
-      createdAt: Timestamp.now()
-    });
-  },
+  deleteTransaction: async (userId: string, monthId: string, transactionId: string) => {
+    const transRef = doc(db, `users/${userId}/finance_months/${monthId}/transactions/${transactionId}`);
+    await deleteDoc(transRef);
 
-  deleteVault: async (userId: string, vaultId: string) => {
-    const vaultRef = doc(db, `users/${userId}/vaults/${vaultId}`);
-    await deleteDoc(vaultRef);
+    const savingsRef = doc(db, `users/${userId}/savings_transactions/${transactionId}`);
+    try { await deleteDoc(savingsRef); } catch (e) {}
   }
 };

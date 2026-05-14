@@ -1,190 +1,131 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip 
-} from 'recharts';
-import { Plus, ChevronLeft, ChevronRight, Edit2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { FinanceService } from '../../../../infrastructure/services/FinanceService';
 import { auth } from '../../../../infrastructure/firebase/config';
 
-export const DiaADia = () => {
-  // Estados para datos y UI
-  const [data, setData] = useState({ budget: 0, transactions: [] as any[] });
+// Sub-componentes importados según tu estructura en image_956520.png
+import { SummaryCards } from './components/SummaryCards';
+import { ExpensesChart } from './components/ExpensesChart';
+import { ComparisonChart } from './components/ComparisonChart';
+import { BudgetCard } from './components/BudgetCard';
+
+export const DiaaDia = () => {
+  // Estado para gestionar la fecha actual (referencia Mayo 2026)
+  const [date, setDate] = useState(new Date(2026, 4)); // Mayo es el índice 4
   const [loading, setLoading] = useState(true);
-  const currentMonth = "2026-05"; // Esto podría ser dinámico con un selector
+
+  // El "ArrayList" (Caché) para guardar datos de meses ya consultados
+  const [history, setHistory] = useState<Record<string, any>>({});
+
+  // Identificadores para la base de datos (ej: "2026-05") y visualización
+  const monthId = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const monthLabel = date.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
 
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
 
-    // Suscripción en tiempo real a Firestore
+    // Si el mes ya está en nuestro historial (caché), no hacemos fetch a Firebase
+    if (history[monthId]) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    // Suscripción en tiempo real a los datos del mes
     const unsubscribe = FinanceService.subscribeToMonthData(
-      user.uid, 
-      currentMonth, 
+      user.uid,
+      monthId,
       (newData) => {
-        setData(newData);
+        // Guardamos los datos en nuestro historial antes de mostrar
+        setHistory(prev => ({ ...prev, [monthId]: newData }));
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [currentMonth]);
+  }, [monthId]);
 
-  // --- LÓGICA DE CÁLCULO ---
-  const incomes = data.transactions.filter(t => t.type === 'income');
-  const expenses = data.transactions.filter(t => t.type === 'expense');
+  // Lógica de navegación (ArrayList de meses)
+  const handlePrevMonth = () => {
+    setDate(new Date(date.getFullYear(), date.getMonth() - 1));
+  };
 
-  const totalIncomes = incomes.reduce((acc, curr) => acc + curr.amount, 0);
-  const totalExpenses = expenses.reduce((acc, curr) => acc + curr.amount, 0);
-  
-  // Balance = Ingresos - Gastos
-  const balance = totalIncomes - totalExpenses;
-  
-  // Presupuesto
-  const presupuestoRestante = data.budget - totalExpenses;
-  const porcentajeGasto = data.budget > 0 ? (totalExpenses / data.budget) * 100 : 0;
+  const handleNextMonth = () => {
+    setDate(new Date(date.getFullYear(), date.getMonth() + 1));
+  };
 
-  // Datos para gráficas
-  const hasIncomesOrExpenses = data.transactions.length > 0;
-  
-  const dataDonut = [
-    { name: 'Ingresos', value: totalIncomes },
-    { name: 'Gastos', value: totalExpenses }
-  ];
+  // Datos del mes actual obtenidos del historial
+  const monthData = history[monthId] || { budget: 0, transactions: [] };
 
-  if (loading) return <div className="p-10 text-center text-white">Cargando datos...</div>;
+  if (loading && !history[monthId]) {
+    return (
+      <div className="flex items-center justify-center h-64 text-blue-500">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-current"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0c0c0c] text-white p-4 md:p-6">
-      {/* Selector de Mes */}
+      
+      {/* Cabecera con Navegación de Meses */}
       <div className="flex items-center gap-4 mb-8">
-        <ChevronLeft className="text-gray-500 cursor-pointer hover:text-white" />
-        <h1 className="text-xl font-bold">Mayo 2026</h1>
-        <ChevronRight className="text-gray-500 cursor-pointer hover:text-white" />
+        <button 
+          onClick={handlePrevMonth} 
+          className="text-gray-500 hover:text-white transition-colors p-1"
+        >
+          <ChevronLeft size={24} />
+        </button>
+        <h1 className="text-xl font-bold capitalize">{monthLabel}</h1>
+        <button 
+          onClick={handleNextMonth} 
+          className="text-gray-500 hover:text-white transition-colors p-1"
+        >
+          <ChevronRight size={24} />
+        </button>
       </div>
 
-      {/* 1. RESUMEN SUPERIOR */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-5 shadow-sm">
-          <p className="text-gray-400 text-sm mb-1 font-medium">Balance</p>
-          <p className="text-2xl font-bold text-blue-500">{balance.toFixed(2)}€</p>
-        </div>
-        <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-5 shadow-sm">
-          <p className="text-gray-400 text-sm mb-1 font-medium">Ingresos</p>
-          <p className="text-2xl font-bold text-green-500">+{totalIncomes.toFixed(2)}€</p>
-        </div>
-        <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-5 shadow-sm">
-          <p className="text-gray-400 text-sm mb-1 font-medium">Gastos</p>
-          <p className="text-2xl font-bold text-red-500">-{totalExpenses.toFixed(2)}€</p>
-        </div>
-      </div>
+      {/* 1. Tarjetas de Resumen (Balance, Ingresos, Gastos) */}
+      <SummaryCards transactions={monthData.transactions} />
 
-      {/* 2. FILA DE GRÁFICAS (Solo si hay datos) */}
+      {/* 2. Fila de Gráficas: Distribución y Comparativa */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 min-h-[350px] flex flex-col">
-          <h2 className="font-bold text-gray-200 mb-4">Distribución de gastos</h2>
-          {hasIncomesOrExpenses ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie 
-                  data={expenses.length > 0 ? expenses : [{name: 'Sin gastos', amount: 1}]} 
-                  innerRadius={0} 
-                  outerRadius={80} 
-                  fill="#f59e0b" 
-                  dataKey="amount"
-                />
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-600 italic text-sm">
-              No hay gastos registrados
-            </div>
-          )}
-        </div>
-
-        <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 min-h-[350px] flex flex-col">
-          <h2 className="font-bold text-gray-200 mb-4">Ingresos vs Gastos</h2>
-          {hasIncomesOrExpenses ? (
-            <div className="flex-1 relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={dataDonut} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                    <Cell fill="#3b82f6" />
-                    <Cell fill="#ef4444" />
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <p className={`text-xl font-bold ${balance >= 0 ? 'text-white' : 'text-red-500'}`}>
-                  {balance >= 0 ? `+${balance.toFixed(0)}€` : `${balance.toFixed(0)}€`}
-                </p>
-                <p className="text-[10px] text-gray-500 uppercase tracking-widest">balance</p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-600 italic text-sm">
-              Esperando transacciones...
-            </div>
-          )}
-        </div>
+        <ExpensesChart transactions={monthData.transactions} />
+        <ComparisonChart transactions={monthData.transactions} />
       </div>
 
-      {/* 3. PRESUPUESTO Y TRANSACCIONES */}
+      {/* 3. Control de Presupuesto y Listado de Ingresos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <BudgetCard 
+          budget={monthData.budget} 
+          transactions={monthData.transactions} 
+          monthId={monthId}
+        />
         
-        {/* Presupuesto Mensual */}
-        <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 h-fit">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="font-bold text-gray-200">Presupuesto mensual</h2>
-            <button className="text-gray-400 hover:text-white bg-[#2d2d2d] p-1.5 rounded-md transition-colors">
-              <Edit2 size={14} />
-            </button>
-          </div>
-          
-          <div className="flex justify-between text-sm mb-3">
-            <p className="text-gray-400">Presupuesto: <span className="text-white font-bold">{data.budget}€</span></p>
-            <p className={`${presupuestoRestante >= 0 ? 'text-green-500' : 'text-red-500'} font-medium`}>
-              Restante: {presupuestoRestante.toFixed(2)}€
-            </p>
-          </div>
-
-          {/* BARRA DE PROGRESO BICOLOR */}
-          <div className="relative h-16 w-full bg-[#0c0c0c] rounded-lg overflow-hidden border border-[#2d2d2d]">
-            {/* Fondo Verde (Presupuesto) */}
-            <div className="absolute inset-0 bg-[#10b981] opacity-30"></div>
-            {/* Barra Roja (Gastos Reales) */}
-            <div 
-              className="absolute left-0 top-0 h-full bg-red-500 transition-all duration-700 ease-out shadow-[0_0_15px_rgba(239,68,68,0.3)]" 
-              style={{ width: `${Math.min(porcentajeGasto, 100)}%` }}
-            ></div>
-          </div>
-
-          <button className="w-full mt-6 flex items-center justify-center gap-2 border border-dashed border-[#3d3d3d] py-3 rounded-xl text-sm text-gray-400 hover:bg-[#252525] hover:border-gray-500 transition-all">
-            <Plus size={16} /> Añadir gasto
-          </button>
-        </div>
-
-        {/* Ingresos Recientes */}
-        <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 flex flex-col">
-          <h2 className="font-bold text-gray-200 mb-4">Ingresos</h2>
-          <div className="flex-1 space-y-4">
-            {incomes.length > 0 ? incomes.map((inc, i) => (
-              <div key={i} className="flex justify-between items-center py-2 border-b border-[#262626] last:border-0">
-                <div>
-                  <p className="text-sm font-semibold">{inc.label || 'Ingreso'}</p>
-                  <p className="text-[11px] text-gray-500 uppercase tracking-tighter">9 may</p>
-                </div>
-                <p className="text-green-500 font-bold">+{inc.amount.toFixed(2)}€</p>
-              </div>
-            )) : (
-              <p className="text-center text-gray-600 text-sm py-4 italic">No hay ingresos registrados</p>
+        {/* Sección de Ingresos (Se puede modularizar luego si crece mucho) */}
+        <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 shadow-sm">
+          <h2 className="font-bold text-gray-200 mb-6">Ingresos Recientes</h2>
+          <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+            {monthData.transactions.filter((t: any) => t.type === 'income').length > 0 ? (
+              monthData.transactions
+                .filter((t: any) => t.type === 'income')
+                .map((inc: any, i: number) => (
+                  <div key={i} className="flex justify-between items-center py-3 border-b border-[#262626] last:border-0">
+                    <div>
+                      <p className="text-sm font-semibold">{inc.label}</p>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-tighter">Recibido</p>
+                    </div>
+                    <p className="text-green-500 font-bold">+{inc.amount.toFixed(2)}€</p>
+                  </div>
+                ))
+            ) : (
+              <p className="text-gray-600 italic text-sm text-center py-8">
+                No hay ingresos registrados en {monthLabel.split(' ')[0]}.
+              </p>
             )}
           </div>
-          <button className="w-full mt-4 flex items-center justify-center gap-2 border border-dashed border-[#3d3d3d] py-3 rounded-xl text-sm text-gray-400 hover:bg-[#252525] hover:border-gray-500 transition-all">
-            <Plus size={16} /> Añadir ingreso
-          </button>
         </div>
-
       </div>
     </div>
   );

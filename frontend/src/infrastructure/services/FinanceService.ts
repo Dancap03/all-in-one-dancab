@@ -9,7 +9,7 @@ export const FinanceService = {
 
     let currentBudget = 0;
     let currentTransactions: any[] = [];
-    let monthLoaded = false;
+    let monthLoaded = false; 
     let transLoaded = false;
 
     const checkAndCallback = () => {

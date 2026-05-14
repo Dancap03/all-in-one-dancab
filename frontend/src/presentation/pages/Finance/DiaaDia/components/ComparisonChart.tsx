@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 export const ComparisonChart = ({ transactions }: { transactions: any[] }) => {
   const inc = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const exp = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-  const data = [{ value: inc }, { value: exp }];
+  const data = [{ value: inc }, { value: exp }]; 
 
   return (
     <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 min-h-[350px]">

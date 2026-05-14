@@ -2,7 +2,7 @@ interface SavingsHistoryProps {
   transactions: any[];
   vaults: any[];
 }
- 
+  
 export const SavingsHistory = ({ transactions, vaults }: SavingsHistoryProps) => {
   if (transactions.length === 0) return null;
 

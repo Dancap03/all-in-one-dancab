@@ -3,8 +3,8 @@ import { Edit2, Plus, Pencil, Trash2 } from 'lucide-react';
 import { BudgetModal } from './modals/BudgetModal';
 import { TransactionModal } from './modals/TransactionModal';
 import { ConfirmDeleteModal } from './modals/ConfirmDeleteModal';
-import { FinanceService } from '../../../../../../infrastructure/services/FinanceService';
-import { auth } from '../../../../../../infrastructure/firebase/config';
+import { FinanceService } from '../../../../../infrastructure/services/FinanceService';
+import { auth } from '../../../../../infrastructure/firebase/config';
 
 interface BudgetCardProps { 
   budget: number;

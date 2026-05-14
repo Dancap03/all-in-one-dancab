@@ -4,7 +4,7 @@ interface ConfirmDeleteModalProps {
   isOpen: boolean; 
   onClose: () => void; 
   onConfirm: () => void;
-  isDeleting: boolean;
+  isDeleting: boolean; 
 }
 
 export const ConfirmDeleteModal = ({ isOpen, onClose, onConfirm, isDeleting }: ConfirmDeleteModalProps) => {

@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react';
 export const IncomeList = ({ transactions }: { transactions: any[] }) => {
   const incomes = transactions.filter(t => t.type === 'income');
 
-  return (
+  return ( 
     <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 flex flex-col">
       <h2 className="font-bold mb-4">Ingresos</h2>
       <div className="flex-1 space-y-4">

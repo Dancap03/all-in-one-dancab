@@ -1,5 +1,5 @@
 import { db } from '../firebase/config';
-import { doc, collection, onSnapshot, setDoc, addDoc, query, orderBy, Timestamp, deleteDoc, updateDoc } from 'firebase/firestore';
+import { doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 
 export const FinanceService = {
   subscribeToMonthData: (userId: string, monthId: string, callback: (data: any) => void) => {
@@ -12,14 +12,12 @@ export const FinanceService = {
     let monthLoaded = false;
     let transLoaded = false;
 
-    // Función que comprueba si ambas peticiones ya han contestado
     const checkAndCallback = () => {
       if (monthLoaded && transLoaded) {
         callback({ budget: currentBudget, transactions: currentTransactions });
       }
     };
 
-    // Escuchar el documento del mes (para el presupuesto)
     const unsubMonth = onSnapshot(monthRef, 
       (snap) => {
         currentBudget = snap.exists() ? snap.data().budget : 0;
@@ -28,12 +26,10 @@ export const FinanceService = {
       }, 
       (error) => {
         console.error("Error al cargar el presupuesto:", error);
-        // Si hay error, forzamos a que deje de cargar devolviendo lo que tenga
         monthLoaded = true; checkAndCallback();
       }
     );
 
-    // Escuchar la colección de transacciones (ingresos y gastos)
     const unsubTrans = onSnapshot(q, 
       (snap) => {
         currentTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -46,7 +42,6 @@ export const FinanceService = {
       }
     );
 
-    // Al desmontar el componente, cancelamos ambas suscripciones a la vez
     return () => {
       unsubMonth();
       unsubTrans();
@@ -65,7 +60,6 @@ export const FinanceService = {
       date: Timestamp.now()
     });
   },
-  // ... (después de addTransaction)
 
   updateTransaction: async (userId: string, monthId: string, transactionId: string, data: any) => {
     const transRef = doc(db, `users/${userId}/finance_months/${monthId}/transactions/${transactionId}`);
@@ -76,5 +70,4 @@ export const FinanceService = {
     const transRef = doc(db, `users/${userId}/finance_months/${monthId}/transactions/${transactionId}`);
     await deleteDoc(transRef);
   }
-};
 };

@@ -1,101 +1,73 @@
 import { db } from '../firebase/config';
-import { doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
+// AQUÍ ESTÁ EL ARREGLO: He añadido 'doc' y 'deleteDoc' en esta línea
+import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, deleteDoc } from 'firebase/firestore';
 
-export const FinanceService = {
-  subscribeToMonthData: (userId: string, monthId: string, callback: (data: any) => void) => {
-    const monthRef = doc(db, `users/${userId}/finance_months/${monthId}`);
-    const transRef = collection(db, `users/${userId}/finance_months/${monthId}/transactions`);
+export interface SavingsTransaction {
+  id?: string;
+  type: 'deposit' | 'withdrawal' | 'to_vault' | 'from_vault';
+  amount: number;
+  label: string;
+  date: Timestamp;
+  vaultId?: string;
+}
+
+export const SavingsService = {
+  subscribeToSavings: (userId: string, callback: (data: { available: number, inVaults: number, transactions: SavingsTransaction[] }) => void) => {
+    const transRef = collection(db, `users/${userId}/savings_transactions`);
     const q = query(transRef, orderBy('date', 'desc'));
 
-    let currentBudget = 0;
-    let currentTransactions: any[] = [];
-    let monthLoaded = false;
-    let transLoaded = false;
+    return onSnapshot(q, (snap) => {
+      const transactions = snap.docs.map(d => ({ id: d.id, ...d.data() } as SavingsTransaction));
+      
+      let available = 0;
+      let inVaults = 0;
 
-    const checkAndCallback = () => {
-      if (monthLoaded && transLoaded) {
-        callback({ budget: currentBudget, transactions: currentTransactions });
-      }
-    };
+      transactions.forEach(t => {
+        if (t.type === 'deposit') available += t.amount;
+        if (t.type === 'withdrawal') available -= t.amount;
+        
+        if (t.type === 'to_vault') {
+          available -= t.amount;
+          inVaults += t.amount;
+        }
+        if (t.type === 'from_vault') {
+          available += t.amount;
+          inVaults -= t.amount;
+        }
+      });
 
-    const unsubMonth = onSnapshot(monthRef, 
-      (snap) => {
-        currentBudget = snap.exists() ? snap.data().budget : 0;
-        monthLoaded = true;
-        checkAndCallback();
-      }, 
-      (error) => {
-        console.error("Error al cargar el presupuesto:", error);
-        monthLoaded = true; checkAndCallback();
-      }
-    );
-
-    const unsubTrans = onSnapshot(q, 
-      (snap) => {
-        currentTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        transLoaded = true;
-        checkAndCallback();
-      }, 
-      (error) => {
-        console.error("Error al cargar transacciones:", error);
-        transLoaded = true; checkAndCallback();
-      }
-    );
-
-    return () => {
-      unsubMonth();
-      unsubTrans();
-    };
+      callback({ available, inVaults, transactions });
+    }, (error) => {
+      console.error("Error al cargar ahorros:", error);
+    });
   },
 
-  updateBudget: async (userId: string, monthId: string, amount: number) => {
-    const monthRef = doc(db, `users/${userId}/finance_months/${monthId}`);
-    await setDoc(monthRef, { budget: amount }, { merge: true });
-  },
-
-  addTransaction: async (userId: string, monthId: string, data: any) => {
-    const transRef = collection(db, `users/${userId}/finance_months/${monthId}/transactions`);
-    const newDoc = await addDoc(transRef, {
+  addSavingsTransaction: async (userId: string, data: Omit<SavingsTransaction, 'id' | 'date'>) => {
+    const transRef = collection(db, `users/${userId}/savings_transactions`);
+    await addDoc(transRef, {
       ...data,
       date: Timestamp.now()
     });
-
-    // PUENTE CON AHORRO: Si es Ahorro, lo replicamos en el libro mayor global
-    if (data.type === 'transfer' && data.category === 'Ahorro') {
-      const savingsRef = doc(db, `users/${userId}/savings_transactions/${newDoc.id}`);
-      await setDoc(savingsRef, {
-        type: 'deposit',
-        amount: data.amount,
-        label: data.label || 'Desde Día a Día',
-        date: Timestamp.now()
-      });
-    }
   },
 
-  updateTransaction: async (userId: string, monthId: string, transactionId: string, data: any) => {
-    const transRef = doc(db, `users/${userId}/finance_months/${monthId}/transactions/${transactionId}`);
-    await updateDoc(transRef, data);
-
-    // PUENTE CON AHORRO: Sincronizamos la edición
-    const savingsRef = doc(db, `users/${userId}/savings_transactions/${transactionId}`);
-    if (data.type === 'transfer' && data.category === 'Ahorro') {
-      await setDoc(savingsRef, {
-        type: 'deposit',
-        amount: data.amount,
-        label: data.label || 'Desde Día a Día'
-      }, { merge: true }); // Usamos merge para que no sobrescriba la fecha original
-    } else {
-      // Si cambiaste la categoría a "Inversión", lo borramos de Ahorros para que no descuadre
-      try { await deleteDoc(savingsRef); } catch (e) {}
-    }
+  subscribeToVaults: (userId: string, callback: (vaults: any[]) => void) => {
+    const vaultsRef = collection(db, `users/${userId}/vaults`);
+    const q = query(vaultsRef, orderBy('createdAt', 'asc'));
+    return onSnapshot(q, (snap) => {
+      callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
   },
 
-  deleteTransaction: async (userId: string, monthId: string, transactionId: string) => {
-    const transRef = doc(db, `users/${userId}/finance_months/${monthId}/transactions/${transactionId}`);
-    await deleteDoc(transRef);
+  addVault: async (userId: string, data: any) => {
+    const vaultsRef = collection(db, `users/${userId}/vaults`);
+    await addDoc(vaultsRef, {
+      ...data,
+      createdAt: Timestamp.now()
+    });
+  },
 
-    // PUENTE CON AHORRO: Si lo borras en tu mes, desaparece del ahorro global
-    const savingsRef = doc(db, `users/${userId}/savings_transactions/${transactionId}`);
-    try { await deleteDoc(savingsRef); } catch (e) {}
+  deleteVault: async (userId: string, vaultId: string) => {
+    const vaultRef = doc(db, `users/${userId}/vaults/${vaultId}`);
+    await deleteDoc(vaultRef);
   }
 };

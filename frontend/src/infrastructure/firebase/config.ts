@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getFirestore } from "firebase/firestore"; // Importante
 
 // Sustituye estos valores con los que copiaste de tu nueva consola de Firebase
 const firebaseConfig = {

@@ -6,7 +6,7 @@ export const FinanceService = {
     const monthRef = doc(db, `users/${userId}/finance_months/${monthId}`);
     const transRef = collection(db, `users/${userId}/finance_months/${monthId}/transactions`);
     const q = query(transRef, orderBy('date', 'desc'));
-
+ 
     let currentBudget = 0;
     let currentTransactions: any[] = [];
     let monthLoaded = false;

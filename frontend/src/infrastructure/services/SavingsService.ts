@@ -68,5 +68,19 @@ export const SavingsService = {
   deleteVault: async (userId: string, vaultId: string) => {
     const vaultRef = doc(db, `users/${userId}/vaults/${vaultId}`);
     await deleteDoc(vaultRef);
+  },
+  updateSavingsTransaction: async (userId: string, transactionId: string, data: any) => {
+    const transRef = doc(db, `users/${userId}/savings_transactions/${transactionId}`);
+    await updateDoc(transRef, data);
+  },
+
+  deleteSavingsTransaction: async (userId: string, transactionId: string) => {
+    const transRef = doc(db, `users/${userId}/savings_transactions/${transactionId}`);
+    await deleteDoc(transRef);
+  },
+
+  updateVault: async (userId: string, vaultId: string, data: any) => {
+    const vaultRef = doc(db, `users/${userId}/vaults/${vaultId}`);
+    await updateDoc(vaultRef, data);
   }
 };

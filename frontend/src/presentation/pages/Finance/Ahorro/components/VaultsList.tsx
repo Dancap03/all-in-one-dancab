@@ -3,9 +3,11 @@ import { Pencil, Trash2 } from 'lucide-react';
 interface VaultsListProps {
   vaults: any[];
   vaultBalances: Record<string, number>;
+  onEditVault: (vault: any) => void;
+  onDeleteVault: (vaultId: string) => void;
 }
-   
-export const VaultsList = ({ vaults, vaultBalances }: VaultsListProps) => {
+
+export const VaultsList = ({ vaults, vaultBalances, onEditVault, onDeleteVault }: VaultsListProps) => {
   if (vaults.length === 0) return null;
 
   return (
@@ -18,8 +20,8 @@ export const VaultsList = ({ vaults, vaultBalances }: VaultsListProps) => {
               <h3 className="font-bold text-white">{vault.name}</h3>
             </div>
             <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button className="text-gray-500 hover:text-white transition-colors"><Pencil size={14}/></button>
-              <button className="text-gray-500 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
+              <button onClick={() => onEditVault(vault)} className="text-gray-500 hover:text-white transition-colors"><Pencil size={14}/></button>
+              <button onClick={() => onDeleteVault(vault.id)} className="text-gray-500 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
             </div>
           </div>
           <p className="text-2xl font-bold" style={{ color: vault.color }}>

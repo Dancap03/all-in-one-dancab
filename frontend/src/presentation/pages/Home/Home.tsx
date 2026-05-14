@@ -1,7 +1,7 @@
 export const Home = () => {
   return (
     <div className="text-white">
-      <header className="mb-8">
+      <header className="mb-8"> 
         <h1 className="text-2xl font-bold">Panel Principal</h1>
         <p className="text-gray-400 text-sm">Resumen general de tu ecosistema personal.</p>
       </header>

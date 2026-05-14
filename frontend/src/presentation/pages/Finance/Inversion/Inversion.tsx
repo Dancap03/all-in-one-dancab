@@ -4,3 +4,4 @@ export const Inversion = () => (
     <p className="text-gray-400 text-sm italic">Seguimiento de ETFs y Criptoactivos.</p>
   </div>
 );
+ 

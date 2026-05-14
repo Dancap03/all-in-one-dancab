@@ -11,7 +11,7 @@ export const useLoginLogic = () => {
     e.preventDefault();
     try {
       await signInWithEmailAndPassword(auth, email, password);
-    } catch (err: any) {
+    } catch (err) {
       setError('Credenciales incorrectas.');
     }
   };
@@ -19,8 +19,8 @@ export const useLoginLogic = () => {
   const handleGoogleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (err: any) {
-      setError('Error al conectar con Google.');
+    } catch (err) {
+      setError('Error en la conexión con Google.');
     }
   };
 

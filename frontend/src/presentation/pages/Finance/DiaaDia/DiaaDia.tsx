@@ -6,7 +6,7 @@ import { auth } from '../../../../infrastructure/firebase/config';
 // Importación de todos los sub-componentes modulares
 import { SummaryCards } from './components/SummaryCards';
 import { ExpensesChart } from './components/ExpensesChart';
-import { ComparisonChart } from './components/ComparisonChart';
+import { ComparisonChart } from './components/ComparisonChart'; 
 import { BudgetCard } from './components/BudgetCard';
 import { IncomeList } from './components/IncomeList';
 

@@ -51,4 +51,25 @@ export const SavingsService = {
       date: Timestamp.now()
     });
   }
+
+  subscribeToVaults: (userId: string, callback: (vaults: any[]) => void) => {
+    const vaultsRef = collection(db, `users/${userId}/vaults`);
+    const q = query(vaultsRef, orderBy('createdAt', 'asc'));
+    return onSnapshot(q, (snap) => {
+      callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  },
+
+  addVault: async (userId: string, data: any) => {
+    const vaultsRef = collection(db, `users/${userId}/vaults`);
+    await addDoc(vaultsRef, {
+      ...data,
+      createdAt: Timestamp.now()
+    });
+  },
+
+  deleteVault: async (userId: string, vaultId: string) => {
+    const vaultRef = doc(db, `users/${userId}/vaults/${vaultId}`);
+    await deleteDoc(vaultRef);
+  }
 };

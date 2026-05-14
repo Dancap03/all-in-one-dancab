@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { FinanceService } from '../../../../infrastructure/services/FinanceService';
-import { auth } from '../../../../infrastructure/firebase/config';
+import { auth } from '../../../../infrastructure/firebase/config'; 
 
 // Sub-componentes importados según tu estructura en image_956520.png
 import { SummaryCards } from './components/SummaryCards';

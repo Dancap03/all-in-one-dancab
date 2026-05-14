@@ -6,10 +6,10 @@ import { auth } from './infrastructure/firebase/config';
 // Importación de Páginas
 import { Login } from './presentation/pages/Login/Login';
 import { Navbar } from './presentation/components/Navbar/Navbar';
-import { DiaDia } from './presentation/pages/finance/diadia/DiaDia';
-import { Patrimonio } from './presentation/pages/finance/patrimonio/Patrimonio';
-import { Ahorro } from './presentation/pages/finance/ahorro/Ahorro';
-import { Inversion } from './presentation/pages/finance/inversion/Inversion';
+import { DiaDia } from './presentation/pages/Finance/DiaaDia/DiaaDia';
+import { Patrimonio } from './presentation/pages/Finance/Patrimonio/Patrimonio';
+import { Ahorro } from './presentation/pages/Finance/Ahorro/Ahorro';
+import { Inversion } from './presentation/pages/Finance/Inversion/Inversion';
 
 // Componente para proteger rutas privadas
 const ProtectedRoute = ({ children, user }: { children: JSX.Element, user: User | null }) => {

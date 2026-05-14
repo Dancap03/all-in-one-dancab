@@ -6,7 +6,7 @@ import { FinanceService } from '../../../../../../infrastructure/services/Financ
 import { auth } from '../../../../../../infrastructure/firebase/config';
 
 interface IncomeListProps {
-  transactions: any[];
+  transactions: any[]; 
   monthId: string;
   monthLabel: string;
 }

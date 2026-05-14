@@ -37,7 +37,7 @@ export const DiaaDia = () => {
     const unsubscribe = FinanceService.subscribeToMonthData(
       user.uid,
       monthId,
-      (newData) => {
+      (newData: any) => {
         setHistory(prev => ({ ...prev, [monthId]: newData }));
         setLoading(false);
       }

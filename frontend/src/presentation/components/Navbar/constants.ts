@@ -11,7 +11,7 @@ import {
   Layers 
 } from 'lucide-react';
 
-export const NAV_ITEMS = [
+export const NAV_ITEMS = [ 
   { label: 'Calendario', icon: Calendar, href: '/calendar' },
   { label: 'Finanzas', icon: TrendingUp, href: '/finance' },
   { label: 'Salud', icon: Heart, href: '/health' },

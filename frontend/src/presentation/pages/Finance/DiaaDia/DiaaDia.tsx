@@ -6,21 +6,21 @@ import { auth } from '../../../../infrastructure/firebase/config';
 // Importación de todos los sub-componentes modulares
 import { SummaryCards } from './components/SummaryCards';
 import { ExpensesChart } from './components/ExpensesChart';
-import { ComparisonChart } from './components/ComparisonChart'; 
+import { ComparisonChart } from './components/ComparisonChart';
 import { BudgetCard } from './components/BudgetCard';
 import { IncomeList } from './components/IncomeList';
 import { OtherExpensesList } from './components/OtherExpensesList';
 import { TransfersList } from './components/TransfersList';
 
 export const DiaaDia = () => {
-  // Estado inicial fijado en Mayo 2026 (mes actual de desarrollo)
+  // Estado inicial fijado en Mayo 2026
   const [date, setDate] = useState(new Date(2026, 4)); 
   const [loading, setLoading] = useState(true);
 
-  // El "ArrayList" (Caché) para guardar datos de meses ya consultados
+  // Caché para guardar datos de meses ya consultados
   const [history, setHistory] = useState<Record<string, any>>({});
 
-  // Identificadores: "2026-05" para Firebase y "mayo de 2026" para la vista
+  // Identificadores de fecha
   const monthId = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
   const monthLabel = date.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
 
@@ -28,14 +28,12 @@ export const DiaaDia = () => {
     const user = auth.currentUser;
     if (!user) return;
 
-    // Si el mes ya está en nuestro historial (caché), evitamos recargar
     if (history[monthId]) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    // Suscripción en tiempo real a los datos del mes en Firestore
     const unsubscribe = FinanceService.subscribeToMonthData(
       user.uid,
       monthId,
@@ -57,10 +55,9 @@ export const DiaaDia = () => {
     setDate(new Date(date.getFullYear(), date.getMonth() + 1));
   };
 
-  // Extraemos los datos del historial, o devolvemos valores por defecto si está vacío
   const monthData = history[monthId] || { budget: 0, transactions: [] };
 
-  // Pantalla de carga centralizada
+  // Pantalla de carga
   if (loading && !history[monthId]) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] bg-[#0c0c0c]">
@@ -92,25 +89,10 @@ export const DiaaDia = () => {
       {/* 1. Tarjetas Superiores */}
       <SummaryCards transactions={monthData.transactions} />
 
-      {/* 2. Fila de Gráficas Recharts */}
+      {/* 2. Fila de Gráficas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <ExpensesChart transactions={monthData.transactions} />
         <ComparisonChart transactions={monthData.transactions} />
-      </div>
-
-      {/* 3. Fila de Control Financiero (Presupuesto e Ingresos) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <BudgetCard 
-          budget={monthData.budget} 
-          transactions={monthData.transactions} 
-          monthId={monthId}
-        />
-        
-        <IncomeList 
-          transactions={monthData.transactions} 
-          monthId={monthId} 
-          monthLabel={monthLabel.split(' ')[0]} 
-        />
       </div>
 
       {/* 3. Fila de Control Financiero (Presupuesto e Ingresos) */}

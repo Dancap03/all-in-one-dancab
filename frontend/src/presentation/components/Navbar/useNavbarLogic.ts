@@ -1,19 +1,26 @@
 import { useState } from 'react';
-
-type DropdownState = 'finance' | 'user' | null;
+import { auth } from '../../../infrastructure/firebase/config';
 
 export const useNavbarLogic = () => {
-  const [activeDropdown, setActiveDropdown] = useState<DropdownState>(null);
+  const [isFinanceOpen, setIsFinanceOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
-  const toggleDropdown = (menuName: DropdownState) => {
-    setActiveDropdown((prev) => (prev === menuName ? null : menuName));
+  const toggleFinance = () => setIsFinanceOpen(!isFinanceOpen);
+  const toggleUserMenu = () => setIsUserMenuOpen(!isUserMenuOpen);
+
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+    } catch (error) {
+      console.error("Error al cerrar sesión", error);
+    }
   };
 
-  const closeAll = () => setActiveDropdown(null);
-
   return {
-    activeDropdown,
-    toggleDropdown,
-    closeAll,
+    isFinanceOpen,
+    isUserMenuOpen,
+    toggleFinance,
+    toggleUserMenu,
+    handleLogout
   };
 };

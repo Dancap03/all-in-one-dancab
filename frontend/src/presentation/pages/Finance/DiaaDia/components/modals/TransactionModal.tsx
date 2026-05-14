@@ -6,7 +6,7 @@ import { auth } from '../../../../../../infrastructure/firebase/config';
 interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  monthId: string; 
+  monthId: string;  
   type: 'income' | 'expense';
   transaction?: any; // <-- NUEVO: Recibe los datos si estamos editando
 }

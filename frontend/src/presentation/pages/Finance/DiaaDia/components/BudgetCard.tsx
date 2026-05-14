@@ -6,7 +6,7 @@ import { ConfirmDeleteModal } from './modals/ConfirmDeleteModal';
 import { FinanceService } from '../../../../../../infrastructure/services/FinanceService';
 import { auth } from '../../../../../../infrastructure/firebase/config';
 
-interface BudgetCardProps {
+interface BudgetCardProps { 
   budget: number;
   transactions: any[];
   monthId: string;

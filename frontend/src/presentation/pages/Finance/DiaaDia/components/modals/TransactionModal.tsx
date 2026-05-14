@@ -2,17 +2,28 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { FinanceService } from '../../../../../../infrastructure/services/FinanceService';
 import { auth } from '../../../../../../infrastructure/firebase/config';
- 
+
 interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  monthId: string;  
-  type: 'income' | 'expense';
-  transaction?: any; // <-- NUEVO: Recibe los datos si estamos editando
+  monthId: string;
+  type: 'income' | 'expense' | 'other_expense' | 'transfer';
+  transaction?: any;
 }
 
-const EXPENSE_CATEGORIES = ['Comida', 'Transporte', 'Ocio', 'Salud', 'Ropa', 'Hogar', 'Suscripciones', 'Educación', 'Otros'];
-const INCOME_CATEGORIES = ['Nómina', 'Intereses', 'Dividendos', 'Venta', 'Freelance', 'Otros ingresos'];
+const CATEGORIES = {
+  income: ['Nómina', 'Intereses', 'Dividendos', 'Venta', 'Freelance', 'Otros ingresos'],
+  expense: ['Comida', 'Transporte', 'Ocio', 'Salud', 'Ropa', 'Hogar', 'Suscripciones', 'Educación', 'Otros'],
+  other_expense: ['Imprevistos', 'Impuestos', 'Multas', 'Regalos', 'Otros'],
+  transfer: ['Ahorro', 'Inversión']
+};
+
+const TITLES = {
+  income: { add: 'Añadir ingreso', edit: 'Editar ingreso' },
+  expense: { add: 'Añadir gasto', edit: 'Editar gasto' },
+  other_expense: { add: 'Añadir otro gasto', edit: 'Editar otro gasto' },
+  transfer: { add: 'Añadir transacción', edit: 'Editar transacción' }
+};
 
 export const TransactionModal = ({ isOpen, onClose, monthId, type, transaction }: TransactionModalProps) => {
   const [amount, setAmount] = useState('');
@@ -21,10 +32,9 @@ export const TransactionModal = ({ isOpen, onClose, monthId, type, transaction }
   const [date, setDate] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const isIncome = type === 'income';
-  const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  const categoriesList = CATEGORIES[type] || [];
+  const modalTitle = transaction ? TITLES[type].edit : TITLES[type].add;
 
-  // NUEVO: Si hay datos, rellenamos los campos
   useEffect(() => {
     if (transaction && isOpen) {
       setAmount(transaction.amount.toString());
@@ -68,15 +78,12 @@ export const TransactionModal = ({ isOpen, onClose, monthId, type, transaction }
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      {/* ... El resto de la vista HTML (divs, inputs, selects, botones) queda EXACTAMENTE IGUAL que en el código que ya tienes ... */}
       <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl w-full max-w-sm p-6 shadow-2xl relative">
         <button onClick={onClose} className="absolute right-4 top-4 text-gray-400 hover:text-white">
           <X size={18} />
         </button>
         
-        <h2 className="text-xl font-bold text-white mb-6">
-          {transaction ? 'Editar' : 'Añadir'} {isIncome ? 'ingreso' : 'gasto'}
-        </h2>
+        <h2 className="text-xl font-bold text-white mb-6">{modalTitle}</h2>
         
         <div className="space-y-4 mb-8">
           <div>
@@ -87,7 +94,7 @@ export const TransactionModal = ({ isOpen, onClose, monthId, type, transaction }
             <label className="block text-sm font-medium text-white mb-1">Categoría</label>
             <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] focus:border-[#10b981] rounded-lg px-4 py-2.5 text-white outline-none appearance-none">
               <option value="" disabled>Selecciona...</option>
-              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              {categoriesList.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>

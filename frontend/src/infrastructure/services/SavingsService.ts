@@ -50,7 +50,7 @@ export const SavingsService = {
       ...data,
       date: Timestamp.now()
     });
-  }
+  },
 
   subscribeToVaults: (userId: string, callback: (vaults: any[]) => void) => {
     const vaultsRef = collection(db, `users/${userId}/vaults`);

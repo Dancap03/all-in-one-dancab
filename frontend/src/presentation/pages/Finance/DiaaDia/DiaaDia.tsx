@@ -9,6 +9,8 @@ import { ExpensesChart } from './components/ExpensesChart';
 import { ComparisonChart } from './components/ComparisonChart'; 
 import { BudgetCard } from './components/BudgetCard';
 import { IncomeList } from './components/IncomeList';
+import { OtherExpensesList } from './components/OtherExpensesList';
+import { TransfersList } from './components/TransfersList';
 
 export const DiaaDia = () => {
   // Estado inicial fijado en Mayo 2026 (mes actual de desarrollo)
@@ -105,6 +107,36 @@ export const DiaaDia = () => {
         />
         
         <IncomeList 
+          transactions={monthData.transactions} 
+          monthId={monthId} 
+          monthLabel={monthLabel.split(' ')[0]} 
+        />
+      </div>
+
+      {/* 3. Fila de Control Financiero (Presupuesto e Ingresos) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <BudgetCard 
+          budget={monthData.budget} 
+          transactions={monthData.transactions} 
+          monthId={monthId}
+        />
+        
+        <IncomeList 
+          transactions={monthData.transactions} 
+          monthId={monthId} 
+          monthLabel={monthLabel.split(' ')[0]} 
+        />
+      </div>
+
+      {/* 4. Fila de Imprevistos e Inversiones (NUEVA) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <OtherExpensesList 
+          transactions={monthData.transactions} 
+          monthId={monthId} 
+          monthLabel={monthLabel.split(' ')[0]} 
+        />
+        
+        <TransfersList 
           transactions={monthData.transactions} 
           monthId={monthId} 
           monthLabel={monthLabel.split(' ')[0]} 

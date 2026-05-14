@@ -6,7 +6,7 @@ export const FinanceService = {
     const monthRef = doc(db, `users/${userId}/finance_months/${monthId}`);
     const transRef = collection(db, `users/${userId}/finance_months/${monthId}/transactions`);
     const q = query(transRef, orderBy('date', 'desc'));
- 
+
     let currentBudget = 0;
     let currentTransactions: any[] = [];
     let monthLoaded = false;
@@ -55,19 +55,47 @@ export const FinanceService = {
 
   addTransaction: async (userId: string, monthId: string, data: any) => {
     const transRef = collection(db, `users/${userId}/finance_months/${monthId}/transactions`);
-    await addDoc(transRef, {
+    const newDoc = await addDoc(transRef, {
       ...data,
       date: Timestamp.now()
     });
+
+    // PUENTE CON AHORRO: Si es Ahorro, lo replicamos en el libro mayor global
+    if (data.type === 'transfer' && data.category === 'Ahorro') {
+      const savingsRef = doc(db, `users/${userId}/savings_transactions/${newDoc.id}`);
+      await setDoc(savingsRef, {
+        type: 'deposit',
+        amount: data.amount,
+        label: data.label || 'Desde Día a Día',
+        date: Timestamp.now()
+      });
+    }
   },
 
   updateTransaction: async (userId: string, monthId: string, transactionId: string, data: any) => {
     const transRef = doc(db, `users/${userId}/finance_months/${monthId}/transactions/${transactionId}`);
     await updateDoc(transRef, data);
+
+    // PUENTE CON AHORRO: Sincronizamos la edición
+    const savingsRef = doc(db, `users/${userId}/savings_transactions/${transactionId}`);
+    if (data.type === 'transfer' && data.category === 'Ahorro') {
+      await setDoc(savingsRef, {
+        type: 'deposit',
+        amount: data.amount,
+        label: data.label || 'Desde Día a Día'
+      }, { merge: true }); // Usamos merge para que no sobrescriba la fecha original
+    } else {
+      // Si cambiaste la categoría a "Inversión", lo borramos de Ahorros para que no descuadre
+      try { await deleteDoc(savingsRef); } catch (e) {}
+    }
   },
 
   deleteTransaction: async (userId: string, monthId: string, transactionId: string) => {
     const transRef = doc(db, `users/${userId}/finance_months/${monthId}/transactions/${transactionId}`);
     await deleteDoc(transRef);
+
+    // PUENTE CON AHORRO: Si lo borras en tu mes, desaparece del ahorro global
+    const savingsRef = doc(db, `users/${userId}/savings_transactions/${transactionId}`);
+    try { await deleteDoc(savingsRef); } catch (e) {}
   }
 };

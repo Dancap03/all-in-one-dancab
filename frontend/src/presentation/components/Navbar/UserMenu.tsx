@@ -1,3 +1,4 @@
+import { User } from 'lucide-react';
 import { USER_MENU_ITEMS } from './constants';
 
 interface UserMenuProps {
@@ -8,20 +9,24 @@ interface UserMenuProps {
 export const UserMenu = ({ isOpen, onToggle }: UserMenuProps) => {
   return (
     <div className="relative">
-      <button onClick={onToggle} className="flex items-center gap-2 focus:outline-none">
-        <img 
-          src="/default-avatar.png" 
-          alt="Usuario" 
-          className="w-8 h-8 rounded-full border border-gray-600 hover:border-gray-400 transition-colors"
-        />
+      <button 
+        onClick={onToggle}
+        className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 hover:bg-gray-600 transition-colors border border-gray-600"
+      >
+        <User size={18} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full mt-4 right-0 w-48 bg-[#1e1e1e] border border-gray-800 rounded-md shadow-xl py-2 z-50">
+        <div className="absolute right-0 mt-2 w-48 bg-[#1a1a1a] border border-[#2d2d2d] rounded-md shadow-lg py-1 z-50">
           {USER_MENU_ITEMS.map((item) => (
-            <button key={item.id} className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+            <a
+              key={item.label} // Antes decía item.id, por eso fallaba
+              href={item.href}
+              className="flex items-center gap-3 px-4 py-2 text-sm text-[#a3a3a3] hover:bg-[#2d2d2d] hover:text-white transition-colors"
+            >
+              <item.icon size={16} />
               {item.label}
-            </button>
+            </a>
           ))}
         </div>
       )}

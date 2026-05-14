@@ -7,7 +7,7 @@ import { auth } from './infrastructure/firebase/config';
 import { Login } from './presentation/pages/Login/Login';
 import { Navbar } from './presentation/components/Navbar/Navbar';
 import { Home } from './presentation/pages/Home/Home';
-import { DiaDia } from './presentation/pages/Finance/DiaaDia/DiaaDia';
+import { DiaaDia } from './presentation/pages/Finance/DiaaDia/DiaaDia';
 import { Patrimonio } from './presentation/pages/Finance/Patrimonio/Patrimonio';
 import { Ahorro } from './presentation/pages/Finance/Ahorro/Ahorro';
 import { Inversion } from './presentation/pages/Finance/Inversion/Inversion';

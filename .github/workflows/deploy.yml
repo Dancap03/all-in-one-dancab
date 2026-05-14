@@ -5,6 +5,10 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
 # Permisos necesarios para el método "GitHub Actions" de tu captura
 permissions:
   contents: read

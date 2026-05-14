@@ -4,3 +4,4 @@ export const Patrimonio = () => (
     <p className="text-gray-400 text-sm italic">Cargando balance total de activos...</p>
   </div>
 );
+ 

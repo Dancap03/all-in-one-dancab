@@ -18,8 +18,9 @@ export const TransfersList = ({ transactions, monthId, monthLabel }: TransfersLi
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // AQUÍ ESTÁ EL FILTRO ACTUALIZADO
   const transfers = transactions
-    .filter(t => t.type === 'transfer')
+    .filter(t => t.type === 'transfer' || t.type === 'savings_return')
     .sort((a, b) => new Date(b.dateString || 0).getTime() - new Date(a.dateString || 0).getTime());
 
   const handleEdit = (t: any) => { setSelectedTransaction(t); setIsModalOpen(true); };
@@ -51,7 +52,12 @@ export const TransfersList = ({ transactions, monthId, monthLabel }: TransfersLi
                     <p className="text-[11px] text-gray-500 mt-1 capitalize">{dateStr}</p>
                   </div>
                   <div className="flex items-center gap-4">
-                    <p className="text-blue-500 font-bold">{trans.amount.toFixed(2)}€</p>
+                    
+                    {/* AQUÍ ESTÁ TU CÓDIGO EXACTO */}
+                    <p className={`${trans.type === 'savings_return' ? 'text-green-500' : 'text-blue-500'} font-bold`}>
+                      {trans.type === 'savings_return' ? '+' : ''}{trans.amount.toFixed(2)}€
+                    </p>
+
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => handleEdit(trans)} className="text-gray-500 hover:text-white transition-colors"><Pencil size={14}/></button>
                       <button onClick={() => handleDeleteRequest(trans.id)} className="text-gray-500 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>

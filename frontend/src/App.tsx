@@ -64,7 +64,7 @@ export default function App() {
                     <Route path="/" element={<Home />} />
                     
                     {/* FINANZAS: Cada sección en su ruta específica */}
-                    <Route path="/finance/diadia" element={<DiaDia />} />
+                    <Route path="/finance/diadia" element={<DiaaDia />} />
                     <Route path="/finance/patrimonio" element={<Patrimonio />} />
                     <Route path="/finance/ahorro" element={<Ahorro />} />
                     <Route path="/finance/inversion" element={<Inversion />} />

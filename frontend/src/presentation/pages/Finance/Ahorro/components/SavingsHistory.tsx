@@ -6,7 +6,7 @@ interface SavingsHistoryProps {
   onEdit: (transaction: any) => void;
   onDelete: (id: string) => void;
 }
-
+ 
 export const SavingsHistory = ({ transactions, vaults, onEdit, onDelete }: SavingsHistoryProps) => {
   if (transactions.length === 0) return null;
 

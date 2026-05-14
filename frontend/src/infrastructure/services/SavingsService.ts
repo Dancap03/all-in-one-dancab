@@ -1,5 +1,5 @@
 import { db } from '../firebase/config';
-import { collection, onSnapshot, query, orderBy, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, deleteDoc } from 'firebase/firestore';
 
 export interface SavingsTransaction {
   id?: string;
@@ -7,11 +7,10 @@ export interface SavingsTransaction {
   amount: number;
   label: string;
   date: Timestamp;
-  vaultId?: string; // Solo si va o viene de una hucha
+  vaultId?: string;
 }
 
 export const SavingsService = {
-  // Nos suscribimos a todos los movimientos históricos de ahorro
   subscribeToSavings: (userId: string, callback: (data: { available: number, inVaults: number, transactions: SavingsTransaction[] }) => void) => {
     const transRef = collection(db, `users/${userId}/savings_transactions`);
     const q = query(transRef, orderBy('date', 'desc'));
@@ -22,7 +21,6 @@ export const SavingsService = {
       let available = 0;
       let inVaults = 0;
 
-      // Calculamos los totales recorriendo el historial
       transactions.forEach(t => {
         if (t.type === 'deposit') available += t.amount;
         if (t.type === 'withdrawal') available -= t.amount;
@@ -43,7 +41,6 @@ export const SavingsService = {
     });
   },
 
-  // Función para registrar un movimiento
   addSavingsTransaction: async (userId: string, data: Omit<SavingsTransaction, 'id' | 'date'>) => {
     const transRef = collection(db, `users/${userId}/savings_transactions`);
     await addDoc(transRef, {

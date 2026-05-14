@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Edit2, Plus } from 'lucide-react';
 import { BudgetModal } from './modals/BudgetModal';
 import { TransactionModal } from './modals/TransactionModal';
-import { IncomeList } from './components/IncomeList';
 
 interface BudgetCardProps {
   budget: number;
@@ -14,13 +13,14 @@ export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) =
   const [isBudgetOpen, setIsBudgetOpen] = useState(false);
   const [isExpenseOpen, setIsExpenseOpen] = useState(false);
 
+  // Filtramos solo los gastos para la barra de progreso
   const expenses = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const remaining = budget - expenses;
   const percent = budget > 0 ? (expenses / budget) * 100 : 0;
 
   return (
     <>
-      <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6">
+      <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 h-fit shadow-sm">
         <div className="flex justify-between items-center mb-6">
           <h2 className="font-bold text-gray-200">Presupuesto mensual</h2>
           <button onClick={() => setIsBudgetOpen(true)} className="bg-[#2d2d2d] p-1.5 rounded-md text-gray-400 hover:text-white transition-colors">
@@ -35,6 +35,7 @@ export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) =
           </p>
         </div>
 
+        {/* Barra de progreso bicolor */}
         <div className="relative h-16 w-full bg-[#0c0c0c] rounded-lg overflow-hidden border border-[#2d2d2d]">
           <div className="absolute inset-0 bg-[#10b981] opacity-25"></div>
           <div 
@@ -48,9 +49,20 @@ export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) =
         </button>
       </div>
 
-      {/* Modales ocultos hasta que se pulsan los botones */}
-      <BudgetModal isOpen={isBudgetOpen} onClose={() => setIsBudgetOpen(false)} monthId={monthId} currentBudget={budget} />
-      <TransactionModal isOpen={isExpenseOpen} onClose={() => setIsExpenseOpen(false)} monthId={monthId} type="expense" />
+      {/* Modales ocultos conectados a Firebase */}
+      <BudgetModal 
+        isOpen={isBudgetOpen} 
+        onClose={() => setIsBudgetOpen(false)} 
+        monthId={monthId} 
+        currentBudget={budget} 
+      />
+      
+      <TransactionModal 
+        isOpen={isExpenseOpen} 
+        onClose={() => setIsExpenseOpen(false)} 
+        monthId={monthId} 
+        type="expense" 
+      />
     </>
   );
 };

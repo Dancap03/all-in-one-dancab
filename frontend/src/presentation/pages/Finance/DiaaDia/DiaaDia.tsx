@@ -4,7 +4,7 @@ import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b'];
 
 export const DiaDia = () => {
-  // Datos de ejemplo basados en tu imagen de Mayo 2026
+  // Datos de ejemplo basados en tu imagen de Mayo 2026 
   const dataPie = [{ name: 'Inversión', value: 100 }];
   const dataDonut = [
     { name: 'Ingresos', value: 390.00 },

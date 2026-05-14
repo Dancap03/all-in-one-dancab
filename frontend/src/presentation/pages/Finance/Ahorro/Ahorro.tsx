@@ -6,7 +6,7 @@ import { auth } from '../../../../infrastructure/firebase/config';
 import { SavingsChart } from './components/SavingsChart';
 import { VaultsList } from './components/VaultsList';
 import { SavingsHistory } from './components/SavingsHistory';
-
+ 
 export const Ahorro = () => {
   const [available, setAvailable] = useState(0);
   const [inVaults, setInVaults] = useState(0);

@@ -1,0 +1,113 @@
+import { useState } from 'react';
+import { X } from 'lucide-react';
+import { FinanceService } from '../../../../../../infrastructure/services/FinanceService';
+import { auth } from '../../../../../../infrastructure/firebase/config';
+
+interface TransactionModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  monthId: string;
+  type: 'income' | 'expense';
+}
+
+const EXPENSE_CATEGORIES = ['Comida', 'Transporte', 'Ocio', 'Salud', 'Ropa', 'Hogar', 'Suscripciones', 'Educación', 'Otros'];
+const INCOME_CATEGORIES = ['Nómina', 'Intereses', 'Dividendos', 'Venta', 'Freelance', 'Otros ingresos'];
+
+export const TransactionModal = ({ isOpen, onClose, monthId, type }: TransactionModalProps) => {
+  const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState('');
+  const [description, setDescription] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
+  const [isSaving, setIsSaving] = useState(false);
+
+  if (!isOpen) return null;
+
+  const isIncome = type === 'income';
+  const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+
+  const handleSave = async () => {
+    const user = auth.currentUser;
+    if (!user || !amount || !category) return;
+    
+    setIsSaving(true);
+    try {
+      await FinanceService.addTransaction(user.uid, monthId, {
+        amount: Number(amount),
+        category,
+        label: description || category, // Si no hay descripción, usamos la categoría como título
+        type,
+        dateString: date // Guardamos el string para ordenar luego
+      });
+      // Limpiar formulario al cerrar
+      setAmount(''); setCategory(''); setDescription('');
+      onClose();
+    } catch (error) {
+      console.error("Error al guardar transacción", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl w-full max-w-sm p-6 shadow-2xl relative">
+        <button onClick={onClose} className="absolute right-4 top-4 text-gray-400 hover:text-white">
+          <X size={18} />
+        </button>
+        
+        <h2 className="text-xl font-bold text-white mb-6">Añadir {isIncome ? 'ingreso' : 'gasto'}</h2>
+        
+        <div className="space-y-4 mb-8">
+          <div>
+            <label className="block text-sm font-medium text-white mb-1">Cantidad (€)</label>
+            <input 
+              type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)}
+              className="w-full bg-[#1a1a1a] border border-[#2d2d2d] focus:border-[#10b981] rounded-lg px-4 py-2.5 text-white outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-white mb-1">Categoría</label>
+            <select 
+              value={category} onChange={(e) => setCategory(e.target.value)}
+              className="w-full bg-[#1a1a1a] border border-[#2d2d2d] focus:border-[#10b981] rounded-lg px-4 py-2.5 text-white outline-none appearance-none"
+            >
+              <option value="" disabled>Selecciona...</option>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-white mb-1">Descripción (opcional)</label>
+            <input 
+              type="text" placeholder="Nota..." value={description} onChange={(e) => setDescription(e.target.value)}
+              className="w-full bg-[#1a1a1a] border border-[#2d2d2d] focus:border-[#10b981] rounded-lg px-4 py-2.5 text-white outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-white mb-1">Fecha</label>
+            <input 
+              type="date" value={date} onChange={(e) => setDate(e.target.value)}
+              className="w-full bg-[#1a1a1a] border border-[#2d2d2d] focus:border-[#10b981] rounded-lg px-4 py-2.5 text-white outline-none color-scheme-dark"
+              style={{ colorScheme: 'dark' }} // Fuerza el calendario oscuro en el navegador
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#1a1a1a] border border-[#2d2d2d] hover:bg-[#252525] transition-colors">
+            Cancelar
+          </button>
+          <button 
+            onClick={handleSave} 
+            disabled={isSaving || !amount || !category} 
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#3b82f6] hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:bg-[#2d2d2d]"
+          >
+            {isSaving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { TransactionModal } from './modals/TransactionModal';
 import { ConfirmDeleteModal } from './modals/ConfirmDeleteModal';
-import { FinanceService } from '../../../../../../infrastructure/services/FinanceService';
-import { auth } from '../../../../../../infrastructure/firebase/config';
+import { FinanceService } from '../../../../../infrastructure/services/FinanceService';
+import { auth } from '../../../../../infrastructure/firebase/config';
 
 interface IncomeListProps {
   transactions: any[]; 

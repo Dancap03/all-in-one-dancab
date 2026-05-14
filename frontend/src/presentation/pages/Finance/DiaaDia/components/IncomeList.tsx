@@ -10,7 +10,7 @@ interface IncomeListProps {
   monthId: string;
   monthLabel: string;
 }
-
+ 
 export const IncomeList = ({ transactions, monthId, monthLabel }: IncomeListProps) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);

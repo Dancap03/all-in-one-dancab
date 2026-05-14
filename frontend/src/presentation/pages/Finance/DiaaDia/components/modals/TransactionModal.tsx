@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { FinanceService } from '../../../../../../infrastructure/services/FinanceService';
 import { auth } from '../../../../../../infrastructure/firebase/config';
-
+ 
 interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;

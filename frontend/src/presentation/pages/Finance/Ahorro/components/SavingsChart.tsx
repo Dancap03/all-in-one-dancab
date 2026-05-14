@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
  
-export const SavingsChart = () => {
+export const SavingsChart = () => { 
   // Datos simulados para representar la gráfica de tu imagen
   const data = [
     { name: 'ene', disp: 0, hucha: 0 }, { name: 'feb', disp: 0, hucha: 0 },

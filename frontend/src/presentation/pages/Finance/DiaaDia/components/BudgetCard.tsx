@@ -9,7 +9,7 @@ import { auth } from '../../../../../infrastructure/firebase/config';
 interface BudgetCardProps { 
   budget: number;
   transactions: any[]; 
-  monthId: string;
+  monthId: string; 
 }
 
 export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) => {

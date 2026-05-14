@@ -64,7 +64,7 @@ export const FinanceService = {
       ...data,
       date: Timestamp.now()
     });
-  }
+  },
   // ... (después de addTransaction)
 
   updateTransaction: async (userId: string, monthId: string, transactionId: string, data: any) => {

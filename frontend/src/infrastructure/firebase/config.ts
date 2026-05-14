@@ -16,4 +16,4 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-export const db = getFirestore(app); // 2. Exportar esto para que FinanceService lo vea
+export const db = getFirestore(app); // 2. Exportar esto para que FinanceService lo vea 

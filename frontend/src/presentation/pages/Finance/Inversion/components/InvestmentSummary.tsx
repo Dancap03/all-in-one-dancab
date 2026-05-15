@@ -1,4 +1,4 @@
-import { LineChart, Line, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, Tooltip, ResponsiveContainer, YAxis } from 'recharts';
 import { EyeOff, Settings, Share } from 'lucide-react';
 
 interface Portfolio {
@@ -15,16 +15,28 @@ interface InvestmentSummaryProps {
   activePortfolioId: string;
   onSelectPortfolio: (id: string) => void;
   onAddPortfolio: () => void;
-  hasPortfolios: boolean;
+  onOpenSettings: () => void;
+  hasPortfolios: boolean; 
 }
 
 export const InvestmentSummary = ({ 
   balance, chartData, activeTimeframe, onTimeframeChange, 
-  portfolios, activePortfolioId, onSelectPortfolio, onAddPortfolio, hasPortfolios
+  portfolios, activePortfolioId, onSelectPortfolio, onAddPortfolio, onOpenSettings, hasPortfolios
 }: InvestmentSummaryProps) => {
   const timeframes = ['1D', '1W', '1M', 'YTD', '1Y', 'Max'];
-
   const showAggregated = portfolios.length > 1;
+
+  // Tooltip personalizado para recrear el efecto de la fecha flotante sobre el cursor
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="relative -top-8 bg-transparent text-[#a3a3a3] text-xs font-medium whitespace-nowrap">
+          {label}
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-6 shadow-sm">
@@ -34,7 +46,6 @@ export const InvestmentSummary = ({
         <div className="flex items-center gap-6 text-sm">
           <span className="font-bold text-white text-lg mr-2">Carteras</span>
           
-          {/* Si no hay carteras, no mostramos el menú de navegación interno */}
           {hasPortfolios && (
             <div className="flex gap-4">
               {showAggregated && (
@@ -45,7 +56,6 @@ export const InvestmentSummary = ({
                   Aggregated
                 </button>
               )}
-              
               {portfolios.map(p => (
                 <button 
                   key={p.id}
@@ -63,19 +73,22 @@ export const InvestmentSummary = ({
           <button onClick={onAddPortfolio} className="bg-transparent hover:bg-[#2d2d2d] text-white text-sm font-medium px-4 py-1.5 rounded-lg border border-[#2d2d2d] transition-colors flex items-center gap-2">
             <span>+ Agregar cuenta</span>
           </button>
-          <button className="text-gray-400 hover:text-white"><Settings size={18} /></button>
+          {/* Botón de Ajustes ahora funcional */}
+          <button onClick={onOpenSettings} disabled={activePortfolioId === 'aggregated' || !hasPortfolios} className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+            <Settings size={18} />
+          </button>
           <button className="text-gray-400 hover:text-white"><Share size={18} /></button>
         </div>
       </div>
 
-      {/* Cabecera del Balance y Controles del Gráfico */}
+      {/* Cabecera del Balance */}
       <div className="flex justify-between items-start mb-8 mt-2">
         <div>
           <button className="flex items-center gap-2 text-gray-400 hover:text-white text-sm mb-4 transition-colors">
             <EyeOff size={16} /> Ocultar
           </button>
           <h2 className="text-4xl font-bold text-white mb-2">{balance.total}</h2>
-          <div className={`flex items-center gap-2 text-sm font-bold ${balance.positivo ? 'text-[#10b981]' : (hasPortfolios ? 'text-red-500' : 'text-[#10b981]')}`}>
+          <div className={`flex items-center gap-2 text-sm font-bold ${balance.positivo ? 'text-[#10b981]' : (hasPortfolios && balance.total !== '0,00 €' ? 'text-red-500' : 'text-[#10b981]')}`}>
             <span>{balance.positivo ? '↑' : (hasPortfolios && balance.total !== '0,00 €' ? '↓' : '↑')} {balance.rendimiento}</span>
             <span>({balance.beneficio})</span>
           </div>
@@ -99,15 +112,17 @@ export const InvestmentSummary = ({
         </div>
       </div>
 
-      {/* Gráfica */}
+      {/* Gráfica Avanzada */}
       <div className="h-64 w-full border-b border-[#2d2d2d] border-dashed pb-2 relative">
         {chartData && chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
+            <LineChart data={chartData} margin={{ top: 30, right: 0, left: 0, bottom: 0 }}>
+              <YAxis domain={['dataMin', 'dataMax']} hide />
               <Tooltip 
-                contentStyle={{ backgroundColor: '#151515', borderColor: '#2d2d2d', color: '#fff', borderRadius: '8px' }}
-                itemStyle={{ color: balance.positivo ? '#10b981' : '#ef4444' }}
-                labelStyle={{ display: 'none' }}
+                content={<CustomTooltip />}
+                cursor={{ stroke: '#555', strokeWidth: 1, strokeDasharray: '0' }}
+                position={{ y: -10 }} 
+                isAnimationActive={false}
               />
               <Line 
                 type="monotone" 
@@ -115,12 +130,11 @@ export const InvestmentSummary = ({
                 stroke={balance.positivo ? '#10b981' : '#ef4444'} 
                 strokeWidth={2} 
                 dot={false}
-                activeDot={{ r: 6, fill: balance.positivo ? '#10b981' : '#ef4444', stroke: '#151515', strokeWidth: 2 }}
+                activeDot={{ r: 5, fill: balance.positivo ? '#10b981' : '#ef4444', stroke: '#151515', strokeWidth: 2 }}
               />
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          /* Línea recta si no hay datos */
           <div className="absolute inset-0 flex items-center justify-center">
              <div className="w-full h-0.5 bg-[#10b981]"></div>
           </div>

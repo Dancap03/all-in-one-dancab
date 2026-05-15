@@ -8,6 +8,7 @@ import { VaultsList } from './components/VaultsList';
 import { SavingsHistory } from './components/SavingsHistory';
 import { VaultModal } from './components/modals/VaultModal';
 import { SavingsTransactionModal } from './components/modals/SavingsTransactionModal';
+import { ConfirmDeleteModal } from './components/modals/ConfirmDeleteModal'; // IMPORTACIÓN NUEVA
 
 export const Ahorro = () => {
   const [available, setAvailable] = useState(0);
@@ -16,11 +17,17 @@ export const Ahorro = () => {
   const [vaults, setVaults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Estados para los modales de creación/edición
   const [isVaultModalOpen, setIsVaultModalOpen] = useState(false);
   const [selectedVault, setSelectedVault] = useState<any>(null);
   const [isTransModalOpen, setIsTransModalOpen] = useState(false);
   const [transType, setTransType] = useState<'to_vault' | 'from_vault' | 'withdrawal'>('to_vault');
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+
+  // NUEVO: Estados para los modales de borrado
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingData, setDeletingData] = useState<{ id: string, type: 'transaction' | 'vault' } | null>(null);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -39,13 +46,41 @@ export const Ahorro = () => {
     if (t.type === 'from_vault' && t.vaultId) vaultBalances[t.vaultId] = (vaultBalances[t.vaultId] || 0) - t.amount;
   });
 
+  // Funciones para Transacciones
   const handleOpenTransModal = (type: 'to_vault' | 'from_vault' | 'withdrawal') => { setTransType(type); setSelectedTransaction(null); setIsTransModalOpen(true); };
   const handleEditTransaction = (t: any) => { setTransType(t.type); setSelectedTransaction(t); setIsTransModalOpen(true); };
-  const handleDeleteTransaction = async (id: string) => { if (window.confirm("¿Eliminar este movimiento?")) await SavingsService.deleteSavingsTransaction(auth.currentUser!.uid, id); };
   
-  // Nuevas funciones para Huchas
+  // NUEVO: Abre modal en vez de usar window.confirm
+  const handleDeleteTransactionRequest = (id: string) => {
+    const t = transactions.find(tr => tr.id === id);
+    if (!t) return;
+
+    // Validación antifraude (esta se queda)
+    if (t.type === 'to_vault' && (vaultBalances[t.vaultId!] || 0) - t.amount < 0) { alert("No puedes borrar este movimiento porque la hucha se quedaría en negativo."); return; }
+    if (t.type === 'from_vault' && available - t.amount < 0) { alert("No puedes borrar esta retirada porque tu disponible quedaría en negativo."); return; }
+
+    setDeletingData({ id, type: 'transaction' }); setIsDeleteModalOpen(true);
+  };
+  
+  // Funciones para Huchas
   const handleEditVault = (vault: any) => { setSelectedVault(vault); setIsVaultModalOpen(true); };
-  const handleDeleteVault = async (id: string) => { if (window.confirm("¿Seguro que quieres borrar esta hucha? (Sus movimientos quedarán huérfanos)")) await SavingsService.deleteVault(auth.currentUser!.uid, id); };
+  
+  // NUEVO: Abre modal en vez de usar window.confirm
+  const handleDeleteVaultRequest = (id: string) => { setDeletingData({ id, type: 'vault' }); setIsDeleteModalOpen(true); };
+
+  // NUEVO: Función final que ejecuta el borrado en Firebase
+  const handleConfirmDelete = async () => {
+    if (!deletingData || !auth.currentUser) return;
+    setIsDeleting(true);
+    try {
+      if (deletingData.type === 'transaction') {
+        await SavingsService.deleteSavingsTransaction(auth.currentUser.uid, deletingData.id);
+      } else if (deletingData.type === 'vault') {
+        await SavingsService.deleteVault(auth.currentUser.uid, deletingData.id);
+      }
+      setIsDeleteModalOpen(false);
+    } catch (e) { console.error(e); } finally { setIsDeleting(false); setDeletingData(null); }
+  };
 
   if (loading) return <div className="flex items-center justify-center min-h-[calc(100vh-80px)] bg-[#0c0c0c]"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#10b981]"></div></div>;
 
@@ -71,13 +106,26 @@ export const Ahorro = () => {
         <button onClick={() => { setSelectedVault(null); setIsVaultModalOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-transparent border border-[#2d2d2d] text-gray-300 rounded-lg text-sm font-medium hover:bg-[#1a1a1a] transition-colors ml-auto"><Plus size={16} /> Nueva hucha</button>
       </div>
 
-      {/* Le pasamos las transacciones al gráfico para que haga los cálculos reales */}
       <SavingsChart transactions={transactions} />
-      <VaultsList vaults={vaults} vaultBalances={vaultBalances} onEditVault={handleEditVault} onDeleteVault={handleDeleteVault} />
-      <SavingsHistory transactions={transactions} vaults={vaults} onEdit={handleEditTransaction} onDelete={handleDeleteTransaction} />
       
+      {/* CORRECCIÓN DE PROPS: Ahora pasamos las funciones de borrado al modal */}
+      <VaultsList vaults={vaults} vaultBalances={vaultBalances} onEditVault={handleEditVault} onDeleteVault={handleDeleteVaultRequest} />
+      
+      <SavingsHistory transactions={transactions} vaults={vaults} onEdit={handleEditTransaction} onDelete={handleDeleteTransactionRequest} />
+      
+      {/* Inyección de Modales */}
       <VaultModal isOpen={isVaultModalOpen} onClose={() => setIsVaultModalOpen(false)} vault={selectedVault} />
       <SavingsTransactionModal isOpen={isTransModalOpen} onClose={() => setIsTransModalOpen(false)} type={transType} vaults={vaults} transaction={selectedTransaction} available={available} vaultBalances={vaultBalances} />
+      
+      {/* NUEVO: Modal de Confirmación de Borrado unificado */}
+      <ConfirmDeleteModal 
+        isOpen={isDeleteModalOpen} 
+        onClose={() => setIsDeleteModalOpen(false)} 
+        onConfirm={handleConfirmDelete} 
+        isDeleting={isDeleting} 
+        title={deletingData?.type === 'vault' ? "Eliminar hucha" : "Eliminar transacción"}
+        message={deletingData?.type === 'vault' ? "¿Estás seguro de que quieres eliminar esta hucha? Sus movimientos quedarán huérfanos." : "¿Estás seguro de que quieres eliminar esta transacción? Esta acción no se puede deshacer."}
+      />
     </div>
   );
 };

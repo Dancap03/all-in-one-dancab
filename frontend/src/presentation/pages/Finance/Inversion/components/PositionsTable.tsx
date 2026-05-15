@@ -9,7 +9,7 @@ interface Position {
   plVal: string;
   pos: boolean;
   color: string;
-}
+} 
 
 interface PositionsTableProps {
   posiciones: Position[];

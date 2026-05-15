@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { LineChart, Line, Tooltip, ResponsiveContainer, YAxis, XAxis } from 'recharts';
-import { EyeOff, Settings, Share } from 'lucide-react';
+import { Settings } from 'lucide-react';
 
 interface Portfolio {
   id: string;
@@ -30,30 +30,27 @@ export const InvestmentSummary = ({
   // Estado para capturar el punto exacto por donde pasa el ratón
   const [hoveredPoint, setHoveredPoint] = useState<any>(null);
 
-  // Lógica para mostrar el balance dinámico (Si hay hover, recalcula. Si no, muestra el general)
+  // Lógica para mostrar el balance dinámico
   let displayTotal = balance.total;
   let displayRendimiento = balance.rendimiento;
   let displayBeneficio = balance.beneficio;
   let isPositivo = balance.positivo;
 
   if (hoveredPoint && chartData.length > 0) {
-    const baseline = chartData[0].value; // El valor base es el primer punto de la gráfica
+    const baseline = chartData[0].value;
     const currentVal = hoveredPoint.value;
     const diff = currentVal - baseline;
     const perc = baseline !== 0 ? (diff / baseline) * 100 : 0;
     
     isPositivo = diff >= 0;
     
-    // Formateo estilo getquin
     displayTotal = `${currentVal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
     displayRendimiento = `${isPositivo ? '↗' : '↘'} ${Math.abs(perc).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`;
     displayBeneficio = `${isPositivo ? '+' : ''}${diff.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
   } else if (hasPortfolios && balance.total !== '0,00 €') {
-    // Ajuste de flechas para el estado por defecto
     displayRendimiento = displayRendimiento.replace('↑', '↗').replace('↓', '↘');
   }
 
-  // Tooltip personalizado para recrear la fecha flotante
   const CustomTooltip = ({ active, label }: any) => {
     if (active && label) {
       return (
@@ -68,7 +65,7 @@ export const InvestmentSummary = ({
   return (
     <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-6 shadow-sm">
       
-      {/* Navegación Superior Estilo getquin */}
+      {/* Navegación Superior */}
       <div className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-6 text-sm">
           <span className="font-bold text-white text-lg mr-2">Carteras</span>
@@ -103,16 +100,12 @@ export const InvestmentSummary = ({
           <button onClick={onOpenSettings} disabled={activePortfolioId === 'aggregated' || !hasPortfolios} className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
             <Settings size={18} />
           </button>
-          <button className="text-gray-400 hover:text-white"><Share size={18} /></button>
         </div>
       </div>
 
-      {/* Cabecera del Balance (Ahora 100% Dinámica) */}
+      {/* Cabecera del Balance (Ahora sin el botón Ocultar) */}
       <div className="flex justify-between items-start mb-8 mt-2">
         <div>
-          <button className="flex items-center gap-2 text-gray-400 hover:text-white text-sm mb-4 transition-colors">
-            <EyeOff size={16} /> Ocultar
-          </button>
           <h2 className="text-4xl font-bold text-white mb-2 transition-all">{displayTotal}</h2>
           <div className={`flex items-center gap-2 text-sm font-bold transition-colors ${isPositivo ? 'text-[#10b981]' : (hasPortfolios && balance.total !== '0,00 €' ? 'text-red-500' : 'text-[#10b981]')}`}>
             <span>{displayRendimiento}</span>
@@ -152,14 +145,13 @@ export const InvestmentSummary = ({
               }}
               onMouseLeave={() => setHoveredPoint(null)}
             >
-              {/* XAxis oculto pero necesario para mapear la fecha (date) al Tooltip */}
               <XAxis dataKey="date" hide />
               <YAxis domain={['dataMin', 'dataMax']} hide />
               
               <Tooltip 
                 content={<CustomTooltip />}
                 cursor={{ stroke: '#555', strokeWidth: 1, strokeDasharray: '0' }}
-                position={{ y: 0 }} // Fija el tooltip en la parte superior del chart
+                position={{ y: 0 }} 
                 isAnimationActive={false}
               />
               

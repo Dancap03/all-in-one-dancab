@@ -1,4 +1,6 @@
-interface Position {
+import React from 'react';
+
+export interface Position {
   id: string;
   name: string;
   ticker: string;
@@ -9,7 +11,8 @@ interface Position {
   plVal: string;
   pos: boolean;
   color: string;
-} 
+  portfolioId?: string;
+}
 
 interface PositionsTableProps {
   posiciones: Position[];
@@ -36,34 +39,42 @@ export const PositionsTable = ({ posiciones }: PositionsTableProps) => {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#2d2d2d]">
-            {posiciones.map((item, index) => (
-              <tr key={index} className="hover:bg-[#1a1a1a] transition-colors group cursor-pointer">
-                <td className="px-6 py-4 flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-inner" style={{ backgroundColor: item.color }}>
-                    {item.id}
-                  </div>
-                  <div>
-                    <div className="text-white font-medium">{item.name}</div>
-                    <div className="text-gray-500 text-xs">{item.ticker}</div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-right text-gray-400">
-                  {item.compra.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="text-white font-medium">{item.actual.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</div>
-                  <div className="text-gray-500 text-xs">{item.total.toLocaleString('es-ES')} EUR</div>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className={`font-medium ${item.pos ? 'text-[#10b981]' : 'text-red-500'}`}>
-                    {item.plVal} €
-                  </div>
-                  <div className={`text-xs mt-0.5 ${item.pos ? 'text-[#10b981]' : 'text-red-500'}`}>
-                    {item.pos ? '↑' : '↓'} {item.plPerc}
-                  </div>
+            {posiciones.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-12 text-center text-gray-500 italic">
+                  No tienes posiciones abiertas en esta cartera.
                 </td>
               </tr>
-            ))}
+            ) : (
+              posiciones.map((item, index) => (
+                <tr key={index} className="hover:bg-[#1a1a1a] transition-colors group cursor-pointer">
+                  <td className="px-6 py-4 flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-inner" style={{ backgroundColor: item.color }}>
+                      {item.id}
+                    </div>
+                    <div>
+                      <div className="text-white font-medium">{item.name}</div>
+                      <div className="text-gray-500 text-xs">{item.ticker}</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right text-gray-400">
+                    {item.compra.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="text-white font-medium">{item.actual.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</div>
+                    <div className="text-gray-500 text-xs">{item.total.toLocaleString('es-ES')} EUR</div>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className={`font-medium ${item.pos ? 'text-[#10b981]' : 'text-red-500'}`}>
+                      {item.plVal} €
+                    </div>
+                    <div className={`text-xs mt-0.5 ${item.pos ? 'text-[#10b981]' : 'text-red-500'}`}>
+                      {item.pos ? '↑' : '↓'} {item.plPerc}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

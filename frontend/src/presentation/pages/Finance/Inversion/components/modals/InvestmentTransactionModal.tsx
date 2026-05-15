@@ -11,10 +11,13 @@ interface InvestmentTransactionModalProps {
   onClose: () => void;
   portfolios: Portfolio[];
   activePortfolioId: string;
+  currentPositions: any[];
   onSave: (transactionData: any) => void;
 }
 
-export const InvestmentTransactionModal = ({ isOpen, onClose, portfolios, activePortfolioId, onSave }: InvestmentTransactionModalProps) => {
+export const InvestmentTransactionModal = ({ 
+  isOpen, onClose, portfolios, activePortfolioId, currentPositions, onSave 
+}: InvestmentTransactionModalProps) => {
   const [activeTab, setActiveTab] = useState('Activo');
   const [portfolioId, setPortfolioId] = useState('');
   const [type, setType] = useState('Comprar');
@@ -23,12 +26,19 @@ export const InvestmentTransactionModal = ({ isOpen, onClose, portfolios, active
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [price, setPrice] = useState('');
   const [currency, setCurrency] = useState('EUR');
+  const [nota, setNota] = useState('');
 
   const tabs = ['Activo', 'Cripto', 'Bono', 'Efectivo', 'Inmobiliario', 'NFT', 'Materia prima', 'Préstamo'];
 
   useEffect(() => {
     if (isOpen) {
       setPortfolioId(activePortfolioId === 'aggregated' ? (portfolios[0]?.id || '') : activePortfolioId);
+      setType('Comprar');
+      setAsset('');
+      setCantidadInvertida('');
+      setPrice('');
+      setNota('');
+      setDate(new Date().toISOString().split('T')[0]);
     }
   }, [isOpen, activePortfolioId, portfolios]);
 
@@ -37,7 +47,6 @@ export const InvestmentTransactionModal = ({ isOpen, onClose, portfolios, active
   const handleSave = () => {
     if (!asset || !cantidadInvertida || !price) return;
     
-    // Aquí calculamos las "acciones/monedas" internamente sin molestar al usuario
     const shares = Number(cantidadInvertida) / Number(price);
 
     onSave({
@@ -48,11 +57,10 @@ export const InvestmentTransactionModal = ({ isOpen, onClose, portfolios, active
       price: Number(price),
       shares,
       currency,
-      date
+      date,
+      nota
     });
     
-    // Reset y cerrar
-    setAsset(''); setCantidadInvertida(''); setPrice('');
     onClose();
   };
 
@@ -60,6 +68,10 @@ export const InvestmentTransactionModal = ({ isOpen, onClose, portfolios, active
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 font-sans">
+      
+      {/* Estilo inyectado para ocultar la scrollbar nativa pero permitir scroll */}
+      <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
+
       <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl w-full max-w-[500px] shadow-2xl flex flex-col max-h-[90vh]">
         
         {/* Cabecera */}
@@ -71,9 +83,9 @@ export const InvestmentTransactionModal = ({ isOpen, onClose, portfolios, active
           </div>
         </div>
 
-        {/* Pestañas (Scrollable) */}
-        <div className="flex items-center border-b border-[#2d2d2d] px-2 relative">
-          <div className="flex gap-6 overflow-x-auto custom-scrollbar px-4 py-3 text-sm font-medium text-gray-400 w-full">
+        {/* Pestañas (Scrollable y sin scrollbar visible) */}
+        <div className="flex items-center border-b border-[#2d2d2d] relative overflow-hidden">
+          <div className="flex gap-6 overflow-x-auto hide-scrollbar px-6 py-3 text-sm font-medium text-gray-400 w-full">
             {tabs.map(tab => (
               <button 
                 key={tab} 
@@ -84,20 +96,18 @@ export const InvestmentTransactionModal = ({ isOpen, onClose, portfolios, active
               </button>
             ))}
           </div>
-          <div className="absolute right-2 bg-gradient-to-l from-[#151515] to-transparent w-12 h-full pointer-events-none flex items-center justify-end pr-2">
+          <div className="absolute right-0 bg-gradient-to-l from-[#151515] to-transparent w-16 h-full pointer-events-none flex items-center justify-end pr-4">
             <div className="bg-[#1a1a1a] p-0.5 rounded border border-[#2d2d2d]"><ChevronRight size={14} className="text-gray-400" /></div>
           </div>
-          {/* Línea indicadora activa falsa (simulada) */}
-          <div className="absolute bottom-0 left-6 w-10 h-0.5 bg-white rounded-t-full"></div>
         </div>
 
-        {/* Formulario (Scrollable Body) */}
-        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-5">
+        {/* Formulario */}
+        <div className="p-6 overflow-y-auto hide-scrollbar flex-1 space-y-5">
           
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">Cartera de inversiones</label>
             <div className="relative">
-              <select value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] hover:border-[#444] rounded-lg px-4 py-3 text-sm text-white outline-none appearance-none font-medium transition-colors cursor-pointer">
+              <select value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] hover:border-[#444] rounded-lg px-4 py-3 text-sm text-white outline-none appearance-none font-medium transition-colors cursor-pointer" style={{ colorScheme: 'dark' }}>
                 {portfolios.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
               </select>
               <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -107,7 +117,7 @@ export const InvestmentTransactionModal = ({ isOpen, onClose, portfolios, active
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">Tipo de transacción</label>
             <div className="relative">
-              <select value={type} onChange={(e) => setType(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] hover:border-[#444] rounded-lg px-4 py-3 text-sm text-white outline-none appearance-none font-medium transition-colors cursor-pointer">
+              <select value={type} onChange={(e) => { setType(e.target.value); setAsset(''); }} className="w-full bg-[#1e1e1e] border border-[#333] hover:border-[#444] rounded-lg px-4 py-3 text-sm text-white outline-none appearance-none font-medium transition-colors cursor-pointer" style={{ colorScheme: 'dark' }}>
                 <option value="Comprar">Comprar</option>
                 <option value="Vender">Vender</option>
                 <option value="Dividendos">Dividendos</option>
@@ -118,15 +128,27 @@ export const InvestmentTransactionModal = ({ isOpen, onClose, portfolios, active
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Agregar activo</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">{type === 'Vender' ? 'Seleccionar activo a vender' : 'Agregar activo'}</label>
             <div className="relative">
-              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-              <input type="text" placeholder="Teletipo de bolsa (ticker), ISIN..." value={asset} onChange={(e) => setAsset(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] focus:border-[#555] rounded-lg pl-11 pr-4 py-3 text-sm text-white outline-none transition-colors" />
+              {type === 'Vender' ? (
+                <>
+                  <select value={asset} onChange={(e) => setAsset(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] hover:border-[#444] rounded-lg px-4 py-3 text-sm text-white outline-none appearance-none font-medium transition-colors cursor-pointer" style={{ colorScheme: 'dark' }}>
+                    <option value="" disabled>Selecciona una posición actual...</option>
+                    {currentPositions.map(p => <option key={p.id} value={p.name}>{p.name} ({p.ticker})</option>)}
+                  </select>
+                  <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </>
+              ) : (
+                <>
+                  <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input type="text" placeholder="Teletipo de bolsa (ticker), ISIN..." value={asset} onChange={(e) => setAsset(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] focus:border-[#555] rounded-lg pl-11 pr-4 py-3 text-sm text-white outline-none transition-colors" />
+                </>
+              )}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Cantidad invertida</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">{type === 'Vender' ? 'Cantidad a retirar' : 'Cantidad invertida'}</label>
             <input type="number" placeholder="Por ejemplo 10,00" value={cantidadInvertida} onChange={(e) => setCantidadInvertida(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] focus:border-[#555] rounded-lg px-4 py-3 text-sm text-white outline-none transition-colors" />
           </div>
 
@@ -136,11 +158,11 @@ export const InvestmentTransactionModal = ({ isOpen, onClose, portfolios, active
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Precio de compra (por unidad)</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">{type === 'Vender' ? 'Precio de venta (por unidad)' : 'Precio de compra (por unidad)'}</label>
             <div className="relative flex items-center">
               <input type="number" placeholder="Por ejemplo 1000,00" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] focus:border-[#555] rounded-lg pl-4 pr-24 py-3 text-sm text-white outline-none transition-colors" />
               <div className="absolute right-2 flex items-center gap-1 bg-transparent text-sm font-bold text-white">
-                <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="bg-transparent outline-none appearance-none cursor-pointer pr-4 z-10 relative">
+                <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="bg-transparent outline-none appearance-none cursor-pointer pr-4 z-10 relative" style={{ colorScheme: 'dark' }}>
                   <option value="EUR">EUR</option>
                   <option value="USD">USD</option>
                   <option value="GBP">GBP</option>
@@ -150,11 +172,9 @@ export const InvestmentTransactionModal = ({ isOpen, onClose, portfolios, active
             </div>
           </div>
 
-          <div className="pt-2">
-            <button className="flex items-center gap-2 text-xs font-bold text-white hover:text-gray-300 transition-colors">
-              Introducción de transacción avanzada <span className="text-gray-500 font-normal">opcional</span>
-              <ChevronDown size={14} className="text-gray-400" />
-            </button>
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">Nota (opcional)</label>
+            <input type="text" placeholder="Añadir un comentario..." value={nota} onChange={(e) => setNota(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] focus:border-[#555] rounded-lg px-4 py-3 text-sm text-white outline-none transition-colors" />
           </div>
         </div>
 

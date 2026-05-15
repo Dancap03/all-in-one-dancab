@@ -7,11 +7,10 @@ interface SavingsChartProps {
 }
 
 export const SavingsChart = ({ transactions }: SavingsChartProps) => {
-  // CORRECCIÓN: El estado por defecto es 'year', quitamos 'month'
   const [view, setView] = useState<'year' | 'total'>('year');
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // Algoritmo de "Event Sourcing" para saber el saldo en cualquier fecha del pasado (se queda igual)
+  // Algoritmo de "Event Sourcing" para saber el saldo en cualquier fecha del pasado
   const getBalancesAtDate = (targetDate: Date) => {
     let disp = 0; let hucha = 0;
     transactions.forEach(t => {
@@ -26,13 +25,12 @@ export const SavingsChart = ({ transactions }: SavingsChartProps) => {
   };
 
   const generateData = () => {
-    const data = [];
+    // LA SOLUCIÓN AL ERROR: Le decimos a TypeScript que esto es un array 'any[]'
+    const data: any[] = []; 
     const currentYear = currentDate.getFullYear();
     const monthNamesShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
     if (view === 'year') {
-      // CORRECCIÓN LÓGICA: Data-Driven X-Axis (Eje X basado en datos reales)
-      // 1. Buscamos los meses únicos del año actual que tienen transacciones reales
       const distinctActiveMonths = new Set<number>();
       transactions.forEach(t => {
         if (!t.date) return;
@@ -40,18 +38,14 @@ export const SavingsChart = ({ transactions }: SavingsChartProps) => {
         if (transDate.getFullYear() === currentYear) { distinctActiveMonths.add(transDate.getMonth()); }
       });
 
-      // 2. Si no hay datos este año, no mostramos barras
       if (distinctActiveMonths.size === 0) return [];
 
-      // 3. Ordenamos los meses cronológicamente y generamos la barra calculando el saldo acumulado a final de ese mes
       const sortedMonths = Array.from(distinctActiveMonths).sort((a, b) => a - b);
       sortedMonths.forEach(m => {
-        // Obtenemos el último día de ese mes a última hora
         const endOfActiveMonth = new Date(currentYear, m + 1, 0, 23, 59, 59);
-        data.push({ name: `${monthNamesShort[m]} '${currentYear.toString().slice(-2)}`, ...getBalancesAtDate(endOfActiveMonth) });
+        data.push({ name: monthNamesShort[m], ...getBalancesAtDate(endOfActiveMonth) });
       });
     } else if (view === 'total') {
-      // CORRECCIÓN LÓGICA: También data-driven para total (solo años con datos)
       const distinctActiveYears = new Set<number>();
       transactions.forEach(t => { if (t.date) { distinctActiveYears.add(new Date(t.date.seconds * 1000).getFullYear()); } });
       if (distinctActiveYears.size === 0) return [];
@@ -67,7 +61,6 @@ export const SavingsChart = ({ transactions }: SavingsChartProps) => {
 
   const data = generateData();
 
-  // Navegación (solo para años)
   const handlePrev = () => { if (view === 'year') setCurrentDate(new Date(currentDate.getFullYear() - 1, currentDate.getMonth())); };
   const handleNext = () => { if (view === 'year') setCurrentDate(new Date(currentDate.getFullYear() + 1, currentDate.getMonth())); };
 
@@ -75,10 +68,8 @@ export const SavingsChart = ({ transactions }: SavingsChartProps) => {
 
   return (
     <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-5 shadow-sm mb-6 relative">
-      {/* Cabecera del gráfico */}
       <div className="flex justify-between items-center mb-6 z-10 relative">
         <div className="flex gap-3 text-sm font-medium p-1 bg-[#1a1a1a] rounded-lg border border-[#2d2d2d]">
-          {/* CORRECCIÓN: Botones actualizados, quitamos 'month' */}
           <button onClick={() => setView('year')} className={`px-4 py-1.5 rounded-md transition-colors ${view === 'year' ? 'bg-[#10b981]/10 text-[#10b981] font-bold' : 'text-gray-500 hover:text-white'}`}>Año</button>
           <button onClick={() => setView('total')} className={`px-4 py-1.5 rounded-md transition-colors ${view === 'total' ? 'bg-[#10b981]/10 text-[#10b981] font-bold' : 'text-gray-500 hover:text-white'}`}>Total</button>
         </div>
@@ -89,7 +80,6 @@ export const SavingsChart = ({ transactions }: SavingsChartProps) => {
         </div>
       </div>
 
-      {/* Gráfico */}
       <div className="h-[200px] w-full z-0 relative">
         {data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
@@ -104,12 +94,11 @@ export const SavingsChart = ({ transactions }: SavingsChartProps) => {
         ) : (
           <div className="flex-1 h-full flex flex-col items-center justify-center text-gray-600 italic text-sm gap-2">
              <div className="w-12 h-12 rounded-full border border-[#2d2d2d] flex items-center justify-center text-2xl">📊</div>
-             Aún no hay actividad de ahorro en {currentDate.getFullYear()}
+             Aún no hay actividad en {currentDate.getFullYear()}
           </div>
         )}
       </div>
 
-      {/* Leyenda */}
       <div className="flex justify-center gap-6 mt-4 border-t border-[#2d2d2d] pt-4">
         <div className="flex items-center gap-2 text-xs text-gray-400"><div className="w-3 h-3 bg-[#10b981] rounded-sm"></div> Disponible</div>
         <div className="flex items-center gap-2 text-xs text-gray-400"><div className="w-3 h-3 bg-[#60a5fa] rounded-sm"></div> En huchas</div>

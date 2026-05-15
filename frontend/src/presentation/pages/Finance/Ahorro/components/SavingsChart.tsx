@@ -9,9 +9,13 @@ interface SavingsChartProps {
 export const SavingsChart = ({ transactions }: SavingsChartProps) => {
   const [view, setView] = useState<'year' | 'total'>('year');
   const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // Nuevo estado para controlar nuestro desplegable personalizado
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const realNow = new Date();
-  const currentYear = realNow.getFullYear();
+  const currentRealYear = realNow.getFullYear();
+  const currentRealMonth = realNow.getMonth();
 
   const getBalancesAtDate = (targetDate: Date) => {
     let disp = 0; let hucha = 0;
@@ -32,10 +36,14 @@ export const SavingsChart = ({ transactions }: SavingsChartProps) => {
     const monthNamesShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
     if (view === 'year') {
-      // Mostrar SIEMPRE los 12 meses del año
       for (let i = 0; i < 12; i++) {
-        const endOfMonth = new Date(viewedYear, i + 1, 0, 23, 59, 59);
-        data.push({ name: monthNamesShort[i], ...getBalancesAtDate(endOfMonth) });
+        // LÓGICA CLAVE: Si es el año actual y el mes es del futuro, lo dejamos vacío para que no pinte barra
+        if (viewedYear === currentRealYear && i > currentRealMonth) {
+          data.push({ name: monthNamesShort[i] }); 
+        } else {
+          const endOfMonth = new Date(viewedYear, i + 1, 0, 23, 59, 59);
+          data.push({ name: monthNamesShort[i], ...getBalancesAtDate(endOfMonth) });
+        }
       }
     } else if (view === 'total') {
       const distinctActiveYears = new Set<number>();
@@ -52,41 +60,53 @@ export const SavingsChart = ({ transactions }: SavingsChartProps) => {
   };
 
   const data = generateData();
-
-  const isCurrentYear = currentDate.getFullYear() === currentYear;
+  const isCurrentYear = currentDate.getFullYear() === currentRealYear;
 
   const handlePrev = () => { if (view === 'year') setCurrentDate(new Date(currentDate.getFullYear() - 1, 0)); };
-  
-  // Bloquear navegación al futuro
   const handleNext = () => { if (view === 'year' && !isCurrentYear) setCurrentDate(new Date(currentDate.getFullYear() + 1, 0)); };
 
   const label = view === 'year' ? `${currentDate.getFullYear()}` : 'Todos los años';
-  const yearsList = Array.from({ length: 10 }, (_, i) => currentYear - i);
+  const yearsList = Array.from({ length: 10 }, (_, i) => currentRealYear - i);
 
   return (
     <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-5 shadow-sm mb-6 relative">
       <div className="flex justify-between items-center mb-6 z-10 relative">
+        
+        {/* Botones de Vista */}
         <div className="flex gap-3 text-sm font-medium p-1 bg-[#1a1a1a] rounded-lg border border-[#2d2d2d]">
           <button onClick={() => setView('year')} className={`px-4 py-1.5 rounded-md transition-colors ${view === 'year' ? 'bg-[#10b981]/10 text-[#10b981] font-bold' : 'text-gray-500 hover:text-white'}`}>Año</button>
           <button onClick={() => setView('total')} className={`px-4 py-1.5 rounded-md transition-colors ${view === 'total' ? 'bg-[#10b981]/10 text-[#10b981] font-bold' : 'text-gray-500 hover:text-white'}`}>Total</button>
         </div>
         
+        {/* Navegación y Selector de Año */}
         <div className="flex items-center gap-3 text-sm font-bold bg-[#1a1a1a] rounded-lg border border-[#2d2d2d] px-4 py-1.5">
           {view === 'year' && <button onClick={handlePrev} className="text-gray-500 hover:text-white"><ChevronLeft size={16} /></button>}
           
-          <div className="relative flex items-center justify-center w-12 cursor-pointer hover:text-[#10b981] transition-colors group">
-            <span className="capitalize text-center block w-full">{label}</span>
-            {/* Selector de año nativo invisible */}
-            {view === 'year' && (
-              <select 
-                value={currentDate.getFullYear()} 
-                onChange={(e) => setCurrentDate(new Date(parseInt(e.target.value), 0))}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              >
-                {yearsList.map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
+          <div className="relative flex items-center justify-center w-12 group">
+            <span 
+              onClick={() => view === 'year' && setIsDropdownOpen(!isDropdownOpen)}
+              className={`capitalize text-center block w-full transition-colors ${view === 'year' ? 'cursor-pointer hover:text-[#10b981]' : 'text-gray-200'}`}
+            >
+              {label}
+            </span>
+
+            {/* DESPLEGABLE DE AÑOS PERSONALIZADO */}
+            {isDropdownOpen && view === 'year' && (
+              <>
+                {/* Capa invisible para cerrar al hacer clic fuera */}
+                <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)}></div>
+                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar py-2 w-24">
+                  {yearsList.map(y => (
+                    <div 
+                      key={y} 
+                      onClick={() => { setCurrentDate(new Date(y, 0)); setIsDropdownOpen(false); }}
+                      className={`px-4 py-2 text-center text-sm cursor-pointer transition-colors hover:bg-[#252525] ${currentDate.getFullYear() === y ? 'text-[#10b981] font-bold' : 'text-gray-300'}`}
+                    >
+                      {y}
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 

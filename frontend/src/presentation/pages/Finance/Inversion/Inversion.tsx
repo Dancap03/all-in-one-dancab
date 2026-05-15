@@ -1,70 +1,89 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { InvestmentSummary } from './components/InvestmentSummary';
 import { PositionsTable } from './components/PositionsTable';
 import { VentasTable } from './components/VentasTable';
 import { TransaccionesList } from './components/TransaccionesList';
 import { PortfolioModal } from './components/modals/PortfolioModal';
+import { PortfolioSettingsModal } from './components/modals/PortfolioSettingsModal';
 
 export const Inversion = () => {
   const [activeTab, setActiveTab] = useState('Posiciones');
-  const [activeTimeframe, setActiveTimeframe] = useState('YTD'); 
+  const [activeTimeframe, setActiveTimeframe] = useState('YTD');
   
-  const [portfolios, setPortfolios] = useState<any[]>([]);
-  const [activePortfolioId, setActivePortfolioId] = useState('aggregated');
-  const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false);
+  // ESTADO DE CARTERAS CON PERSISTENCIA
+  const [portfolios, setPortfolios] = useState<any[]>(() => {
+    const saved = localStorage.getItem('aio_portfolios');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
+  const [activePortfolioId, setActivePortfolioId] = useState(() => {
+    const saved = localStorage.getItem('aio_activePortfolio');
+    return saved || 'aggregated';
+  });
 
+  const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+  // Guardar en localStorage cada vez que cambien
+  useEffect(() => {
+    localStorage.setItem('aio_portfolios', JSON.stringify(portfolios));
+  }, [portfolios]);
+
+  useEffect(() => {
+    localStorage.setItem('aio_activePortfolio', activePortfolioId);
+  }, [activePortfolioId]);
+
+  // Funciones de gestión
   const handleAddPortfolio = (newPortfolio: any) => {
     setPortfolios([...portfolios, newPortfolio]);
-    // Si es la primera cartera, la seleccionamos. Si ya había, nos quedamos donde estábamos.
-    if (portfolios.length === 0) {
-      setActivePortfolioId(newPortfolio.id);
+    if (portfolios.length === 0) setActivePortfolioId(newPortfolio.id);
+  };
+
+  const handleUpdatePortfolio = (id: string, newName: string) => {
+    setPortfolios(portfolios.map(p => p.id === id ? { ...p, nombre: newName } : p));
+  };
+
+  const handleDeletePortfolio = (id: string) => {
+    const updated = portfolios.filter(p => p.id !== id);
+    setPortfolios(updated);
+    if (updated.length > 0) {
+      setActivePortfolioId(updated.length === 1 ? updated[0].id : 'aggregated');
+    } else {
+      setActivePortfolioId('aggregated');
     }
   };
 
-  // Mocks de Base de Datos (SOLO pertenecen a carteras individuales)
+  // Mocks de Base de Datos
   const allMockPositions = [
-    { id: 'BTC', name: 'Bitcoin EUR', ticker: 'BTC-EUR', compra: 67629.02, actual: 7.09, total: 68501.66, plPerc: '+1.29%', plVal: '+0.09', pos: true, color: '#f59e0b', portfolioId: 'p1' },
-    { id: 'S&P', name: 'Vanguard S&P 500', ticker: 'VUSA.AS', compra: 88.50, actual: 95.00, total: 95.00, plPerc: '+7.34%', plVal: '+6.50', pos: true, color: '#ef4444', portfolioId: 'p2' }
+    { id: 'BTC', name: 'Bitcoin EUR', ticker: 'BTC-EUR', compra: 67629.02, actual: 7.09, total: 68501.66, plPerc: '+1.29%', plVal: '+0.09', pos: true, color: '#f59e0b', portfolioId: portfolios[0]?.id || 'p1' },
+    { id: 'S&P', name: 'Vanguard S&P 500', ticker: 'VUSA.AS', compra: 88.50, actual: 95.00, total: 95.00, plPerc: '+7.34%', plVal: '+6.50', pos: true, color: '#ef4444', portfolioId: portfolios[1]?.id || 'p2' }
   ];
-
-  const allMockVentas = [
-    { id: 'TSLA', name: 'Tesla Inc', ticker: 'TSLA', fecha: '12 May 2026', detalles: 'Vendió 5 a 160,20 €', totalVenta: 801.00, plPerc: '+6.68%', plVal: '+50.20', pos: true, color: '#ef4444', portfolioId: 'p1' }
-  ];
-
+  const allMockVentas = [];
   const allMockTransacciones = [
-    { id: '1', fechaDia: '08.05', tipoIcono: 'buy' as const, asset: 'iShares MSCI ACWI ETF', detalles: 'Compró 197 a 101,26 €', total: 19948.22, logoInitial: 'i', logoColor: '#3d3d3d', portfolioId: 'p2' },
-    { id: '2', fechaDia: '08.05', tipoIcono: 'buy' as const, asset: 'Alphabet Inc. Class A', detalles: 'Compró 30 a 340,33 €', total: 10209.75, logoInitial: 'Alph', logoColor: '#ef4444', portfolioId: 'p1' },
+    { id: '1', fechaDia: '08.05', tipoIcono: 'buy' as const, asset: 'iShares MSCI ACWI ETF', detalles: 'Compró 197 a 101,26 €', total: 19948.22, logoInitial: 'i', logoColor: '#3d3d3d', portfolioId: portfolios[0]?.id || 'p1' }
   ];
 
-  // LÓGICA CORE: ¿Qué estamos viendo?
   const hasPortfolios = portfolios.length > 0;
-  // Si solo hay 1 cartera, forzamos ver esa. Si no hay ninguna, mostramos 'aggregated' (vacío por defecto).
   const effectivePortfolioId = !hasPortfolios ? 'aggregated' : (portfolios.length === 1 ? portfolios[0].id : activePortfolioId);
 
-  // Filtramos datos basándonos en la vista actual
   let currentPositions = [];
   let currentVentas = [];
   let currentTransacciones = [];
 
   if (effectivePortfolioId === 'aggregated') {
-    // Si vemos todo, sumamos TODAS las posiciones que pertenezcan a ALGUN portfolio existente
     const existingPortfolioIds = portfolios.map(p => p.id);
     currentPositions = allMockPositions.filter(p => existingPortfolioIds.includes(p.portfolioId!));
     currentVentas = allMockVentas.filter(v => existingPortfolioIds.includes(v.portfolioId!));
     currentTransacciones = allMockTransacciones.filter(t => existingPortfolioIds.includes(t.portfolioId!));
   } else {
-    // Si vemos una individual, filtramos estrictamente
     currentPositions = allMockPositions.filter(p => p.portfolioId === effectivePortfolioId);
     currentVentas = allMockVentas.filter(v => v.portfolioId === effectivePortfolioId);
     currentTransacciones = allMockTransacciones.filter(t => t.portfolioId === effectivePortfolioId);
   }
 
-  // Cálculos dinámicos para el Header
   const hasData = currentPositions.length > 0;
   const totalValue = currentPositions.reduce((sum, p) => sum + p.total, 0);
-  
-  // Simulamos un P/L global. En una app real, sumarías los P/L individuales.
-  const isGlobalPositive = totalValue > 50000; // Lógica fake para decidir color verde o rojo
+  const isGlobalPositive = totalValue > 50000; 
 
   const balanceData = { 
     total: hasData ? `${totalValue.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €` : '0,00 €', 
@@ -73,25 +92,54 @@ export const Inversion = () => {
     positivo: hasData ? isGlobalPositive : false 
   };
   
-  const chartData = hasData ? [ { date: '1 ene', value: totalValue * (isGlobalPositive ? 0.9 : 1.1) }, { date: '15 may', value: totalValue } ] : [];
+  // GENERADOR DE DATOS DINÁMICOS PARA LA GRÁFICA
+  const generateDynamicChartData = () => {
+    if (!hasData) return [];
+    const data = [];
+    let baseValue = totalValue * (isGlobalPositive ? 0.9 : 1.1);
+    
+    // Determinar puntos y formato de fecha según el timeframe
+    let points = 20;
+    let labelFormat = '';
+    
+    if (activeTimeframe === '1D') { points = 48; labelFormat = 'HH:mm'; }
+    else if (activeTimeframe === '1W') { points = 14; labelFormat = 'HH:mm, DD. MMM'; }
+    else if (activeTimeframe === '1M') { points = 30; labelFormat = 'DD. MMM'; }
+    else { points = 60; labelFormat = 'MMM YYYY'; }
+
+    // Generar línea ondulada
+    for (let i = 0; i < points; i++) {
+      baseValue += (Math.random() - 0.5) * (totalValue * 0.02);
+      
+      // Formato de fecha falso adaptativo para el Tooltip
+      let dateLabel = '';
+      if (activeTimeframe === '1D') dateLabel = `${10 + Math.floor(i/4)}:${(i%4)*15 === 0 ? '00' : (i%4)*15}`;
+      else if (activeTimeframe === '1W') dateLabel = `10:00, ${10 + i}. may`;
+      else if (activeTimeframe === '1M') dateLabel = `${i + 1}. may`;
+      else dateLabel = `${Math.floor(i/5) + 1}. may 2026`;
+
+      data.push({ 
+        date: dateLabel, 
+        value: i === points - 1 ? totalValue : baseValue 
+      });
+    }
+    return data;
+  };
 
   const tabs = ['Posiciones', 'Distribución', 'Rendimiento', 'Dividendos'];
 
   return (
     <div className="w-full">
-      {/* La vista de getquin no tiene título "Carteras" suelto arriba, 
-        está integrado en el bloque del Summary. 
-      */}
-      
       <InvestmentSummary 
         balance={balanceData} 
-        chartData={chartData} 
+        chartData={generateDynamicChartData()} 
         activeTimeframe={activeTimeframe} 
         onTimeframeChange={setActiveTimeframe}
         portfolios={portfolios}
         activePortfolioId={effectivePortfolioId}
         onSelectPortfolio={setActivePortfolioId}
         onAddPortfolio={() => setIsPortfolioModalOpen(true)}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
         hasPortfolios={hasPortfolios}
       />
 
@@ -124,10 +172,8 @@ export const Inversion = () => {
           )}
         </>
       ) : (
-        /* Estado vacío idéntico a image_eef753.png */
         <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">
           <div className="w-12 h-12 bg-[#2d2d2d] rounded-full flex items-center justify-center mb-4">
-             {/* Icono simulado del maletín rojo */}
              <span className="text-[#ef4444] font-bold text-lg">💼</span>
           </div>
           <h3 className="text-xl font-bold text-white mb-2">Comienza tu viaje de inversión</h3>
@@ -138,7 +184,15 @@ export const Inversion = () => {
         </div>
       )}
 
+      {/* Modales */}
       <PortfolioModal isOpen={isPortfolioModalOpen} onClose={() => setIsPortfolioModalOpen(false)} onSave={handleAddPortfolio} />
+      <PortfolioSettingsModal 
+        isOpen={isSettingsModalOpen} 
+        onClose={() => setIsSettingsModalOpen(false)} 
+        portfolio={portfolios.find(p => p.id === effectivePortfolioId)} 
+        onUpdate={handleUpdatePortfolio} 
+        onDelete={handleDeletePortfolio} 
+      />
     </div>
   );
 };

@@ -7,7 +7,7 @@ import { PortfolioModal } from './components/modals/PortfolioModal';
 
 export const Inversion = () => {
   const [activeTab, setActiveTab] = useState('Posiciones');
-  const [activeTimeframe, setActiveTimeframe] = useState('YTD');
+  const [activeTimeframe, setActiveTimeframe] = useState('YTD'); 
   
   const [portfolios, setPortfolios] = useState<any[]>([]);
   const [activePortfolioId, setActivePortfolioId] = useState('aggregated');

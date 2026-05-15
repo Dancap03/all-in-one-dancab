@@ -3,12 +3,18 @@ interface SummaryCardsProps {
 }
 
 export const SummaryCards = ({ transactions }: SummaryCardsProps) => {
+  // Entradas de dinero
   const incomes = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-  const expenses = transactions.filter(t => t.type === 'expense' || t.type === 'other_expense').reduce((acc, t) => acc + t.amount, 0);
-  
-  // AÑADE savings_return AL BALANCE GENERAL
   const returnedSavings = transactions.filter(t => t.type === 'savings_return').reduce((acc, t) => acc + t.amount, 0);
-  const balance = incomes - expenses + returnedSavings;
+  const totalIncomes = incomes + returnedSavings;
+
+  // Salidas de dinero (Gastos operativos + Dinero enviado a ahorro/inversión)
+  const expenses = transactions.filter(t => t.type === 'expense' || t.type === 'other_expense').reduce((acc, t) => acc + t.amount, 0);
+  const transfersOut = transactions.filter(t => t.type === 'transfer').reduce((acc, t) => acc + t.amount, 0);
+  const totalOutflows = expenses + transfersOut;
+
+  // Balance final real
+  const balance = totalIncomes - totalOutflows;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -24,15 +30,15 @@ export const SummaryCards = ({ transactions }: SummaryCardsProps) => {
       <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-6 shadow-sm">
         <p className="text-gray-400 text-sm font-medium mb-2">Ingresos</p>
         <p className="text-3xl font-bold text-[#10b981]">
-          +{incomes.toFixed(2)}€
+          +{totalIncomes.toFixed(2)}€
         </p>
       </div>
 
-      {/* Gastos */}
+      {/* Gastos Totales (Incluye ahorro) */}
       <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-6 shadow-sm">
-        <p className="text-gray-400 text-sm font-medium mb-2">Gastos</p>
+        <p className="text-gray-400 text-sm font-medium mb-2">Salidas (Gastos + Ahorro)</p>
         <p className="text-3xl font-bold text-[#ef4444]">
-          -{expenses.toFixed(2)}€
+          -{totalOutflows.toFixed(2)}€
         </p>
       </div>
     </div>

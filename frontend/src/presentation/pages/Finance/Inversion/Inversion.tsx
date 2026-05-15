@@ -5,6 +5,7 @@ import { VentasTable } from './components/VentasTable';
 import { TransaccionesList } from './components/TransaccionesList';
 import { PortfolioModal } from './components/modals/PortfolioModal';
 import { PortfolioSettingsModal } from './components/modals/PortfolioSettingsModal';
+import { InvestmentTransactionModal } from './components/modals/InvestmentTransactionModal';
 
 export const Inversion = () => {
   const [activeTab, setActiveTab] = useState('Posiciones');
@@ -21,8 +22,10 @@ export const Inversion = () => {
     return saved || 'aggregated';
   });
 
+  // ESTADO DE MODALES
   const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
 
   // Guardar en localStorage cada vez que cambien
   useEffect(() => {
@@ -53,13 +56,17 @@ export const Inversion = () => {
     }
   };
 
+  const handleSaveTransaction = (data: any) => {
+    console.log("Transacción guardada:", data);
+    // Aquí es donde en el futuro llamarás a FinanceService para guardar en la BD
+  };
+
   // Mocks de Base de Datos
   const allMockPositions = [
     { id: 'BTC', name: 'Bitcoin EUR', ticker: 'BTC-EUR', compra: 67629.02, actual: 7.09, total: 68501.66, plPerc: '+1.29%', plVal: '+0.09', pos: true, color: '#f59e0b', portfolioId: portfolios[0]?.id || 'p1' },
     { id: 'S&P', name: 'Vanguard S&P 500', ticker: 'VUSA.AS', compra: 88.50, actual: 95.00, total: 95.00, plPerc: '+7.34%', plVal: '+6.50', pos: true, color: '#ef4444', portfolioId: portfolios[1]?.id || 'p2' }
   ];
   
-  // SOLUCIÓN AL ERROR TS: Añadido : any[] para que TypeScript no se queje de los arrays vacíos
   const allMockVentas: any[] = [];
   
   const allMockTransacciones = [
@@ -69,7 +76,6 @@ export const Inversion = () => {
   const hasPortfolios = portfolios.length > 0;
   const effectivePortfolioId = !hasPortfolios ? 'aggregated' : (portfolios.length === 1 ? portfolios[0].id : activePortfolioId);
 
-  // SOLUCIÓN AL ERROR TS: Tipado explícito de any[]
   let currentPositions: any[] = [];
   let currentVentas: any[] = [];
   let currentTransacciones: any[] = [];
@@ -96,26 +102,21 @@ export const Inversion = () => {
     positivo: hasData ? isGlobalPositive : false 
   };
   
-  // GENERADOR DE DATOS DINÁMICOS PARA LA GRÁFICA
   const generateDynamicChartData = () => {
     if (!hasData) return [];
     const data = [];
     let baseValue = totalValue * (isGlobalPositive ? 0.9 : 1.1);
     
-    // Determinar puntos y formato de fecha según el timeframe
     let points = 20;
-    let labelFormat = '';
     
-    if (activeTimeframe === '1D') { points = 48; labelFormat = 'HH:mm'; }
-    else if (activeTimeframe === '1W') { points = 14; labelFormat = 'HH:mm, DD. MMM'; }
-    else if (activeTimeframe === '1M') { points = 30; labelFormat = 'DD. MMM'; }
-    else { points = 60; labelFormat = 'MMM YYYY'; }
+    if (activeTimeframe === '1D') { points = 48; }
+    else if (activeTimeframe === '1W') { points = 14; }
+    else if (activeTimeframe === '1M') { points = 30; }
+    else { points = 60; }
 
-    // Generar línea ondulada
     for (let i = 0; i < points; i++) {
       baseValue += (Math.random() - 0.5) * (totalValue * 0.02);
       
-      // Formato de fecha falso adaptativo para el Tooltip
       let dateLabel = '';
       if (activeTimeframe === '1D') dateLabel = `${10 + Math.floor(i/4)}:${(i%4)*15 === 0 ? '00' : (i%4)*15}`;
       else if (activeTimeframe === '1W') dateLabel = `10:00, ${10 + i}. may`;
@@ -163,9 +164,9 @@ export const Inversion = () => {
 
           {activeTab === 'Posiciones' && (
             <div className="flex flex-col pb-10">
-              <PositionsTable posiciones={currentPositions} />
+              <PositionsTable posiciones={currentPositions} onAddTransaction={() => setIsTransactionModalOpen(true)} />
               <VentasTable ventas={currentVentas} />
-              <TransaccionesList transacciones={currentTransacciones} mesLabel="mayo 2026" />
+              <TransaccionesList transacciones={currentTransacciones} mesLabel="mayo 2026" onAddTransaction={() => setIsTransactionModalOpen(true)} />
             </div>
           )}
           
@@ -190,12 +191,21 @@ export const Inversion = () => {
 
       {/* Modales */}
       <PortfolioModal isOpen={isPortfolioModalOpen} onClose={() => setIsPortfolioModalOpen(false)} onSave={handleAddPortfolio} />
+      
       <PortfolioSettingsModal 
         isOpen={isSettingsModalOpen} 
         onClose={() => setIsSettingsModalOpen(false)} 
         portfolio={portfolios.find(p => p.id === effectivePortfolioId)} 
         onUpdate={handleUpdatePortfolio} 
         onDelete={handleDeletePortfolio} 
+      />
+
+      <InvestmentTransactionModal
+        isOpen={isTransactionModalOpen}
+        onClose={() => setIsTransactionModalOpen(false)}
+        portfolios={portfolios}
+        activePortfolioId={effectivePortfolioId}
+        onSave={handleSaveTransaction}
       />
     </div>
   );

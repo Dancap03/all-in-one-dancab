@@ -1,4 +1,5 @@
-import { LineChart, Line, Tooltip, ResponsiveContainer, YAxis } from 'recharts';
+import { useState } from 'react';
+import { LineChart, Line, Tooltip, ResponsiveContainer, YAxis, XAxis } from 'recharts';
 import { EyeOff, Settings, Share } from 'lucide-react';
 
 interface Portfolio {
@@ -10,7 +11,7 @@ interface InvestmentSummaryProps {
   balance: { total: string; rendimiento: string; beneficio: string; positivo: boolean; };
   chartData: any[];
   activeTimeframe: string;
-  onTimeframeChange: (timeframe: string) => void; 
+  onTimeframeChange: (timeframe: string) => void;
   portfolios: Portfolio[];
   activePortfolioId: string;
   onSelectPortfolio: (id: string) => void;
@@ -26,11 +27,37 @@ export const InvestmentSummary = ({
   const timeframes = ['1D', '1W', '1M', 'YTD', '1Y', 'Max'];
   const showAggregated = portfolios.length > 1;
 
-  // Tooltip personalizado para recrear el efecto de la fecha flotante sobre el cursor
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
+  // Estado para capturar el punto exacto por donde pasa el ratón
+  const [hoveredPoint, setHoveredPoint] = useState<any>(null);
+
+  // Lógica para mostrar el balance dinámico (Si hay hover, recalcula. Si no, muestra el general)
+  let displayTotal = balance.total;
+  let displayRendimiento = balance.rendimiento;
+  let displayBeneficio = balance.beneficio;
+  let isPositivo = balance.positivo;
+
+  if (hoveredPoint && chartData.length > 0) {
+    const baseline = chartData[0].value; // El valor base es el primer punto de la gráfica
+    const currentVal = hoveredPoint.value;
+    const diff = currentVal - baseline;
+    const perc = baseline !== 0 ? (diff / baseline) * 100 : 0;
+    
+    isPositivo = diff >= 0;
+    
+    // Formateo estilo getquin
+    displayTotal = `${currentVal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+    displayRendimiento = `${isPositivo ? '↗' : '↘'} ${Math.abs(perc).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`;
+    displayBeneficio = `${isPositivo ? '+' : ''}${diff.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+  } else if (hasPortfolios && balance.total !== '0,00 €') {
+    // Ajuste de flechas para el estado por defecto
+    displayRendimiento = displayRendimiento.replace('↑', '↗').replace('↓', '↘');
+  }
+
+  // Tooltip personalizado para recrear la fecha flotante
+  const CustomTooltip = ({ active, label }: any) => {
+    if (active && label) {
       return (
-        <div className="relative -top-8 bg-transparent text-[#a3a3a3] text-xs font-medium whitespace-nowrap">
+        <div className="relative -top-8 text-[#a3a3a3] text-xs font-medium whitespace-nowrap bg-transparent text-center">
           {label}
         </div>
       );
@@ -73,7 +100,6 @@ export const InvestmentSummary = ({
           <button onClick={onAddPortfolio} className="bg-transparent hover:bg-[#2d2d2d] text-white text-sm font-medium px-4 py-1.5 rounded-lg border border-[#2d2d2d] transition-colors flex items-center gap-2">
             <span>+ Agregar cuenta</span>
           </button>
-          {/* Botón de Ajustes ahora funcional */}
           <button onClick={onOpenSettings} disabled={activePortfolioId === 'aggregated' || !hasPortfolios} className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
             <Settings size={18} />
           </button>
@@ -81,16 +107,16 @@ export const InvestmentSummary = ({
         </div>
       </div>
 
-      {/* Cabecera del Balance */}
+      {/* Cabecera del Balance (Ahora 100% Dinámica) */}
       <div className="flex justify-between items-start mb-8 mt-2">
         <div>
           <button className="flex items-center gap-2 text-gray-400 hover:text-white text-sm mb-4 transition-colors">
             <EyeOff size={16} /> Ocultar
           </button>
-          <h2 className="text-4xl font-bold text-white mb-2">{balance.total}</h2>
-          <div className={`flex items-center gap-2 text-sm font-bold ${balance.positivo ? 'text-[#10b981]' : (hasPortfolios && balance.total !== '0,00 €' ? 'text-red-500' : 'text-[#10b981]')}`}>
-            <span>{balance.positivo ? '↑' : (hasPortfolios && balance.total !== '0,00 €' ? '↓' : '↑')} {balance.rendimiento}</span>
-            <span>({balance.beneficio})</span>
+          <h2 className="text-4xl font-bold text-white mb-2 transition-all">{displayTotal}</h2>
+          <div className={`flex items-center gap-2 text-sm font-bold transition-colors ${isPositivo ? 'text-[#10b981]' : (hasPortfolios && balance.total !== '0,00 €' ? 'text-red-500' : 'text-[#10b981]')}`}>
+            <span>{displayRendimiento}</span>
+            <span>({displayBeneficio})</span>
           </div>
         </div>
         
@@ -112,25 +138,38 @@ export const InvestmentSummary = ({
         </div>
       </div>
 
-      {/* Gráfica Avanzada */}
+      {/* Gráfica Avanzada e Interactiva */}
       <div className="h-64 w-full border-b border-[#2d2d2d] border-dashed pb-2 relative">
         {chartData && chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 30, right: 0, left: 0, bottom: 0 }}>
+            <LineChart 
+              data={chartData} 
+              margin={{ top: 30, right: 0, left: 0, bottom: 0 }}
+              onMouseMove={(e: any) => {
+                if (e && e.activePayload && e.activePayload.length > 0) {
+                  setHoveredPoint(e.activePayload[0].payload);
+                }
+              }}
+              onMouseLeave={() => setHoveredPoint(null)}
+            >
+              {/* XAxis oculto pero necesario para mapear la fecha (date) al Tooltip */}
+              <XAxis dataKey="date" hide />
               <YAxis domain={['dataMin', 'dataMax']} hide />
+              
               <Tooltip 
                 content={<CustomTooltip />}
                 cursor={{ stroke: '#555', strokeWidth: 1, strokeDasharray: '0' }}
-                position={{ y: -10 }} 
+                position={{ y: 0 }} // Fija el tooltip en la parte superior del chart
                 isAnimationActive={false}
               />
+              
               <Line 
                 type="monotone" 
                 dataKey="value" 
-                stroke={balance.positivo ? '#10b981' : '#ef4444'} 
+                stroke={isPositivo ? '#10b981' : '#ef4444'} 
                 strokeWidth={2} 
                 dot={false}
-                activeDot={{ r: 5, fill: balance.positivo ? '#10b981' : '#ef4444', stroke: '#151515', strokeWidth: 2 }}
+                activeDot={{ r: 5, fill: isPositivo ? '#10b981' : '#ef4444', stroke: '#151515', strokeWidth: 2 }}
               />
             </LineChart>
           </ResponsiveContainer>

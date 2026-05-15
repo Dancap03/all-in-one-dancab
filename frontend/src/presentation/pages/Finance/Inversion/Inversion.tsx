@@ -6,12 +6,12 @@ import { TransaccionesList } from './components/TransaccionesList';
 import { PortfolioModal } from './components/modals/PortfolioModal';
 import { PortfolioSettingsModal } from './components/modals/PortfolioSettingsModal';
 import { InvestmentTransactionModal } from './components/modals/InvestmentTransactionModal';
- 
+
 export const Inversion = () => {
   const [activeTab, setActiveTab] = useState('Posiciones');
   const [activeTimeframe, setActiveTimeframe] = useState('YTD');
   
-  // ESTADO DE CARTERAS CON PERSISTENCIA
+  // ESTADO DE CARTERAS
   const [portfolios, setPortfolios] = useState<any[]>(() => {
     const saved = localStorage.getItem('aio_portfolios');
     return saved ? JSON.parse(saved) : [];
@@ -22,21 +22,39 @@ export const Inversion = () => {
     return saved || 'aggregated';
   });
 
-  // ESTADO DE MODALES
+  // DATOS FINANCIEROS PERSISTENTES
+  const [allPositions, setAllPositions] = useState<any[]>(() => {
+    const saved = localStorage.getItem('aio_positions');
+    return saved ? JSON.parse(saved) : [
+      { id: 'BTC', name: 'Bitcoin EUR', ticker: 'BTC-EUR', compra: 67629.02, actual: 7.09, total: 68501.66, plPerc: '+1.29%', plVal: '+0.09', pos: true, color: '#f59e0b', portfolioId: 'p1' },
+      { id: 'S&P', name: 'Vanguard S&P 500', ticker: 'VUSA.AS', compra: 88.50, actual: 95.00, total: 95.00, plPerc: '+7.34%', plVal: '+6.50', pos: true, color: '#ef4444', portfolioId: 'p2' }
+    ];
+  });
+
+  const [allVentas, setAllVentas] = useState<any[]>(() => {
+    const saved = localStorage.getItem('aio_ventas');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [allTransacciones, setAllTransacciones] = useState<any[]>(() => {
+    const saved = localStorage.getItem('aio_transacciones');
+    return saved ? JSON.parse(saved) : [
+      { id: '1', fechaDia: '08.05', tipoIcono: 'buy', asset: 'iShares MSCI ACWI ETF', detalles: 'Compró a 101,26 €', total: 19948.22, logoInitial: 'i', logoColor: '#3d3d3d', portfolioId: 'p2' }
+    ];
+  });
+
   const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
 
-  // Guardar en localStorage cada vez que cambien
-  useEffect(() => {
-    localStorage.setItem('aio_portfolios', JSON.stringify(portfolios));
-  }, [portfolios]);
+  // EFECTOS DE GUARDADO LOCAL
+  useEffect(() => { localStorage.setItem('aio_portfolios', JSON.stringify(portfolios)); }, [portfolios]);
+  useEffect(() => { localStorage.setItem('aio_activePortfolio', activePortfolioId); }, [activePortfolioId]);
+  useEffect(() => { localStorage.setItem('aio_positions', JSON.stringify(allPositions)); }, [allPositions]);
+  useEffect(() => { localStorage.setItem('aio_ventas', JSON.stringify(allVentas)); }, [allVentas]);
+  useEffect(() => { localStorage.setItem('aio_transacciones', JSON.stringify(allTransacciones)); }, [allTransacciones]);
 
-  useEffect(() => {
-    localStorage.setItem('aio_activePortfolio', activePortfolioId);
-  }, [activePortfolioId]);
-
-  // Funciones de gestión
+  // FUNCIONES DE CARTERA
   const handleAddPortfolio = (newPortfolio: any) => {
     setPortfolios([...portfolios, newPortfolio]);
     if (portfolios.length === 0) setActivePortfolioId(newPortfolio.id);
@@ -49,46 +67,91 @@ export const Inversion = () => {
   const handleDeletePortfolio = (id: string) => {
     const updated = portfolios.filter(p => p.id !== id);
     setPortfolios(updated);
-    if (updated.length > 0) {
-      setActivePortfolioId(updated.length === 1 ? updated[0].id : 'aggregated');
-    } else {
-      setActivePortfolioId('aggregated');
+    setActivePortfolioId(updated.length === 1 ? updated[0].id : (updated.length > 0 ? 'aggregated' : 'aggregated'));
+  };
+
+  // LOGICA CORE: PROCESAR NUEVA TRANSACCIÓN
+  const handleSaveTransaction = (data: any) => {
+    const { portfolioId, type, asset, cantidadInvertida, price, date, nota } = data;
+    const formattedDate = new Date(date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }).replace('/', '.');
+
+    // 1. Añadir a Historial de Transacciones
+    const newTx = {
+      id: Date.now().toString(),
+      fechaDia: formattedDate,
+      tipoIcono: type === 'Comprar' ? 'buy' : 'sell',
+      asset: asset,
+      detalles: `${type === 'Comprar' ? 'Compró' : 'Vendió'} a ${price} € ${nota ? `(${nota})` : ''}`,
+      total: cantidadInvertida,
+      logoInitial: asset.substring(0, 1).toUpperCase(),
+      logoColor: type === 'Comprar' ? '#3b82f6' : '#ef4444',
+      portfolioId: portfolioId
+    };
+    setAllTransacciones(prev => [newTx, ...prev]);
+
+    // 2. Modificar Posiciones
+    setAllPositions(prev => {
+      let updated = [...prev];
+      // Buscamos si el activo ya existe en ESA cartera específica
+      const existingIdx = updated.findIndex(p => (p.name === asset || p.id === asset) && p.portfolioId === portfolioId);
+
+      if (type === 'Comprar') {
+        if (existingIdx >= 0) {
+          const p = { ...updated[existingIdx] };
+          p.total += cantidadInvertida;
+          p.actual = p.total; 
+          updated[existingIdx] = p;
+        } else {
+          updated.push({
+            id: asset.substring(0, 3).toUpperCase(), name: asset, ticker: asset.toUpperCase(), 
+            compra: price, actual: cantidadInvertida, total: cantidadInvertida,
+            plPerc: '+0.00%', plVal: '+0.00', pos: true, color: '#10b981', portfolioId
+          });
+        }
+      } else if (type === 'Vender') {
+        if (existingIdx >= 0) {
+          const p = { ...updated[existingIdx] };
+          p.total -= cantidadInvertida;
+          p.actual = p.total;
+          
+          if (p.total <= 0) {
+             updated.splice(existingIdx, 1); // Lo vendió todo, se borra de posiciones
+          } else {
+             updated[existingIdx] = p;
+          }
+        }
+      }
+      return updated;
+    });
+
+    // 3. Añadir a Ventas si corresponde
+    if (type === 'Vender') {
+      const newVenta = {
+        id: asset.substring(0, 3).toUpperCase(), name: asset, ticker: asset.toUpperCase(), fecha: formattedDate, 
+        detalles: `Vendió a ${price} €`, totalVenta: cantidadInvertida, plPerc: '+0.00%', plVal: '+0.00', 
+        pos: true, color: '#ef4444', portfolioId
+      };
+      setAllVentas(prev => [newVenta, ...prev]);
     }
   };
-
-  const handleSaveTransaction = (data: any) => {
-    console.log("Transacción guardada:", data);
-    // Aquí es donde en el futuro llamarás a FinanceService para guardar en la BD
-  };
-
-  // Mocks de Base de Datos
-  const allMockPositions = [
-    { id: 'BTC', name: 'Bitcoin EUR', ticker: 'BTC-EUR', compra: 67629.02, actual: 7.09, total: 68501.66, plPerc: '+1.29%', plVal: '+0.09', pos: true, color: '#f59e0b', portfolioId: portfolios[0]?.id || 'p1' },
-    { id: 'S&P', name: 'Vanguard S&P 500', ticker: 'VUSA.AS', compra: 88.50, actual: 95.00, total: 95.00, plPerc: '+7.34%', plVal: '+6.50', pos: true, color: '#ef4444', portfolioId: portfolios[1]?.id || 'p2' }
-  ];
-  
-  const allMockVentas: any[] = [];
-  
-  const allMockTransacciones = [
-    { id: '1', fechaDia: '08.05', tipoIcono: 'buy' as const, asset: 'iShares MSCI ACWI ETF', detalles: 'Compró 197 a 101,26 €', total: 19948.22, logoInitial: 'i', logoColor: '#3d3d3d', portfolioId: portfolios[0]?.id || 'p1' }
-  ];
 
   const hasPortfolios = portfolios.length > 0;
   const effectivePortfolioId = !hasPortfolios ? 'aggregated' : (portfolios.length === 1 ? portfolios[0].id : activePortfolioId);
 
+  // FILTRADO DINÁMICO SEGÚN LA CARTERA SELECCIONADA
   let currentPositions: any[] = [];
   let currentVentas: any[] = [];
   let currentTransacciones: any[] = [];
 
   if (effectivePortfolioId === 'aggregated') {
-    const existingPortfolioIds = portfolios.map(p => p.id);
-    currentPositions = allMockPositions.filter(p => existingPortfolioIds.includes(p.portfolioId));
-    currentVentas = allMockVentas.filter(v => existingPortfolioIds.includes(v.portfolioId));
-    currentTransacciones = allMockTransacciones.filter(t => existingPortfolioIds.includes(t.portfolioId));
+    const existingIds = portfolios.map(p => p.id);
+    currentPositions = allPositions.filter(p => existingIds.includes(p.portfolioId));
+    currentVentas = allVentas.filter(v => existingIds.includes(v.portfolioId));
+    currentTransacciones = allTransacciones.filter(t => existingIds.includes(t.portfolioId));
   } else {
-    currentPositions = allMockPositions.filter(p => p.portfolioId === effectivePortfolioId);
-    currentVentas = allMockVentas.filter(v => v.portfolioId === effectivePortfolioId);
-    currentTransacciones = allMockTransacciones.filter(t => t.portfolioId === effectivePortfolioId);
+    currentPositions = allPositions.filter(p => p.portfolioId === effectivePortfolioId);
+    currentVentas = allVentas.filter(v => v.portfolioId === effectivePortfolioId);
+    currentTransacciones = allTransacciones.filter(t => t.portfolioId === effectivePortfolioId);
   }
 
   const hasData = currentPositions.length > 0;
@@ -106,27 +169,17 @@ export const Inversion = () => {
     if (!hasData) return [];
     const data = [];
     let baseValue = totalValue * (isGlobalPositive ? 0.9 : 1.1);
-    
-    let points = 20;
-    
-    if (activeTimeframe === '1D') { points = 48; }
-    else if (activeTimeframe === '1W') { points = 14; }
-    else if (activeTimeframe === '1M') { points = 30; }
-    else { points = 60; }
+    let points = activeTimeframe === '1D' ? 48 : activeTimeframe === '1W' ? 14 : activeTimeframe === '1M' ? 30 : 60;
 
     for (let i = 0; i < points; i++) {
       baseValue += (Math.random() - 0.5) * (totalValue * 0.02);
-      
       let dateLabel = '';
       if (activeTimeframe === '1D') dateLabel = `${10 + Math.floor(i/4)}:${(i%4)*15 === 0 ? '00' : (i%4)*15}`;
       else if (activeTimeframe === '1W') dateLabel = `10:00, ${10 + i}. may`;
       else if (activeTimeframe === '1M') dateLabel = `${i + 1}. may`;
       else dateLabel = `${Math.floor(i/5) + 1}. may 2026`;
 
-      data.push({ 
-        date: dateLabel, 
-        value: i === points - 1 ? totalValue : baseValue 
-      });
+      data.push({ date: dateLabel, value: i === points - 1 ? totalValue : baseValue });
     }
     return data;
   };
@@ -205,6 +258,7 @@ export const Inversion = () => {
         onClose={() => setIsTransactionModalOpen(false)}
         portfolios={portfolios}
         activePortfolioId={effectivePortfolioId}
+        currentPositions={currentPositions}
         onSave={handleSaveTransaction}
       />
     </div>

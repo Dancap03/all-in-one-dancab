@@ -3,7 +3,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 interface VaultsListProps {
   vaults: any[];
   vaultBalances: Record<string, number>;
-  onEditVault: (vault: any) => void;
+  onEditVault: (vault: any) => void; 
   onDeleteVault: (vaultId: string) => void;
 }
 

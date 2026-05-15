@@ -15,46 +15,52 @@ interface InvestmentSummaryProps {
   activePortfolioId: string;
   onSelectPortfolio: (id: string) => void;
   onAddPortfolio: () => void;
+  hasPortfolios: boolean;
 }
 
 export const InvestmentSummary = ({ 
   balance, chartData, activeTimeframe, onTimeframeChange, 
-  portfolios, activePortfolioId, onSelectPortfolio, onAddPortfolio 
+  portfolios, activePortfolioId, onSelectPortfolio, onAddPortfolio, hasPortfolios
 }: InvestmentSummaryProps) => {
   const timeframes = ['1D', '1W', '1M', 'YTD', '1Y', 'Max'];
 
-  // Si solo hay 1 cartera, ignoramos el "aggregated" internamente para el CSS
-  const currentTab = portfolios.length === 1 ? portfolios[0].id : activePortfolioId;
+  const showAggregated = portfolios.length > 1;
 
   return (
-    <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-6 mb-6 shadow-sm">
+    <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-6 shadow-sm">
       
-      {/* Navegación de Carteras */}
-      <div className="flex justify-between items-end mb-8 border-b border-[#2d2d2d] pb-4">
-        <div className="flex gap-6 text-sm font-medium overflow-x-auto custom-scrollbar">
+      {/* Navegación Superior Estilo getquin */}
+      <div className="flex justify-between items-center mb-8">
+        <div className="flex items-center gap-6 text-sm">
+          <span className="font-bold text-white text-lg mr-2">Carteras</span>
           
-          {/* Solo mostramos Aggregated si hay MÁS de 1 cartera */}
-          {portfolios.length > 1 && (
-            <button 
-              onClick={() => onSelectPortfolio('aggregated')}
-              className={`pb-4 -mb-4 transition-colors whitespace-nowrap ${currentTab === 'aggregated' ? 'text-white border-b-2 border-white' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              Aggregated
-            </button>
+          {/* Si no hay carteras, no mostramos el menú de navegación interno */}
+          {hasPortfolios && (
+            <div className="flex gap-4">
+              {showAggregated && (
+                <button 
+                  onClick={() => onSelectPortfolio('aggregated')}
+                  className={`pb-1 transition-colors ${activePortfolioId === 'aggregated' ? 'text-white border-b-2 border-white font-bold' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                  Aggregated
+                </button>
+              )}
+              
+              {portfolios.map(p => (
+                <button 
+                  key={p.id}
+                  onClick={() => onSelectPortfolio(p.id)}
+                  className={`pb-1 transition-colors ${activePortfolioId === p.id ? 'text-white border-b-2 border-white font-bold' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                  {p.nombre}
+                </button>
+              ))}
+            </div>
           )}
-          
-          {portfolios.map(p => (
-            <button 
-              key={p.id}
-              onClick={() => onSelectPortfolio(p.id)}
-              className={`pb-4 -mb-4 transition-colors whitespace-nowrap ${currentTab === p.id ? 'text-white border-b-2 border-white' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              {p.nombre}
-            </button>
-          ))}
         </div>
-        <div className="flex items-center gap-4 shrink-0 pl-4">
-          <button onClick={onAddPortfolio} className="bg-[#1a1a1a] hover:bg-[#252525] text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-[#2d2d2d] transition-colors flex items-center gap-2">
+
+        <div className="flex items-center gap-4">
+          <button onClick={onAddPortfolio} className="bg-transparent hover:bg-[#2d2d2d] text-white text-sm font-medium px-4 py-1.5 rounded-lg border border-[#2d2d2d] transition-colors flex items-center gap-2">
             <span>+ Agregar cuenta</span>
           </button>
           <button className="text-gray-400 hover:text-white"><Settings size={18} /></button>
@@ -63,14 +69,14 @@ export const InvestmentSummary = ({
       </div>
 
       {/* Cabecera del Balance y Controles del Gráfico */}
-      <div className="flex justify-between items-start mb-8">
+      <div className="flex justify-between items-start mb-8 mt-2">
         <div>
           <button className="flex items-center gap-2 text-gray-400 hover:text-white text-sm mb-4 transition-colors">
             <EyeOff size={16} /> Ocultar
           </button>
           <h2 className="text-4xl font-bold text-white mb-2">{balance.total}</h2>
-          <div className={`flex items-center gap-2 text-sm font-bold ${balance.positivo ? 'text-[#10b981]' : 'text-gray-500'}`}>
-            <span>{balance.positivo ? '↑' : ''} {balance.rendimiento}</span>
+          <div className={`flex items-center gap-2 text-sm font-bold ${balance.positivo ? 'text-[#10b981]' : (hasPortfolios ? 'text-red-500' : 'text-[#10b981]')}`}>
+            <span>{balance.positivo ? '↑' : (hasPortfolios && balance.total !== '0,00 €' ? '↓' : '↑')} {balance.rendimiento}</span>
             <span>({balance.beneficio})</span>
           </div>
         </div>
@@ -93,8 +99,8 @@ export const InvestmentSummary = ({
         </div>
       </div>
 
-      {/* Gráfica Condicional */}
-      <div className="h-64 w-full border-b border-[#2d2d2d] border-dashed pb-2">
+      {/* Gráfica */}
+      <div className="h-64 w-full border-b border-[#2d2d2d] border-dashed pb-2 relative">
         {chartData && chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
@@ -114,9 +120,9 @@ export const InvestmentSummary = ({
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-gray-600 italic">
-             <span className="text-3xl mb-3 opacity-50">📉</span>
-             <p className="text-sm">Sin posiciones en esta cartera.</p>
+          /* Línea recta si no hay datos */
+          <div className="absolute inset-0 flex items-center justify-center">
+             <div className="w-full h-0.5 bg-[#10b981]"></div>
           </div>
         )}
       </div>

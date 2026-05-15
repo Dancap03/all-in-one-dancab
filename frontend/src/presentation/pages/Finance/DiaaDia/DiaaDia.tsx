@@ -15,22 +15,24 @@ export const DiaaDia = () => {
   const [date, setDate] = useState(new Date()); 
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<Record<string, any>>({});
+  
+  // Nuevos estados para nuestro calendario personalizado
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(date.getFullYear());
 
   const monthId = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
   const monthLabel = date.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+  const monthNamesShort = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
   // Variables para controlar el límite del futuro
   const realNow = new Date();
   const currentYear = realNow.getFullYear();
   const currentMonth = realNow.getMonth();
   const isCurrentMonth = date.getFullYear() === currentYear && date.getMonth() === currentMonth;
-  const maxMonthString = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
-  const currentMonthInputString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
-
     if (history[monthId]) { setLoading(false); return; }
 
     setLoading(true);
@@ -50,40 +52,75 @@ export const DiaaDia = () => {
   const monthData = history[monthId] || { budget: 0, transactions: [] };
 
   if (loading && !history[monthId]) {
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] bg-[#0c0c0c]">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
+    return <div className="flex items-center justify-center min-h-[calc(100vh-80px)] bg-[#0c0c0c]"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div></div>;
   }
 
   return (
     <div className="min-h-screen bg-[#0c0c0c] text-white p-4 md:p-6">
       
-      {/* Cabecera con Navegación de Meses y Selector Oculto */}
+      {/* Cabecera con Navegación y Calendario Desplegable */}
       <div className="flex items-center gap-4 mb-8">
         <button onClick={handlePrevMonth} className="text-gray-500 hover:text-white transition-colors p-1 rounded-md hover:bg-[#1a1a1a]">
           <ChevronLeft size={24} />
         </button>
         
-        <div className="relative flex items-center justify-center group cursor-pointer">
-          <h1 className="text-xl font-bold capitalize group-hover:text-blue-500 transition-colors">
+        <div className="relative flex items-center justify-center group">
+          <h1 
+            onClick={() => { setPickerYear(date.getFullYear()); setIsDatePickerOpen(true); }}
+            className="text-xl font-bold capitalize cursor-pointer hover:text-blue-500 transition-colors"
+          >
             {monthLabel}
           </h1>
-          {/* Selector nativo de mes oculto sobre el texto */}
-          <input 
-            type="month"
-            max={maxMonthString}
-            value={currentMonthInputString}
-            onChange={(e) => {
-              if (e.target.value) {
-                const [y, m] = e.target.value.split('-');
-                setDate(new Date(parseInt(y), parseInt(m) - 1));
-              }
-            }}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            style={{ colorScheme: 'dark' }}
-          />
+          
+          {/* CALENDARIO PERSONALIZADO TIPO POPOVER */}
+          {isDatePickerOpen && (
+            <>
+              {/* Capa invisible para cerrar */}
+              <div className="fixed inset-0 z-40" onClick={() => setIsDatePickerOpen(false)}></div>
+              
+              <div className="absolute top-full mt-2 left-0 bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl shadow-2xl z-50 p-4 w-72">
+                
+                {/* Cabecera del año en el calendario */}
+                <div className="flex justify-between items-center mb-4">
+                  <button onClick={() => setPickerYear(prev => prev - 1)} className="p-1 hover:bg-[#252525] rounded transition-colors text-gray-400 hover:text-white">
+                    <ChevronLeft size={18} />
+                  </button>
+                  <span className="font-bold text-lg text-white">{pickerYear}</span>
+                  <button 
+                    onClick={() => setPickerYear(prev => prev + 1)} 
+                    disabled={pickerYear >= currentYear}
+                    className={`p-1 rounded transition-colors ${pickerYear >= currentYear ? 'text-[#2d2d2d] cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-[#252525]'}`}
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+                
+                {/* Cuadrícula de meses */}
+                <div className="grid grid-cols-3 gap-2">
+                  {monthNamesShort.map((m, i) => {
+                    const isDisabled = pickerYear === currentYear && i > currentMonth;
+                    const isSelected = date.getFullYear() === pickerYear && date.getMonth() === i;
+                    
+                    return (
+                      <button
+                        key={m}
+                        disabled={isDisabled}
+                        onClick={() => { setDate(new Date(pickerYear, i)); setIsDatePickerOpen(false); }}
+                        className={`py-2 text-sm rounded-lg transition-all ${
+                          isDisabled ? 'opacity-20 cursor-not-allowed' : 
+                          isSelected ? 'bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20' : 
+                          'bg-[#151515] border border-[#2d2d2d] hover:border-gray-500 text-gray-300 hover:text-white'
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    )
+                  })}
+                </div>
+
+              </div>
+            </>
+          )}
         </div>
 
         <button 
@@ -95,6 +132,7 @@ export const DiaaDia = () => {
         </button>
       </div>
 
+      {/* Resto de componentes */}
       <SummaryCards transactions={monthData.transactions} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">

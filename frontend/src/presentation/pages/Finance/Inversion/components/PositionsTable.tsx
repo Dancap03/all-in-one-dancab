@@ -16,14 +16,15 @@ export interface Position {
 
 interface PositionsTableProps {
   posiciones: Position[];
+  onAddTransaction: () => void;
 }
 
-export const PositionsTable = ({ posiciones }: PositionsTableProps) => {
+export const PositionsTable = ({ posiciones, onAddTransaction }: PositionsTableProps) => {
   return (
     <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl overflow-hidden shadow-sm">
       <div className="flex justify-between items-center p-6 border-b border-[#2d2d2d]">
         <h3 className="font-bold text-white">Posiciones</h3>
-        <button className="bg-[#1a1a1a] hover:bg-[#252525] text-white text-sm px-4 py-2 rounded-lg border border-[#2d2d2d] transition-colors">
+        <button onClick={onAddTransaction} className="bg-[#1a1a1a] hover:bg-[#252525] text-white text-sm px-4 py-2 rounded-lg border border-[#2d2d2d] transition-colors">
           + Agregar transacción
         </button>
       </div>

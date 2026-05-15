@@ -4,7 +4,7 @@ import { EyeOff, Settings, Share } from 'lucide-react';
 interface Portfolio {
   id: string;
   nombre: string;
-}
+} 
 
 interface InvestmentSummaryProps {
   balance: { total: string; rendimiento: string; beneficio: string; positivo: boolean; };

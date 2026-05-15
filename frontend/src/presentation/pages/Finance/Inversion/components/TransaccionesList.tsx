@@ -16,16 +16,17 @@ export interface Transaccion {
 interface TransaccionesListProps {
   transacciones: Transaccion[];
   mesLabel: string;
+  onAddTransaction: () => void;
 }
 
-export const TransaccionesList = ({ transacciones, mesLabel }: TransaccionesListProps) => {
+export const TransaccionesList = ({ transacciones, mesLabel, onAddTransaction }: TransaccionesListProps) => {
   return (
     <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-6 shadow-sm mt-6">
       
       {/* Cabecera */}
       <div className="flex justify-between items-center mb-6">
         <h3 className="font-bold text-white text-lg">Transacciones</h3>
-        <button className="bg-[#1a1a1a] hover:bg-[#252525] text-white text-sm px-4 py-2 rounded-lg border border-[#2d2d2d] transition-colors flex items-center gap-2">
+        <button onClick={onAddTransaction} className="bg-[#1a1a1a] hover:bg-[#252525] text-white text-sm px-4 py-2 rounded-lg border border-[#2d2d2d] transition-colors flex items-center gap-2">
           <span>+ Agregar transacción</span>
         </button>
       </div>
@@ -47,7 +48,7 @@ export const TransaccionesList = ({ transacciones, mesLabel }: TransaccionesList
         </button>
       </div>
 
-      {/* Lista de transacciones (Agrupadas por mes) */}
+      {/* Lista de transacciones */}
       <div>
         <p className="text-gray-500 text-xs font-medium mb-4 uppercase">{mesLabel}</p>
         
@@ -60,13 +61,11 @@ export const TransaccionesList = ({ transacciones, mesLabel }: TransaccionesList
             transacciones.map((t) => (
               <div key={t.id} className="flex items-center gap-4 py-4 border-l-2 border-transparent hover:bg-[#1a1a1a] -mx-4 px-4 rounded-lg cursor-pointer transition-colors group">
                 
-                {/* Fecha y Flecha */}
                 <div className="w-12 flex flex-col items-center justify-center shrink-0">
                   <span className="text-white font-bold text-sm">{t.fechaDia}</span>
                   <ArrowRight size={14} className="text-gray-500 mt-0.5" />
                 </div>
 
-                {/* Icono del Asset */}
                 <div 
                   className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 bg-[#2d2d2d]"
                   style={t.logoColor ? { backgroundColor: t.logoColor } : {}}
@@ -74,13 +73,11 @@ export const TransaccionesList = ({ transacciones, mesLabel }: TransaccionesList
                   {t.logoInitial}
                 </div>
 
-                {/* Info principal */}
                 <div className="flex-1 min-w-0">
                   <p className="text-white font-bold text-sm truncate">{t.asset}</p>
                   <p className="text-gray-400 text-sm truncate mt-0.5">{t.detalles}</p>
                 </div>
 
-                {/* Total y menú */}
                 <div className="flex items-center gap-4 shrink-0">
                   <p className="text-white font-bold text-sm">
                     {t.total.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €

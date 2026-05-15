@@ -10,7 +10,7 @@ interface InvestmentSummaryProps {
   balance: { total: string; rendimiento: string; beneficio: string; positivo: boolean; };
   chartData: any[];
   activeTimeframe: string;
-  onTimeframeChange: (timeframe: string) => void;
+  onTimeframeChange: (timeframe: string) => void; 
   portfolios: Portfolio[];
   activePortfolioId: string;
   onSelectPortfolio: (id: string) => void;

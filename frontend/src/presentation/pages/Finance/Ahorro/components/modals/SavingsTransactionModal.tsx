@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { SavingsService } from '../../../../../../infrastructure/services/SavingsService';
 import { FinanceService } from '../../../../../../infrastructure/services/FinanceService';
 import { auth } from '../../../../../../infrastructure/firebase/config';
-
+ 
 interface SavingsTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;

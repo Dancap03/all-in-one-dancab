@@ -58,7 +58,10 @@ export const Inversion = () => {
     { id: 'BTC', name: 'Bitcoin EUR', ticker: 'BTC-EUR', compra: 67629.02, actual: 7.09, total: 68501.66, plPerc: '+1.29%', plVal: '+0.09', pos: true, color: '#f59e0b', portfolioId: portfolios[0]?.id || 'p1' },
     { id: 'S&P', name: 'Vanguard S&P 500', ticker: 'VUSA.AS', compra: 88.50, actual: 95.00, total: 95.00, plPerc: '+7.34%', plVal: '+6.50', pos: true, color: '#ef4444', portfolioId: portfolios[1]?.id || 'p2' }
   ];
-  const allMockVentas = [];
+  
+  // SOLUCIÓN AL ERROR TS: Añadido : any[] para que TypeScript no se queje de los arrays vacíos
+  const allMockVentas: any[] = [];
+  
   const allMockTransacciones = [
     { id: '1', fechaDia: '08.05', tipoIcono: 'buy' as const, asset: 'iShares MSCI ACWI ETF', detalles: 'Compró 197 a 101,26 €', total: 19948.22, logoInitial: 'i', logoColor: '#3d3d3d', portfolioId: portfolios[0]?.id || 'p1' }
   ];
@@ -66,15 +69,16 @@ export const Inversion = () => {
   const hasPortfolios = portfolios.length > 0;
   const effectivePortfolioId = !hasPortfolios ? 'aggregated' : (portfolios.length === 1 ? portfolios[0].id : activePortfolioId);
 
-  let currentPositions = [];
-  let currentVentas = [];
-  let currentTransacciones = [];
+  // SOLUCIÓN AL ERROR TS: Tipado explícito de any[]
+  let currentPositions: any[] = [];
+  let currentVentas: any[] = [];
+  let currentTransacciones: any[] = [];
 
   if (effectivePortfolioId === 'aggregated') {
     const existingPortfolioIds = portfolios.map(p => p.id);
-    currentPositions = allMockPositions.filter(p => existingPortfolioIds.includes(p.portfolioId!));
-    currentVentas = allMockVentas.filter(v => existingPortfolioIds.includes(v.portfolioId!));
-    currentTransacciones = allMockTransacciones.filter(t => existingPortfolioIds.includes(t.portfolioId!));
+    currentPositions = allMockPositions.filter(p => existingPortfolioIds.includes(p.portfolioId));
+    currentVentas = allMockVentas.filter(v => existingPortfolioIds.includes(v.portfolioId));
+    currentTransacciones = allMockTransacciones.filter(t => existingPortfolioIds.includes(t.portfolioId));
   } else {
     currentPositions = allMockPositions.filter(p => p.portfolioId === effectivePortfolioId);
     currentVentas = allMockVentas.filter(v => v.portfolioId === effectivePortfolioId);

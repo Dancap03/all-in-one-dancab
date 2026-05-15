@@ -1,6 +1,7 @@
+import React from 'react';
 import { Search, ChevronDown, MoreVertical, ArrowRight } from 'lucide-react';
 
-interface Transaccion {
+export interface Transaccion {
   id: string;
   fechaDia: string;
   tipoIcono: 'buy' | 'sell';
@@ -9,6 +10,7 @@ interface Transaccion {
   total: number;
   logoInitial: string;
   logoColor?: string;
+  portfolioId?: string;
 }
 
 interface TransaccionesListProps {
@@ -40,7 +42,7 @@ export const TransaccionesList = ({ transacciones, mesLabel }: TransaccionesList
             className="w-full bg-[#1a1a1a] border border-[#2d2d2d] text-white text-sm rounded-lg focus:border-[#10b981] outline-none block pl-10 p-2.5 transition-colors"
           />
         </div>
-        <button className="flex items-center gap-2 text-sm text-white px-4 py-2 hover:bg-[#1a1a1a] rounded-lg transition-colors">
+        <button className="flex items-center gap-2 text-sm text-white px-4 py-2 hover:bg-[#1a1a1a] rounded-lg border border-[#2d2d2d] transition-colors">
           Todos <ChevronDown size={14} className="text-gray-400" />
         </button>
       </div>
@@ -50,41 +52,47 @@ export const TransaccionesList = ({ transacciones, mesLabel }: TransaccionesList
         <p className="text-gray-500 text-xs font-medium mb-4 uppercase">{mesLabel}</p>
         
         <div className="flex flex-col">
-          {transacciones.map((t, i) => (
-            <div key={t.id} className="flex items-center gap-4 py-4 border-l-2 border-transparent hover:bg-[#1a1a1a] -mx-4 px-4 rounded-lg cursor-pointer transition-colors group">
-              
-              {/* Fecha y Flecha */}
-              <div className="w-12 flex flex-col items-center justify-center shrink-0">
-                <span className="text-white font-bold text-sm">{t.fechaDia}</span>
-                <ArrowRight size={14} className="text-gray-500 mt-0.5" />
-              </div>
-
-              {/* Icono del Asset */}
-              <div 
-                className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 bg-[#2d2d2d]"
-                style={t.logoColor ? { backgroundColor: t.logoColor } : {}}
-              >
-                {t.logoInitial}
-              </div>
-
-              {/* Info principal */}
-              <div className="flex-1 min-w-0">
-                <p className="text-white font-bold text-sm truncate">{t.asset}</p>
-                <p className="text-gray-400 text-sm truncate mt-0.5">{t.detalles}</p>
-              </div>
-
-              {/* Total y menú */}
-              <div className="flex items-center gap-4 shrink-0">
-                <p className="text-white font-bold text-sm">
-                  {t.total.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
-                </p>
-                <button className="text-gray-500 hover:text-white transition-colors p-1 opacity-0 group-hover:opacity-100">
-                  <MoreVertical size={16} />
-                </button>
-              </div>
-              
+          {transacciones.length === 0 ? (
+            <div className="py-8 text-center text-gray-500 italic text-sm">
+              No hay transacciones registradas en esta cartera.
             </div>
-          ))}
+          ) : (
+            transacciones.map((t) => (
+              <div key={t.id} className="flex items-center gap-4 py-4 border-l-2 border-transparent hover:bg-[#1a1a1a] -mx-4 px-4 rounded-lg cursor-pointer transition-colors group">
+                
+                {/* Fecha y Flecha */}
+                <div className="w-12 flex flex-col items-center justify-center shrink-0">
+                  <span className="text-white font-bold text-sm">{t.fechaDia}</span>
+                  <ArrowRight size={14} className="text-gray-500 mt-0.5" />
+                </div>
+
+                {/* Icono del Asset */}
+                <div 
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 bg-[#2d2d2d]"
+                  style={t.logoColor ? { backgroundColor: t.logoColor } : {}}
+                >
+                  {t.logoInitial}
+                </div>
+
+                {/* Info principal */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-bold text-sm truncate">{t.asset}</p>
+                  <p className="text-gray-400 text-sm truncate mt-0.5">{t.detalles}</p>
+                </div>
+
+                {/* Total y menú */}
+                <div className="flex items-center gap-4 shrink-0">
+                  <p className="text-white font-bold text-sm">
+                    {t.total.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                  </p>
+                  <button className="text-gray-500 hover:text-white transition-colors p-1 opacity-0 group-hover:opacity-100">
+                    <MoreVertical size={16} />
+                  </button>
+                </div>
+                
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

@@ -92,7 +92,6 @@ export const Inversion = () => {
     // 2. Modificar Posiciones
     setAllPositions(prev => {
       let updated = [...prev];
-      // Buscamos si el activo ya existe en ESA cartera específica
       const existingIdx = updated.findIndex(p => (p.name === asset || p.id === asset) && p.portfolioId === portfolioId);
 
       if (type === 'Comprar') {
@@ -115,7 +114,7 @@ export const Inversion = () => {
           p.actual = p.total;
           
           if (p.total <= 0) {
-             updated.splice(existingIdx, 1); // Lo vendió todo, se borra de posiciones
+             updated.splice(existingIdx, 1); 
           } else {
              updated[existingIdx] = p;
           }
@@ -203,7 +202,8 @@ export const Inversion = () => {
 
       {hasPortfolios ? (
         <>
-          <div className="flex gap-8 text-sm font-medium border-b border-[#2d2d2d] mb-6 px-2">
+          {/* Aquí está el margen superior añadido (mt-8) para separar las pestañas del gráfico */}
+          <div className="flex gap-8 text-sm font-medium border-b border-[#2d2d2d] mt-8 mb-6 px-2">
             {tabs.map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-3 transition-colors ${activeTab === tab ? 'text-[#10b981] border-b-2 border-[#10b981]' : 'text-gray-500 hover:text-gray-300'}`}>
                 {tab}

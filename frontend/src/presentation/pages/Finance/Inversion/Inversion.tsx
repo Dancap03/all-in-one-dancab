@@ -9,19 +9,16 @@ export const Inversion = () => {
   const [activeTab, setActiveTab] = useState('Posiciones');
   const [activeTimeframe, setActiveTimeframe] = useState('YTD');
   
-  // Estado para las Carteras
   const [portfolios, setPortfolios] = useState<any[]>([]);
   const [activePortfolioId, setActivePortfolioId] = useState('aggregated');
   const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false);
 
-  // Funciones para manejar las carteras
   const handleAddPortfolio = (newPortfolio: any) => {
     setPortfolios([...portfolios, newPortfolio]);
-    setActivePortfolioId(newPortfolio.id); // Selecciona la nueva cartera automáticamente
+    setActivePortfolioId(newPortfolio.id); 
   };
 
-  // MOCKS CON PORTFOLIO IDs (Simulando datos de BD)
-  // Asumimos que 'p1' es Individual y 'p2' es Individual 2
+  // Mocks de base de datos
   const mockPositions = [
     { id: 'BTC', name: 'Bitcoin EUR', ticker: 'BTC-EUR', compra: 67629.02, actual: 7.09, total: 68501.66, plPerc: '+1.29%', plVal: '+0.09', pos: true, color: '#f59e0b', portfolioId: 'p1' },
     { id: 'S&P', name: 'Vanguard S&P 500', ticker: 'VUSA.AS', compra: 88.50, actual: 95.00, total: 95.00, plPerc: '+7.34%', plVal: '+6.50', pos: true, color: '#ef4444', portfolioId: 'p2' }
@@ -36,16 +33,27 @@ export const Inversion = () => {
     { id: '2', fechaDia: '08.05', tipoIcono: 'buy' as const, asset: 'Alphabet Inc. Class A', detalles: 'Compró 30 a 340,33 €', total: 10209.75, logoInitial: 'Alph', logoColor: '#ef4444', portfolioId: 'p1' },
   ];
 
-  // LÓGICA DE FILTRADO: Si no es 'aggregated', filtramos por la cartera seleccionada.
-  const filteredPositions = activePortfolioId === 'aggregated' ? mockPositions : mockPositions.filter(p => p.portfolioId === activePortfolioId);
-  const filteredVentas = activePortfolioId === 'aggregated' ? mockVentas : mockVentas.filter(v => v.portfolioId === activePortfolioId);
-  const filteredTransacciones = activePortfolioId === 'aggregated' ? mockTransacciones : mockTransacciones.filter(t => t.portfolioId === activePortfolioId);
+  // LÓGICA DE FILTRADO: Si solo hay 1 cartera, forzamos su ID para no buscar "aggregated"
+  const effectivePortfolioId = portfolios.length === 1 ? portfolios[0].id : activePortfolioId;
 
-  // Mocks globales
-  const balanceData = { total: portfolios.length === 0 ? '0.00 €' : '100.568,89 €', rendimiento: '-1.49%', beneficio: '-1520.22 €', positivo: false };
-  const chartData = portfolios.length === 0 ? [] : [ { date: '1 ene', value: 105 }, { date: '15 may', value: 100 } ];
+  const filteredPositions = effectivePortfolioId === 'aggregated' ? mockPositions : mockPositions.filter(p => p.portfolioId === effectivePortfolioId);
+  const filteredVentas = effectivePortfolioId === 'aggregated' ? mockVentas : mockVentas.filter(v => v.portfolioId === effectivePortfolioId);
+  const filteredTransacciones = effectivePortfolioId === 'aggregated' ? mockTransacciones : mockTransacciones.filter(t => t.portfolioId === effectivePortfolioId);
+
+  // CÁLCULO DEL BALANCE REAL Y GRÁFICO CONDICIONAL
+  const hasPositions = filteredPositions.length > 0;
+  const totalValue = filteredPositions.reduce((sum, p) => sum + p.total, 0);
+
+  const balanceData = { 
+    total: hasPositions ? `${totalValue.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €` : '0,00 €', 
+    rendimiento: hasPositions ? '+9.56%' : '0,00%', 
+    beneficio: hasPositions ? '+10.50 €' : '0,00 €', 
+    positivo: hasPositions ? true : false 
+  };
+  
+  const chartData = hasPositions ? [ { date: '1 ene', value: totalValue * 0.9 }, { date: '15 may', value: totalValue } ] : [];
+  
   const tabs = ['Posiciones', 'Distribución', 'Rendimiento', 'Dividendos'];
-
   const hasPortfolios = portfolios.length > 0;
 
   return (
@@ -60,12 +68,11 @@ export const Inversion = () => {
         activeTimeframe={activeTimeframe} 
         onTimeframeChange={setActiveTimeframe}
         portfolios={portfolios}
-        activePortfolioId={activePortfolioId}
+        activePortfolioId={effectivePortfolioId}
         onSelectPortfolio={setActivePortfolioId}
         onAddPortfolio={() => setIsPortfolioModalOpen(true)}
       />
 
-      {/* Renderizado de contenido central */}
       {hasPortfolios ? (
         <>
           <div className="flex gap-8 text-sm font-medium border-b border-[#2d2d2d] mb-6 px-2">
@@ -74,10 +81,6 @@ export const Inversion = () => {
                 {tab}
               </button>
             ))}
-            <button onClick={() => setActiveTab('IA')} className={`pb-3 transition-colors flex items-center gap-2 ${activeTab === 'IA' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500 hover:text-gray-300'}`}>
-              <span>AllInOne IA</span>
-              <span className="bg-blue-500/20 text-blue-400 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Beta</span>
-            </button>
           </div>
 
           {activeTab === 'Posiciones' && (
@@ -87,33 +90,21 @@ export const Inversion = () => {
               <TransaccionesList transacciones={filteredTransacciones} mesLabel="mayo 2026" />
             </div>
           )}
-          
-          {activeTab !== 'Posiciones' && (
-            <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-10 flex items-center justify-center text-gray-500 italic">
-              Módulo de {activeTab} en desarrollo...
-            </div>
-          )}
         </>
       ) : (
-        /* ESTADO VACÍO: Si no hay carteras, se muestra esto en lugar de las tablas */
-        <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">
-          <div className="w-16 h-16 bg-[#1a1a1a] rounded-full flex items-center justify-center mb-4">
+        <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6 shadow-sm">
+          <div className="w-16 h-16 bg-[#1a1a1a] rounded-full flex items-center justify-center mb-4 border border-[#2d2d2d]">
             <span className="text-3xl">💼</span>
           </div>
           <h3 className="text-xl font-bold text-white mb-2">Comienza tu viaje de inversión</h3>
-          <p className="text-gray-400 max-w-sm mb-6">Crea tu primera cartera para empezar a hacer seguimiento de tus ETFs, criptomonedas y acciones.</p>
-          <button onClick={() => setIsPortfolioModalOpen(true)} className="bg-[#2563eb] hover:bg-blue-600 text-white font-bold px-6 py-2.5 rounded-lg transition-colors">
+          <p className="text-gray-400 max-w-sm mb-6 text-sm">Crea tu primera cartera para empezar a hacer seguimiento de tus ETFs, criptomonedas y acciones.</p>
+          <button onClick={() => setIsPortfolioModalOpen(true)} className="bg-white hover:bg-gray-200 text-black font-bold px-6 py-2.5 rounded-lg transition-colors text-sm">
             Crear mi primera cartera
           </button>
         </div>
       )}
 
-      {/* Inyección del Modal */}
-      <PortfolioModal 
-        isOpen={isPortfolioModalOpen} 
-        onClose={() => setIsPortfolioModalOpen(false)} 
-        onSave={handleAddPortfolio} 
-      />
+      <PortfolioModal isOpen={isPortfolioModalOpen} onClose={() => setIsPortfolioModalOpen(false)} onSave={handleAddPortfolio} />
     </div>
   );
 };

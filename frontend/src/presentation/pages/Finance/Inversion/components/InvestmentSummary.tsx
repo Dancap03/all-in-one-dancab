@@ -4,7 +4,7 @@ import { EyeOff, Settings, Share } from 'lucide-react';
 interface Portfolio {
   id: string;
   nombre: string;
-} 
+}
 
 interface InvestmentSummaryProps {
   balance: { total: string; rendimiento: string; beneficio: string; positivo: boolean; };
@@ -23,23 +23,31 @@ export const InvestmentSummary = ({
 }: InvestmentSummaryProps) => {
   const timeframes = ['1D', '1W', '1M', 'YTD', '1Y', 'Max'];
 
+  // Si solo hay 1 cartera, ignoramos el "aggregated" internamente para el CSS
+  const currentTab = portfolios.length === 1 ? portfolios[0].id : activePortfolioId;
+
   return (
     <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-6 mb-6 shadow-sm">
       
       {/* Navegación de Carteras */}
       <div className="flex justify-between items-end mb-8 border-b border-[#2d2d2d] pb-4">
         <div className="flex gap-6 text-sm font-medium overflow-x-auto custom-scrollbar">
-          <button 
-            onClick={() => onSelectPortfolio('aggregated')}
-            className={`pb-4 -mb-4 transition-colors whitespace-nowrap ${activePortfolioId === 'aggregated' ? 'text-white border-b-2 border-white' : 'text-gray-500 hover:text-gray-300'}`}
-          >
-            Aggregated
-          </button>
+          
+          {/* Solo mostramos Aggregated si hay MÁS de 1 cartera */}
+          {portfolios.length > 1 && (
+            <button 
+              onClick={() => onSelectPortfolio('aggregated')}
+              className={`pb-4 -mb-4 transition-colors whitespace-nowrap ${currentTab === 'aggregated' ? 'text-white border-b-2 border-white' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              Aggregated
+            </button>
+          )}
+          
           {portfolios.map(p => (
             <button 
               key={p.id}
               onClick={() => onSelectPortfolio(p.id)}
-              className={`pb-4 -mb-4 transition-colors whitespace-nowrap ${activePortfolioId === p.id ? 'text-white border-b-2 border-white' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`pb-4 -mb-4 transition-colors whitespace-nowrap ${currentTab === p.id ? 'text-white border-b-2 border-white' : 'text-gray-500 hover:text-gray-300'}`}
             >
               {p.nombre}
             </button>
@@ -61,8 +69,8 @@ export const InvestmentSummary = ({
             <EyeOff size={16} /> Ocultar
           </button>
           <h2 className="text-4xl font-bold text-white mb-2">{balance.total}</h2>
-          <div className={`flex items-center gap-2 text-sm font-bold ${balance.positivo ? 'text-[#10b981]' : 'text-red-500'}`}>
-            <span>{balance.positivo ? '↑' : '↓'} {balance.rendimiento}</span>
+          <div className={`flex items-center gap-2 text-sm font-bold ${balance.positivo ? 'text-[#10b981]' : 'text-gray-500'}`}>
+            <span>{balance.positivo ? '↑' : ''} {balance.rendimiento}</span>
             <span>({balance.beneficio})</span>
           </div>
         </div>
@@ -85,25 +93,32 @@ export const InvestmentSummary = ({
         </div>
       </div>
 
-      {/* Gráfica */}
+      {/* Gráfica Condicional */}
       <div className="h-64 w-full border-b border-[#2d2d2d] border-dashed pb-2">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData}>
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#151515', borderColor: '#2d2d2d', color: '#fff', borderRadius: '8px' }}
-              itemStyle={{ color: balance.positivo ? '#10b981' : '#ef4444' }}
-              labelStyle={{ display: 'none' }}
-            />
-            <Line 
-              type="monotone" 
-              dataKey="value" 
-              stroke={balance.positivo ? '#10b981' : '#ef4444'} 
-              strokeWidth={2} 
-              dot={false}
-              activeDot={{ r: 6, fill: balance.positivo ? '#10b981' : '#ef4444', stroke: '#151515', strokeWidth: 2 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        {chartData && chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#151515', borderColor: '#2d2d2d', color: '#fff', borderRadius: '8px' }}
+                itemStyle={{ color: balance.positivo ? '#10b981' : '#ef4444' }}
+                labelStyle={{ display: 'none' }}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="value" 
+                stroke={balance.positivo ? '#10b981' : '#ef4444'} 
+                strokeWidth={2} 
+                dot={false}
+                activeDot={{ r: 6, fill: balance.positivo ? '#10b981' : '#ef4444', stroke: '#151515', strokeWidth: 2 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-gray-600 italic">
+             <span className="text-3xl mb-3 opacity-50">📉</span>
+             <p className="text-sm">Sin posiciones en esta cartera.</p>
+          </div>
+        )}
       </div>
       <div className="pt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
         Gráfico por <span className="text-gray-400">AllInOne</span>

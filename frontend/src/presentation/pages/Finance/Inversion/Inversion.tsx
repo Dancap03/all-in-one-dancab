@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react';
 import { InvestmentSummary } from './components/InvestmentSummary';
-import { PositionsTable } from './components/PositionsTable';
-import { VentasTable } from './components/VentasTable';
-import { TransaccionesList } from './components/TransaccionesList';
 import { PortfolioModal } from './components/modals/PortfolioModal';
 import { PortfolioSettingsModal } from './components/modals/PortfolioSettingsModal';
 import { InvestmentTransactionModal } from './components/modals/InvestmentTransactionModal';
+
+// Importamos las nuevas pestañas
+import { PosicionesTab } from './components/tabs/PosicionesTab';
+import { DistribucionTab } from './components/tabs/DistribucionTab';
+import { RendimientoTab } from './components/tabs/RendimientoTab';
+import { DividendosTab } from './components/tabs/DividendosTab';
+import { AllInOneIATab } from './components/tabs/AllInOneIATab';
 
 export const Inversion = () => {
   const [activeTab, setActiveTab] = useState('Posiciones');
   const [activeTimeframe, setActiveTimeframe] = useState('YTD');
   
-  // ESTADO DE CARTERAS
   const [portfolios, setPortfolios] = useState<any[]>(() => {
     const saved = localStorage.getItem('aio_portfolios');
     return saved ? JSON.parse(saved) : [];
@@ -22,7 +25,6 @@ export const Inversion = () => {
     return saved || 'aggregated';
   });
 
-  // DATOS FINANCIEROS PERSISTENTES
   const [allPositions, setAllPositions] = useState<any[]>(() => {
     const saved = localStorage.getItem('aio_positions');
     return saved ? JSON.parse(saved) : [
@@ -47,14 +49,12 @@ export const Inversion = () => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
 
-  // EFECTOS DE GUARDADO LOCAL
   useEffect(() => { localStorage.setItem('aio_portfolios', JSON.stringify(portfolios)); }, [portfolios]);
   useEffect(() => { localStorage.setItem('aio_activePortfolio', activePortfolioId); }, [activePortfolioId]);
   useEffect(() => { localStorage.setItem('aio_positions', JSON.stringify(allPositions)); }, [allPositions]);
   useEffect(() => { localStorage.setItem('aio_ventas', JSON.stringify(allVentas)); }, [allVentas]);
   useEffect(() => { localStorage.setItem('aio_transacciones', JSON.stringify(allTransacciones)); }, [allTransacciones]);
 
-  // FUNCIONES DE CARTERA
   const handleAddPortfolio = (newPortfolio: any) => {
     setPortfolios([...portfolios, newPortfolio]);
     if (portfolios.length === 0) setActivePortfolioId(newPortfolio.id);
@@ -70,12 +70,10 @@ export const Inversion = () => {
     setActivePortfolioId(updated.length === 1 ? updated[0].id : (updated.length > 0 ? 'aggregated' : 'aggregated'));
   };
 
-  // LOGICA CORE: PROCESAR NUEVA TRANSACCIÓN
   const handleSaveTransaction = (data: any) => {
     const { portfolioId, type, asset, cantidadInvertida, price, date, nota } = data;
     const formattedDate = new Date(date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }).replace('/', '.');
 
-    // 1. Añadir a Historial de Transacciones
     const newTx = {
       id: Date.now().toString(),
       fechaDia: formattedDate,
@@ -89,7 +87,6 @@ export const Inversion = () => {
     };
     setAllTransacciones(prev => [newTx, ...prev]);
 
-    // 2. Modificar Posiciones
     setAllPositions(prev => {
       let updated = [...prev];
       const existingIdx = updated.findIndex(p => (p.name === asset || p.id === asset) && p.portfolioId === portfolioId);
@@ -112,18 +109,13 @@ export const Inversion = () => {
           const p = { ...updated[existingIdx] };
           p.total -= cantidadInvertida;
           p.actual = p.total;
-          
-          if (p.total <= 0) {
-             updated.splice(existingIdx, 1); 
-          } else {
-             updated[existingIdx] = p;
-          }
+          if (p.total <= 0) updated.splice(existingIdx, 1); 
+          else updated[existingIdx] = p;
         }
       }
       return updated;
     });
 
-    // 3. Añadir a Ventas si corresponde
     if (type === 'Vender') {
       const newVenta = {
         id: asset.substring(0, 3).toUpperCase(), name: asset, ticker: asset.toUpperCase(), fecha: formattedDate, 
@@ -137,7 +129,6 @@ export const Inversion = () => {
   const hasPortfolios = portfolios.length > 0;
   const effectivePortfolioId = !hasPortfolios ? 'aggregated' : (portfolios.length === 1 ? portfolios[0].id : activePortfolioId);
 
-  // FILTRADO DINÁMICO SEGÚN LA CARTERA SELECCIONADA
   let currentPositions: any[] = [];
   let currentVentas: any[] = [];
   let currentTransacciones: any[] = [];
@@ -177,13 +168,30 @@ export const Inversion = () => {
       else if (activeTimeframe === '1W') dateLabel = `10:00, ${10 + i}. may`;
       else if (activeTimeframe === '1M') dateLabel = `${i + 1}. may`;
       else dateLabel = `${Math.floor(i/5) + 1}. may 2026`;
-
       data.push({ date: dateLabel, value: i === points - 1 ? totalValue : baseValue });
     }
     return data;
   };
 
   const tabs = ['Posiciones', 'Distribución', 'Rendimiento', 'Dividendos'];
+
+  // FUNCIÓN PARA RENDERIZAR LA PESTAÑA ACTIVA
+  const renderActiveTab = () => {
+    switch (activeTab) {
+      case 'Posiciones':
+        return <PosicionesTab currentPositions={currentPositions} currentVentas={currentVentas} currentTransacciones={currentTransacciones} onAddTransaction={() => setIsTransactionModalOpen(true)} />;
+      case 'Distribución':
+        return <DistribucionTab />;
+      case 'Rendimiento':
+        return <RendimientoTab />;
+      case 'Dividendos':
+        return <DividendosTab />;
+      case 'IA':
+        return <AllInOneIATab />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="w-full">
@@ -202,7 +210,6 @@ export const Inversion = () => {
 
       {hasPortfolios ? (
         <>
-          {/* Aquí está el margen superior añadido (mt-8) para separar las pestañas del gráfico */}
           <div className="flex gap-8 text-sm font-medium border-b border-[#2d2d2d] mt-8 mb-6 px-2">
             {tabs.map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-3 transition-colors ${activeTab === tab ? 'text-[#10b981] border-b-2 border-[#10b981]' : 'text-gray-500 hover:text-gray-300'}`}>
@@ -215,19 +222,8 @@ export const Inversion = () => {
             </button>
           </div>
 
-          {activeTab === 'Posiciones' && (
-            <div className="flex flex-col pb-10">
-              <PositionsTable posiciones={currentPositions} onAddTransaction={() => setIsTransactionModalOpen(true)} />
-              <VentasTable ventas={currentVentas} />
-              <TransaccionesList transacciones={currentTransacciones} mesLabel="mayo 2026" onAddTransaction={() => setIsTransactionModalOpen(true)} />
-            </div>
-          )}
-          
-          {activeTab !== 'Posiciones' && (
-            <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-10 flex items-center justify-center text-gray-500 italic">
-              Módulo de {activeTab} en desarrollo...
-            </div>
-          )}
+          {/* AQUÍ INYECTAMOS EL CONTENIDO LIMPIO */}
+          {renderActiveTab()}
         </>
       ) : (
         <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">

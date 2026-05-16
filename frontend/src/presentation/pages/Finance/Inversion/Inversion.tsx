@@ -4,7 +4,7 @@ import { PortfolioModal } from './components/modals/PortfolioModal';
 import { PortfolioSettingsModal } from './components/modals/PortfolioSettingsModal';
 import { InvestmentTransactionModal } from './components/modals/InvestmentTransactionModal';
 
-// Importamos las nuevas pestañas
+// Tabs
 import { PosicionesTab } from './components/tabs/PosicionesTab';
 import { DistribucionTab } from './components/tabs/DistribucionTab';
 import { RendimientoTab } from './components/tabs/RendimientoTab';
@@ -15,6 +15,7 @@ export const Inversion = () => {
   const [activeTab, setActiveTab] = useState('Posiciones');
   const [activeTimeframe, setActiveTimeframe] = useState('YTD');
   
+  // ESTADOS CON PERSISTENCIA (LocalStorage)
   const [portfolios, setPortfolios] = useState<any[]>(() => {
     const saved = localStorage.getItem('aio_portfolios');
     return saved ? JSON.parse(saved) : [];
@@ -28,8 +29,8 @@ export const Inversion = () => {
   const [allPositions, setAllPositions] = useState<any[]>(() => {
     const saved = localStorage.getItem('aio_positions');
     return saved ? JSON.parse(saved) : [
-      { id: 'BTC', name: 'Bitcoin EUR', ticker: 'BTC-EUR', compra: 67629.02, actual: 7.09, total: 68501.66, plPerc: '+1.29%', plVal: '+0.09', pos: true, color: '#f59e0b', portfolioId: 'p1' },
-      { id: 'S&P', name: 'Vanguard S&P 500', ticker: 'VUSA.AS', compra: 88.50, actual: 95.00, total: 95.00, plPerc: '+7.34%', plVal: '+6.50', pos: true, color: '#ef4444', portfolioId: 'p2' }
+      { id: 'BTC', name: 'Bitcoin EUR', ticker: 'BTC-EUR', compra: 67629.02, actual: 7.09, total: 68501.66, plPerc: '+1.29%', plVal: '+0.09', pos: true, color: '#f59e0b', portfolioId: portfolios[0]?.id || 'p1' },
+      { id: 'S&P', name: 'Vanguard S&P 500', ticker: 'VUSA.AS', compra: 88.50, actual: 95.00, total: 95.00, plPerc: '+7.34%', plVal: '+6.50', pos: true, color: '#ef4444', portfolioId: portfolios[1]?.id || 'p2' }
     ];
   });
 
@@ -41,20 +42,23 @@ export const Inversion = () => {
   const [allTransacciones, setAllTransacciones] = useState<any[]>(() => {
     const saved = localStorage.getItem('aio_transacciones');
     return saved ? JSON.parse(saved) : [
-      { id: '1', fechaDia: '08.05', tipoIcono: 'buy', asset: 'iShares MSCI ACWI ETF', detalles: 'Compró a 101,26 €', total: 19948.22, logoInitial: 'i', logoColor: '#3d3d3d', portfolioId: 'p2' }
+      { id: '1', fechaDia: '08.05', tipoIcono: 'buy', asset: 'iShares MSCI ACWI ETF', detalles: 'Compró a 101,26 €', total: 19948.22, logoInitial: 'i', logoColor: '#3d3d3d', portfolioId: portfolios[1]?.id || 'p2' }
     ];
   });
 
+  // MODALES
   const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
 
+  // SINCRONIZACIÓN LOCALSTORAGE
   useEffect(() => { localStorage.setItem('aio_portfolios', JSON.stringify(portfolios)); }, [portfolios]);
   useEffect(() => { localStorage.setItem('aio_activePortfolio', activePortfolioId); }, [activePortfolioId]);
   useEffect(() => { localStorage.setItem('aio_positions', JSON.stringify(allPositions)); }, [allPositions]);
   useEffect(() => { localStorage.setItem('aio_ventas', JSON.stringify(allVentas)); }, [allVentas]);
   useEffect(() => { localStorage.setItem('aio_transacciones', JSON.stringify(allTransacciones)); }, [allTransacciones]);
 
+  // FUNCIONES DE CARTERA
   const handleAddPortfolio = (newPortfolio: any) => {
     setPortfolios([...portfolios, newPortfolio]);
     if (portfolios.length === 0) setActivePortfolioId(newPortfolio.id);
@@ -70,10 +74,12 @@ export const Inversion = () => {
     setActivePortfolioId(updated.length === 1 ? updated[0].id : (updated.length > 0 ? 'aggregated' : 'aggregated'));
   };
 
+  // LOGICA: AGREGAR TRANSACCIÓN (Compra/Venta)
   const handleSaveTransaction = (data: any) => {
     const { portfolioId, type, asset, cantidadInvertida, price, date, nota } = data;
     const formattedDate = new Date(date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }).replace('/', '.');
 
+    // 1. Historial
     const newTx = {
       id: Date.now().toString(),
       fechaDia: formattedDate,
@@ -87,6 +93,7 @@ export const Inversion = () => {
     };
     setAllTransacciones(prev => [newTx, ...prev]);
 
+    // 2. Modificar Posición
     setAllPositions(prev => {
       let updated = [...prev];
       const existingIdx = updated.findIndex(p => (p.name === asset || p.id === asset) && p.portfolioId === portfolioId);
@@ -116,6 +123,7 @@ export const Inversion = () => {
       return updated;
     });
 
+    // 3. Modificar Ventas
     if (type === 'Vender') {
       const newVenta = {
         id: asset.substring(0, 3).toUpperCase(), name: asset, ticker: asset.toUpperCase(), fecha: formattedDate, 
@@ -129,6 +137,7 @@ export const Inversion = () => {
   const hasPortfolios = portfolios.length > 0;
   const effectivePortfolioId = !hasPortfolios ? 'aggregated' : (portfolios.length === 1 ? portfolios[0].id : activePortfolioId);
 
+  // FILTRADO DINÁMICO
   let currentPositions: any[] = [];
   let currentVentas: any[] = [];
   let currentTransacciones: any[] = [];
@@ -175,7 +184,6 @@ export const Inversion = () => {
 
   const tabs = ['Posiciones', 'Distribución', 'Rendimiento', 'Dividendos'];
 
-  // FUNCIÓN PARA RENDERIZAR LA PESTAÑA ACTIVA
   const renderActiveTab = () => {
     switch (activeTab) {
       case 'Posiciones':
@@ -222,7 +230,6 @@ export const Inversion = () => {
             </button>
           </div>
 
-          {/* AQUÍ INYECTAMOS EL CONTENIDO LIMPIO */}
           {renderActiveTab()}
         </>
       ) : (
@@ -238,7 +245,6 @@ export const Inversion = () => {
         </div>
       )}
 
-      {/* Modales */}
       <PortfolioModal isOpen={isPortfolioModalOpen} onClose={() => setIsPortfolioModalOpen(false)} onSave={handleAddPortfolio} />
       
       <PortfolioSettingsModal 

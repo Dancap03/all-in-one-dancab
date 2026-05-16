@@ -8,7 +8,7 @@ export interface Position {
   actual: number;
   total: number;
   plPerc: string;
-  plVal: string; 
+  plVal: string;
   pos: boolean;
   color: string;
   portfolioId?: string;

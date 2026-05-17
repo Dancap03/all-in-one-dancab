@@ -13,8 +13,8 @@ interface TransactionModalProps {
 
 const CATEGORIES = {
   income: ['Nómina', 'Intereses', 'Dividendos', 'Venta', 'Freelance', 'Otros ingresos'],
-  expense: ['Comida', 'Transporte', 'Ocio', 'Salud', 'Ropa', 'Hogar', 'Suscripciones', 'Educación', 'Otros'],
-  other_expense: ['Imprevistos', 'Impuestos', 'Multas', 'Regalos', 'Otros'],
+  expense: ['Comida', 'Transporte', 'Ocio', 'Salud', 'Ropa', 'Hogar', 'Suscripciones', 'Educación', 'Regalos', 'Otros'],
+  other_expense: ['Imprevistos', 'Impuestos', 'Multas', 'Ropa', 'Salud', 'Comida', 'Educación', 'Otros'],
   transfer: ['Ahorro', 'Inversión']
 };
 

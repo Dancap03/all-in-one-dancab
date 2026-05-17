@@ -1,5 +1,5 @@
 import { db } from '../firebase/config';
-import { doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
+import { doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, Timestamp, getDocs } from 'firebase/firestore';
 
 export const FinanceService = {
   subscribeToMonthData: (userId: string, monthId: string, callback: (data: any) => void) => {
@@ -46,6 +46,38 @@ export const FinanceService = {
       unsubMonth();
       unsubTrans();
     };
+  },
+
+  // NUEVA FUNCIÓN: Calcula la suma de los balances netos de todos los meses pasados
+  getCarryOverBalance: async (userId: string, currentMonthId: string): Promise<number> => {
+    try {
+      const monthsRef = collection(db, `users/${userId}/finance_months`);
+      const monthsSnap = await getDocs(monthsRef);
+      
+      let totalCarryOver = 0;
+      
+      for (const monthDoc of monthsSnap.docs) {
+        const mId = monthDoc.id; // Formato "YYYY-MM"
+        
+        // Hacemos una comparación lexicográfica: solo sumamos meses estrictamente anteriores al actual
+        if (mId < currentMonthId) {
+          const transRef = collection(db, `users/${userId}/finance_months/${mId}/transactions`);
+          const transSnap = await getDocs(transRef);
+          
+          transSnap.docs.forEach(d => {
+            const t = d.data();
+            if (t.type === 'income') totalCarryOver += t.amount;
+            if (t.type === 'savings_return') totalCarryOver += t.amount;
+            if (t.type === 'expense' || t.type === 'other_expense') totalCarryOver -= t.amount;
+            if (t.type === 'transfer') totalCarryOver -= t.amount;
+          });
+        }
+      }
+      return totalCarryOver;
+    } catch (error) {
+      console.error("Error al calcular el balance acumulado histórico:", error);
+      return 0;
+    }
   },
 
   updateBudget: async (userId: string, monthId: string, amount: number) => {

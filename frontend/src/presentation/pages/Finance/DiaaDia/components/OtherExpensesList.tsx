@@ -20,8 +20,9 @@ export const OtherExpensesList = ({ transactions, monthId, monthLabel }: OtherEx
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
+  // LA MAGIA ESTÁ AQUÍ: Solo coge gastos que SÍ sean "extra" (t.isExtra === true)
   const allExpenses = transactions
-    .filter(t => t.type === 'expense' && t.category !== 'recurring')
+    .filter(t => t.type === 'expense' && t.isExtra)
     .sort((a, b) => new Date(b.dateString || 0).getTime() - new Date(a.dateString || 0).getTime());
 
   const uniqueCategories = Array.from(new Set(allExpenses.map(t => t.category || 'Sin categoría')));
@@ -31,7 +32,10 @@ export const OtherExpensesList = ({ transactions, monthId, monthLabel }: OtherEx
     : allExpenses.filter(t => (t.category || 'Sin categoría') === filterCategory);
 
   const handleEdit = (t: any) => { setSelectedTransaction(t); setIsModalOpen(true); };
-  const handleAddNew = () => { setSelectedTransaction(null); setIsModalOpen(true); };
+  
+  // Al crear uno nuevo desde esta tarjeta, podríamos pasarle un prop al modal para que sepa que es "extra"
+  const handleAddNew = () => { setSelectedTransaction({ isExtra: true }); setIsModalOpen(true); };
+  
   const handleDeleteRequest = (id: string) => { setDeletingId(id); setIsDeleteOpen(true); };
 
   const confirmDelete = async () => {
@@ -84,13 +88,13 @@ export const OtherExpensesList = ({ transactions, monthId, monthLabel }: OtherEx
             })
           ) : (
             <div className="py-6 flex justify-center items-center">
-              <p className="text-gray-500 italic text-sm">No hay gastos {filterCategory !== 'Todas' && 'de esta categoría'}.</p>
+              <p className="text-gray-500 italic text-sm">No hay gastos {filterCategory !== 'Todas' ? 'de esta categoría' : 'extra registrados'}.</p>
             </div>
           )}
         </div>
 
         <button onClick={handleAddNew} className="mt-auto w-full flex items-center justify-center gap-2 border border-dashed border-[#3d3d3d] py-3 rounded-xl text-sm text-gray-400 hover:bg-[#252525] hover:border-gray-500 transition-all">
-          <Plus size={16} /> Añadir gasto
+          <Plus size={16} /> Añadir gasto extra
         </button>
       </div>
 

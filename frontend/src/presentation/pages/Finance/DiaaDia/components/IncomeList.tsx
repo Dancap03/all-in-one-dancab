@@ -62,7 +62,8 @@ export const IncomeList = ({ transactions, monthId, monthLabel }: IncomeListProp
           )}
         </div>
         
-        <div className="overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2 max-h-[460px]">
+        {/* MODIFICACIÓN: max-h-[550px] para que quepan 7-8 ítems cómodamente */}
+        <div className="overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2 max-h-[550px]">
           {filteredIncomes.length > 0 ? (
             filteredIncomes.map((inc, i) => {
               const dateStr = inc.dateString ? new Date(inc.dateString).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Recibido';

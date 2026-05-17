@@ -6,6 +6,6 @@ export const AllInOneIATab = () => {
       <p className="text-sm italic text-center max-w-md">
         Pronto la Inteligencia Artificial analizará tus posiciones, calculará tu nivel de riesgo y te sugerirá rebalanceos automáticos.
       </p>
-    </div>
+    </div> 
   );
 };

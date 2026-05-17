@@ -66,8 +66,8 @@ export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) =
           </div>
         </div>
 
-        {/* LISTA DE GASTOS: flex-1 para empujar el botón abajo, max-h-[380px] para ver 5 transacciones máximo */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2 max-h-[380px]">
+        {/* LISTA DE GASTOS CORREGIDA: flex-1 y min-h-0 (SIN max-h) para que estire bien */}
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2">
           {expenses.length > 0 ? (
             expenses.map((exp, i) => {
               const dateStr = exp.dateString ? new Date(exp.dateString).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Pagado';

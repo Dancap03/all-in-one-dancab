@@ -13,15 +13,22 @@ interface TransfersListProps {
 
 export const TransfersList = ({ transactions, monthId, monthLabel }: TransfersListProps) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [filterCategory, setFilterCategory] = useState('Todas');
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  const transfers = transactions
+  const allTransfers = transactions
     .filter(t => t.type === 'transfer')
     .sort((a, b) => new Date(b.dateString || 0).getTime() - new Date(a.dateString || 0).getTime());
+
+  const uniqueCategories = Array.from(new Set(allTransfers.map(t => t.category || 'Sin categoría')));
+
+  const filteredTransfers = filterCategory === 'Todas' 
+    ? allTransfers 
+    : allTransfers.filter(t => (t.category || 'Sin categoría') === filterCategory);
 
   const handleEdit = (t: any) => { setSelectedTransaction(t); setIsModalOpen(true); };
   const handleAddNew = () => { setSelectedTransaction(null); setIsModalOpen(true); };
@@ -40,15 +47,27 @@ export const TransfersList = ({ transactions, monthId, monthLabel }: TransfersLi
     <>
       <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 h-full flex flex-col shadow-sm">
         
-        <div className="flex items-center gap-2 mb-6">
-          <h2 className="font-bold text-gray-200">Transacciones</h2>
-          <ArrowRightLeft size={16} className="text-blue-500" />
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-2">
+            <h2 className="font-bold text-gray-200">Transacciones</h2>
+            <ArrowRightLeft size={16} className="text-blue-500" />
+          </div>
+          {uniqueCategories.length > 0 && (
+            <select 
+              value={filterCategory} 
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="bg-[#151515] border border-[#2d2d2d] text-gray-400 text-xs rounded-lg px-2 py-1.5 outline-none cursor-pointer hover:text-white transition-colors"
+              style={{ colorScheme: 'dark' }}
+            >
+              <option value="Todas">Todas</option>
+              {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
         </div>
         
-        {/* LÍMITE DE ~6 ITEMS */}
         <div className="overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2 max-h-[460px]">
-          {transfers.length > 0 ? (
-            transfers.map((trans, i) => {
+          {filteredTransfers.length > 0 ? (
+            filteredTransfers.map((trans, i) => {
               const dateStr = trans.dateString ? new Date(trans.dateString).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Realizada';
               return (
                 <div key={i} className="flex justify-between items-center p-4 border border-[#2d2d2d] rounded-xl bg-[#151515] group shrink-0">
@@ -68,7 +87,7 @@ export const TransfersList = ({ transactions, monthId, monthLabel }: TransfersLi
             })
           ) : (
             <div className="py-6 flex justify-center items-center">
-              <p className="text-gray-500 italic text-sm">No hay transacciones ni ahorros registrados.</p>
+              <p className="text-gray-500 italic text-sm">No hay transacciones {filterCategory !== 'Todas' && 'de esta categoría'}.</p>
             </div>
           )}
         </div>

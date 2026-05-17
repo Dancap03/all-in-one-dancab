@@ -13,7 +13,7 @@ import { TransfersList } from './components/TransfersList';
 
 export const DiaaDia = () => {
   const [date, setDate] = useState(new Date()); 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); 
   const [history, setHistory] = useState<Record<string, any>>({});
   
   // NUEVO: Estado para almacenar el balance acumulado de los meses pasados

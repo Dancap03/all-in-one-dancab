@@ -20,9 +20,9 @@ export const OtherExpensesList = ({ transactions, monthId, monthLabel }: OtherEx
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // LA MAGIA ESTÁ AQUÍ: Solo coge gastos que SÍ sean "extra" (t.isExtra === true)
+  // SOLUCIÓN: Filtramos directamente por el tipo 'other_expense' (igual que hace el gráfico)
   const allExpenses = transactions
-    .filter(t => t.type === 'expense' && t.isExtra)
+    .filter(t => t.type === 'other_expense')
     .sort((a, b) => new Date(b.dateString || 0).getTime() - new Date(a.dateString || 0).getTime());
 
   const uniqueCategories = Array.from(new Set(allExpenses.map(t => t.category || 'Sin categoría')));
@@ -33,8 +33,8 @@ export const OtherExpensesList = ({ transactions, monthId, monthLabel }: OtherEx
 
   const handleEdit = (t: any) => { setSelectedTransaction(t); setIsModalOpen(true); };
   
-  // Al crear uno nuevo desde esta tarjeta, podríamos pasarle un prop al modal para que sepa que es "extra"
-  const handleAddNew = () => { setSelectedTransaction({ isExtra: true }); setIsModalOpen(true); };
+  // Ya no hace falta el invento del isExtra
+  const handleAddNew = () => { setSelectedTransaction(null); setIsModalOpen(true); };
   
   const handleDeleteRequest = (id: string) => { setDeletingId(id); setIsDeleteOpen(true); };
 
@@ -98,7 +98,8 @@ export const OtherExpensesList = ({ transactions, monthId, monthLabel }: OtherEx
         </button>
       </div>
 
-      <TransactionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} monthId={monthId} type="expense" transaction={selectedTransaction} />
+      {/* SOLUCIÓN: El type que le pasamos al modal ahora es "other_expense" */}
+      <TransactionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} monthId={monthId} type="other_expense" transaction={selectedTransaction} />
       <ConfirmDeleteModal isOpen={isDeleteOpen} onClose={() => setIsDeleteOpen(false)} onConfirm={confirmDelete} isDeleting={isDeleting} />
     </>
   );

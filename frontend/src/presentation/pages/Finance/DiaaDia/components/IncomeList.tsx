@@ -42,8 +42,8 @@ export const IncomeList = ({ transactions, monthId, monthLabel }: IncomeListProp
         
         <h2 className="font-bold text-gray-200 mb-6">Ingresos</h2>
         
-        {/* SE ADAPTA AL ESPACIO: flex-1 min-h-0 */}
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2">
+        {/* LÍMITE DE ~6 ITEMS: Añadido max-h-[460px] */}
+        <div className="overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2 max-h-[460px]">
           {incomes.length > 0 ? (
             incomes.map((inc, i) => {
               const dateStr = inc.dateString ? new Date(inc.dateString).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Recibido';

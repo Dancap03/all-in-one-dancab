@@ -62,11 +62,22 @@ export const TransactionModal = ({ isOpen, onClose, monthId, type, transaction }
       dateString: date
     };
 
+    // SOLUCIÓN: Extraemos el "YYYY-MM" de la fecha seleccionada ("YYYY-MM-DD")
+    const targetMonthId = date.substring(0, 7);
+
     try {
       if (transaction?.id) {
-        await FinanceService.updateTransaction(user.uid, monthId, transaction.id, data);
+        // Si estamos editando y el mes ha cambiado, borramos la vieja y creamos la nueva
+        if (targetMonthId !== monthId) {
+          await FinanceService.deleteTransaction(user.uid, monthId, transaction.id);
+          await FinanceService.addTransaction(user.uid, targetMonthId, data);
+        } else {
+          // Si es el mismo mes, actualizamos normalmente
+          await FinanceService.updateTransaction(user.uid, targetMonthId, transaction.id, data);
+        }
       } else {
-        await FinanceService.addTransaction(user.uid, monthId, data);
+        // Si es nueva, la guardamos en el mes que le corresponde según SU fecha (no la de la pantalla)
+        await FinanceService.addTransaction(user.uid, targetMonthId, data);
       }
       onClose();
     } catch (error) {

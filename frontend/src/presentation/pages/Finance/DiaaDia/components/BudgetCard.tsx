@@ -15,17 +15,27 @@ interface BudgetCardProps {
 export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) => {
   const [isBudgetOpen, setIsBudgetOpen] = useState(false);
   const [isExpenseOpen, setIsExpenseOpen] = useState(false);
+  const [filterCategory, setFilterCategory] = useState('Todas'); // <-- ESTADO DEL FILTRO
   
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const expenses = transactions
+  // 1. Obtenemos TODOS los gastos para calcular la barra de progreso general
+  const allExpenses = transactions
     .filter(t => t.type === 'expense')
     .sort((a, b) => new Date(b.dateString || 0).getTime() - new Date(a.dateString || 0).getTime());
 
-  const totalExpenses = expenses.reduce((acc, t) => acc + t.amount, 0);
+  // 2. Extraemos las categorías únicas dinámicamente
+  const uniqueCategories = Array.from(new Set(allExpenses.map(t => t.category || 'Sin categoría')));
+
+  // 3. Filtramos la lista visual según lo que elija el usuario
+  const filteredExpenses = filterCategory === 'Todas' 
+    ? allExpenses 
+    : allExpenses.filter(t => (t.category || 'Sin categoría') === filterCategory);
+
+  const totalExpenses = allExpenses.reduce((acc, t) => acc + t.amount, 0); // El total no se filtra
   const remaining = budget - totalExpenses;
   const percent = budget > 0 ? (totalExpenses / budget) * 100 : 0;
 
@@ -49,9 +59,23 @@ export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) =
         <div>
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-bold text-gray-200">Presupuesto mensual</h2>
-            <button onClick={() => setIsBudgetOpen(true)} className="bg-[#2d2d2d] p-1.5 rounded-md text-gray-400 hover:text-white transition-colors">
-              <Edit2 size={14} />
-            </button>
+            <div className="flex items-center gap-3">
+              {/* DESPLEGABLE DE FILTRO */}
+              {uniqueCategories.length > 0 && (
+                <select 
+                  value={filterCategory} 
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="bg-[#151515] border border-[#2d2d2d] text-gray-400 text-xs rounded-lg px-2 py-1.5 outline-none cursor-pointer hover:text-white transition-colors"
+                  style={{ colorScheme: 'dark' }}
+                >
+                  <option value="Todas">Todas</option>
+                  {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
+              <button onClick={() => setIsBudgetOpen(true)} className="bg-[#2d2d2d] p-1.5 rounded-md text-gray-400 hover:text-white transition-colors">
+                <Edit2 size={14} />
+              </button>
+            </div>
           </div>
           <div className="flex justify-between text-sm mb-3">
             <p className="text-gray-400">Presupuesto: <b className="text-white">{budget}€</b></p>
@@ -63,10 +87,9 @@ export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) =
           </div>
         </div>
 
-        {/* LÍMITE DE ~5 ITEMS */}
-        <div className="overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2 max-h-[380px]">
-          {expenses.length > 0 ? (
-            expenses.map((exp, i) => {
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2 max-h-[380px]">
+          {filteredExpenses.length > 0 ? (
+            filteredExpenses.map((exp, i) => {
               const dateStr = exp.dateString ? new Date(exp.dateString).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Pagado';
               return (
                 <div key={i} className="flex justify-between items-center p-4 border border-[#2d2d2d] rounded-xl bg-[#151515] group shrink-0">
@@ -86,7 +109,7 @@ export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) =
             })
           ) : (
             <div className="py-6 flex items-center justify-center">
-              <p className="text-gray-500 italic text-sm">No hay gastos registrados.</p>
+              <p className="text-gray-500 italic text-sm">No hay gastos {filterCategory !== 'Todas' && 'de esta categoría'}.</p>
             </div>
           )}
         </div>

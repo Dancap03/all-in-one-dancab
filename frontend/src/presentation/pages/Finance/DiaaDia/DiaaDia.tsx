@@ -16,7 +16,6 @@ export const DiaaDia = () => {
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<Record<string, any>>({});
   
-  // Nuevos estados para nuestro calendario personalizado
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(date.getFullYear());
 
@@ -24,7 +23,6 @@ export const DiaaDia = () => {
   const monthLabel = date.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
   const monthNamesShort = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-  // Variables para controlar el límite del futuro
   const realNow = new Date();
   const currentYear = realNow.getFullYear();
   const currentMonth = realNow.getMonth();
@@ -58,7 +56,6 @@ export const DiaaDia = () => {
   return (
     <div className="min-h-screen bg-[#0c0c0c] text-white p-4 md:p-6">
       
-      {/* Cabecera con Navegación y Calendario Desplegable */}
       <div className="flex items-center gap-4 mb-8">
         <button onClick={handlePrevMonth} className="text-gray-500 hover:text-white transition-colors p-1 rounded-md hover:bg-[#1a1a1a]">
           <ChevronLeft size={24} />
@@ -72,15 +69,10 @@ export const DiaaDia = () => {
             {monthLabel}
           </h1>
           
-          {/* CALENDARIO PERSONALIZADO TIPO POPOVER */}
           {isDatePickerOpen && (
             <>
-              {/* Capa invisible para cerrar */}
               <div className="fixed inset-0 z-40" onClick={() => setIsDatePickerOpen(false)}></div>
-              
               <div className="absolute top-full mt-2 left-0 bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl shadow-2xl z-50 p-4 w-72">
-                
-                {/* Cabecera del año en el calendario */}
                 <div className="flex justify-between items-center mb-4">
                   <button onClick={() => setPickerYear(prev => prev - 1)} className="p-1 hover:bg-[#252525] rounded transition-colors text-gray-400 hover:text-white">
                     <ChevronLeft size={18} />
@@ -95,12 +87,10 @@ export const DiaaDia = () => {
                   </button>
                 </div>
                 
-                {/* Cuadrícula de meses */}
                 <div className="grid grid-cols-3 gap-2">
                   {monthNamesShort.map((m, i) => {
                     const isDisabled = pickerYear === currentYear && i > currentMonth;
                     const isSelected = date.getFullYear() === pickerYear && date.getMonth() === i;
-                    
                     return (
                       <button
                         key={m}
@@ -131,7 +121,6 @@ export const DiaaDia = () => {
         </button>
       </div>
 
-      {/* Resto de componentes */}
       <SummaryCards transactions={monthData.transactions} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -139,12 +128,13 @@ export const DiaaDia = () => {
         <ComparisonChart transactions={monthData.transactions} />
       </div>
 
-      {/* AQUÍ ESTÁ EL CAMBIO: Añadimos h-[650px] para fijar la altura de ambos bloques */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 h-[650px]">
+      {/* Primer bloque de listas */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <BudgetCard budget={monthData.budget} transactions={monthData.transactions} monthId={monthId} />
         <IncomeList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />
       </div>
 
+      {/* Segundo bloque de listas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <OtherExpensesList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />
         <TransfersList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />

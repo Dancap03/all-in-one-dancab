@@ -10,7 +10,7 @@ import { BudgetCard } from './components/BudgetCard';
 import { IncomeList } from './components/IncomeList';
 import { OtherExpensesList } from './components/OtherExpensesList';
 import { TransfersList } from './components/TransfersList';
-
+ 
 export const DiaaDia = () => {
   const [date, setDate] = useState(new Date()); 
   const [loading, setLoading] = useState(true); 

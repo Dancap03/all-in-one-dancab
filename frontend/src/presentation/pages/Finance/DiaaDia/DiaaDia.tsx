@@ -16,6 +16,9 @@ export const DiaaDia = () => {
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<Record<string, any>>({});
   
+  // NUEVO: Estado para almacenar el balance acumulado de los meses pasados
+  const [carryOverBalance, setCarryOverBalance] = useState(0);
+  
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(date.getFullYear());
 
@@ -31,9 +34,15 @@ export const DiaaDia = () => {
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
-    if (history[monthId]) { setLoading(false); return; }
 
     setLoading(true);
+
+    // 1. Recalcular el remanente de los meses anteriores al cambiar de mes
+    FinanceService.getCarryOverBalance(user.uid, monthId).then(balance => {
+      setCarryOverBalance(balance);
+    });
+
+    // 2. Suscribirse siempre en tiempo real (eliminado el return prematuro que rompía la sincronización)
     const unsubscribe = FinanceService.subscribeToMonthData(
       user.uid, monthId, (newData: any) => {
         setHistory(prev => ({ ...prev, [monthId]: newData }));
@@ -121,23 +130,24 @@ export const DiaaDia = () => {
         </button>
       </div>
 
-      <SummaryCards transactions={monthData.transactions} />
+      {/* ENVIAMOS EL REMANENTE ACUMULADO A LAS TARJETAS */}
+      <SummaryCards transactions={monthData.transactions} carryOverBalance={carryOverBalance} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <ExpensesChart transactions={monthData.transactions} />
         <ComparisonChart transactions={monthData.transactions} />
       </div>
 
-      {/* Primer bloque de listas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <BudgetCard budget={monthData.budget} transactions={monthData.transactions} monthId={monthId} />
-        <IncomeList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />
-      </div>
-
-      {/* Segundo bloque de listas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <OtherExpensesList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />
-        <TransfersList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />
+        <div className="flex flex-col gap-6">
+          <BudgetCard budget={monthData.budget} transactions={monthData.transactions} monthId={monthId} />
+          <OtherExpensesList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />
+        </div>
+        
+        <div className="flex flex-col gap-6">
+          <IncomeList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />
+          <TransfersList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />
+        </div>
       </div>
       
     </div>

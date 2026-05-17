@@ -15,27 +15,25 @@ interface BudgetCardProps {
 export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) => {
   const [isBudgetOpen, setIsBudgetOpen] = useState(false);
   const [isExpenseOpen, setIsExpenseOpen] = useState(false);
-  const [filterCategory, setFilterCategory] = useState('Todas'); // <-- ESTADO DEL FILTRO
+  const [filterCategory, setFilterCategory] = useState('Todas');
   
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // 1. Obtenemos TODOS los gastos para calcular la barra de progreso general
+  // LA MAGIA ESTÁ AQUÍ: Solo coge gastos que NO sean "extra" (!t.isExtra)
   const allExpenses = transactions
-    .filter(t => t.type === 'expense')
+    .filter(t => t.type === 'expense' && !t.isExtra)
     .sort((a, b) => new Date(b.dateString || 0).getTime() - new Date(a.dateString || 0).getTime());
 
-  // 2. Extraemos las categorías únicas dinámicamente
   const uniqueCategories = Array.from(new Set(allExpenses.map(t => t.category || 'Sin categoría')));
 
-  // 3. Filtramos la lista visual según lo que elija el usuario
   const filteredExpenses = filterCategory === 'Todas' 
     ? allExpenses 
     : allExpenses.filter(t => (t.category || 'Sin categoría') === filterCategory);
 
-  const totalExpenses = allExpenses.reduce((acc, t) => acc + t.amount, 0); // El total no se filtra
+  const totalExpenses = allExpenses.reduce((acc, t) => acc + t.amount, 0);
   const remaining = budget - totalExpenses;
   const percent = budget > 0 ? (totalExpenses / budget) * 100 : 0;
 
@@ -55,12 +53,10 @@ export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) =
   return (
     <>
       <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 h-full flex flex-col shadow-sm">
-        
         <div>
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-bold text-gray-200">Presupuesto mensual</h2>
             <div className="flex items-center gap-3">
-              {/* DESPLEGABLE DE FILTRO */}
               {uniqueCategories.length > 0 && (
                 <select 
                   value={filterCategory} 

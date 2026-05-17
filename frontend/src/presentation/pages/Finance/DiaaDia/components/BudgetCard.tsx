@@ -21,7 +21,6 @@ export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) =
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Filtramos los gastos y ordenamos por fecha (el más reciente primero)
   const expenses = transactions
     .filter(t => t.type === 'expense')
     .sort((a, b) => new Date(b.dateString || 0).getTime() - new Date(a.dateString || 0).getTime());
@@ -45,10 +44,8 @@ export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) =
 
   return (
     <>
-      {/* Añadido: h-full flex flex-col para igualar tamaños */}
       <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 h-full flex flex-col shadow-sm">
         
-        {/* Cabecera y Barra de Presupuesto */}
         <div>
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-bold text-gray-200">Presupuesto mensual</h2>
@@ -66,8 +63,8 @@ export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) =
           </div>
         </div>
 
-        {/* LISTA DE GASTOS CORREGIDA: flex-1 y min-h-0 (SIN max-h) para que estire bien */}
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2">
+        {/* LÍMITE DE ~5 ITEMS */}
+        <div className="overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2 max-h-[380px]">
           {expenses.length > 0 ? (
             expenses.map((exp, i) => {
               const dateStr = exp.dateString ? new Date(exp.dateString).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Pagado';
@@ -94,7 +91,6 @@ export const BudgetCard = ({ budget, transactions, monthId }: BudgetCardProps) =
           )}
         </div>
 
-        {/* Botón: mt-auto lo pega siempre abajo */}
         <button onClick={handleAddNew} className="mt-auto w-full flex items-center justify-center gap-2 border border-dashed border-[#3d3d3d] py-3 rounded-xl text-sm text-gray-400 hover:bg-[#252525] hover:border-gray-500 transition-all">
           <Plus size={16} /> Añadir gasto
         </button>

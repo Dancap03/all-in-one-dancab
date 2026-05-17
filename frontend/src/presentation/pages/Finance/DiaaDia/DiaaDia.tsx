@@ -117,7 +117,6 @@ export const DiaaDia = () => {
                     )
                   })}
                 </div>
-
               </div>
             </>
           )}
@@ -140,7 +139,8 @@ export const DiaaDia = () => {
         <ComparisonChart transactions={monthData.transactions} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      {/* AQUÍ ESTÁ EL CAMBIO: Añadimos h-[650px] para fijar la altura de ambos bloques */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 h-[650px]">
         <BudgetCard budget={monthData.budget} transactions={monthData.transactions} monthId={monthId} />
         <IncomeList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />
       </div>

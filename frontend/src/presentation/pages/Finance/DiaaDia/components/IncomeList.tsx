@@ -39,13 +39,13 @@ export const IncomeList = ({ transactions, monthId, monthLabel }: IncomeListProp
 
   return (
     <>
-      {/* Añadido: h-full flex flex-col para igualar tamaños */}
+      {/* Contenedor principal: h-full y flex-col para igualar la altura de la tarjeta vecina */}
       <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 h-full flex flex-col shadow-sm">
         
         <h2 className="font-bold text-gray-200 mb-6">Ingresos</h2>
         
-        {/* LISTA DE INGRESOS: flex-1 y max-h-[380px] para ver 5 transacciones y hacer scroll */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2 max-h-[380px]">
+        {/* LISTA DE INGRESOS CORREGIDA: flex-1 y min-h-0 (SIN max-h) para que el scroll automático funcione y ocupe el resto del panel */}
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2">
           {incomes.length > 0 ? (
             incomes.map((inc, i) => {
               const dateStr = inc.dateString ? new Date(inc.dateString).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Recibido';
@@ -72,7 +72,7 @@ export const IncomeList = ({ transactions, monthId, monthLabel }: IncomeListProp
           )}
         </div>
 
-        {/* Botón: mt-auto lo pega siempre abajo */}
+        {/* Botón: mt-auto asegura que, si hay pocos items, el botón se quede pegado abajo de todas formas */}
         <button onClick={handleAddNew} className="mt-auto w-full flex items-center justify-center gap-2 border border-dashed border-[#3d3d3d] py-3 rounded-xl text-sm text-gray-400 hover:bg-[#252525] hover:border-gray-500 transition-all">
           <Plus size={16} /> Añadir ingreso
         </button>

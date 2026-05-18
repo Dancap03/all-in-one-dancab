@@ -17,3 +17,5 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const db = getFirestore(app); // 2. Exportar esto para que FinanceService lo vea 
+// Al final de tu archivo config.ts existente, añade esto:
+export const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";

@@ -1,7 +1,7 @@
 import * as functions from "firebase-functions/v2";
-import { GoogleGenerativeAI } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export const analyzeAsset = functions.https.onCall(async (request) => {
   if (!request.auth) {

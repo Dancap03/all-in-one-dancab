@@ -189,7 +189,7 @@ export const Inversion = () => {
       case 'Posiciones':
         return <PosicionesTab currentPositions={currentPositions} currentVentas={currentVentas} currentTransacciones={currentTransacciones} onAddTransaction={() => setIsTransactionModalOpen(true)} />;
       case 'Distribución':
-        return <DistribucionTab />;
+        eturn <DistribucionTab currentPositions={currentPositions} />;
       case 'Rendimiento':
         return <RendimientoTab />;
       case 'Dividendos':

@@ -23,26 +23,25 @@ export const DistribucionTab = ({ currentPositions }: DistribucionTabProps) => {
     }))
     .sort((a, b) => b.value - a.value); // Ordenamos de mayor a menor
 
-  const subTabs = ['Tipo', 'Posiciones', 'Regiones', 'Sectores', 'Activos', 'Divisas'];
+  // 1. Añadidas todas las pestañas exactas
+  const subTabs = ['Tipo', 'Posiciones', 'DeepDive', 'Regiones', 'Sectores', 'Industrias', 'Activos', 'Países', 'Divisas'];
 
   return (
     <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-6 shadow-sm min-h-[500px] flex flex-col">
       
-      {/* Sub-menú superior idéntico a la captura */}
-      <div className="flex items-center justify-between border-b border-[#2d2d2d] pb-3 mb-8 overflow-x-auto hide-scrollbar">
-        <div className="flex gap-6 text-sm">
-          {subTabs.map((tab, i) => (
-            <button 
-              key={tab} 
-              className={`whitespace-nowrap transition-colors ${i === 0 ? 'text-white font-bold border-b-2 border-white pb-3 -mb-[14px]' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-        <button className="text-gray-400 hover:text-white text-xs font-medium flex items-center gap-1 hidden md:flex">
-          Asset classes <ChevronRight size={14} />
-        </button>
+      {/* Estilo inyectado para ocultar la scrollbar nativa pero permitir el scroll horizontal fluido */}
+      <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
+
+      {/* 2. Menú arreglado: Sin "Asset classes", con scroll horizontal fluido y sin aplastarse */}
+      <div className="flex items-center gap-6 border-b border-[#2d2d2d] pb-3 mb-8 overflow-x-auto hide-scrollbar w-full">
+        {subTabs.map((tab, i) => (
+          <button 
+            key={tab} 
+            className={`whitespace-nowrap transition-colors text-sm ${i === 0 ? 'text-white font-bold border-b-2 border-white pb-3 -mb-[14px]' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            {tab}
+          </button>
+        ))}
       </div>
 
       {data.length > 0 ? (

@@ -20,7 +20,8 @@ export const FinanceService = {
 
     const unsubMonth = onSnapshot(monthRef, 
       (snap) => {
-        currentBudget = snap.exists() ? snap.data().budget : 0;
+        // ESCUDO 1: Aseguramos que el presupuesto sea un Número (o 0 si la carpeta es "fantasma")
+        currentBudget = snap.exists() && snap.data().budget ? Number(snap.data().budget) : 0;
         monthLoaded = true;
         checkAndCallback();
       }, 
@@ -32,7 +33,15 @@ export const FinanceService = {
 
     const unsubTrans = onSnapshot(q, 
       (snap) => {
-        currentTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // ESCUDO 2: Forzamos la conversión a Número. Esto repara la pantalla negra al instante.
+        currentTransactions = snap.docs.map(d => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+            amount: Number(data.amount) || 0 
+          };
+        });
         transLoaded = true;
         checkAndCallback();
       }, 
@@ -64,10 +73,12 @@ export const FinanceService = {
           
           transSnap.docs.forEach(d => {
             const t = d.data();
-            if (t.type === 'income') totalCarryOver += t.amount;
-            if (t.type === 'savings_return') totalCarryOver += t.amount;
-            if (t.type === 'expense' || t.type === 'other_expense') totalCarryOver -= t.amount;
-            if (t.type === 'transfer') totalCarryOver -= t.amount;
+            // ESCUDO 3: Convertimos también a Número para que el balance no explote
+            const amt = Number(t.amount) || 0;
+            if (t.type === 'income') totalCarryOver += amt;
+            if (t.type === 'savings_return') totalCarryOver += amt;
+            if (t.type === 'expense' || t.type === 'other_expense') totalCarryOver -= amt;
+            if (t.type === 'transfer') totalCarryOver -= amt;
           });
         }
       }
@@ -84,7 +95,7 @@ export const FinanceService = {
   },
 
   addTransaction: async (userId: string, monthId: string, data: any) => {
-    // MAGIA ANTI-FANTASMAS: Aseguramos que la carpeta del mes exista siempre
+    // Solución anti-fantasmas que pusimos en el paso anterior
     const monthRef = doc(db, `users/${userId}/finance_months/${monthId}`);
     await setDoc(monthRef, {}, { merge: true });
 
@@ -106,7 +117,6 @@ export const FinanceService = {
   },
 
   updateTransaction: async (userId: string, monthId: string, transactionId: string, data: any) => {
-    // Nos aseguramos también al editar, por si editas una transacción que estaba en un mes fantasma
     const monthRef = doc(db, `users/${userId}/finance_months/${monthId}`);
     await setDoc(monthRef, {}, { merge: true });
 

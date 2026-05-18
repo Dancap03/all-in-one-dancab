@@ -48,7 +48,6 @@ export const FinanceService = {
     };
   },
 
-  // NUEVA FUNCIÓN: Calcula la suma de los balances netos de todos los meses pasados
   getCarryOverBalance: async (userId: string, currentMonthId: string): Promise<number> => {
     try {
       const monthsRef = collection(db, `users/${userId}/finance_months`);
@@ -57,9 +56,8 @@ export const FinanceService = {
       let totalCarryOver = 0;
       
       for (const monthDoc of monthsSnap.docs) {
-        const mId = monthDoc.id; // Formato "YYYY-MM"
+        const mId = monthDoc.id; 
         
-        // Hacemos una comparación lexicográfica: solo sumamos meses estrictamente anteriores al actual
         if (mId < currentMonthId) {
           const transRef = collection(db, `users/${userId}/finance_months/${mId}/transactions`);
           const transSnap = await getDocs(transRef);
@@ -86,6 +84,10 @@ export const FinanceService = {
   },
 
   addTransaction: async (userId: string, monthId: string, data: any) => {
+    // MAGIA ANTI-FANTASMAS: Aseguramos que la carpeta del mes exista siempre
+    const monthRef = doc(db, `users/${userId}/finance_months/${monthId}`);
+    await setDoc(monthRef, {}, { merge: true });
+
     const transRef = collection(db, `users/${userId}/finance_months/${monthId}/transactions`);
     const newDoc = await addDoc(transRef, {
       ...data,
@@ -104,6 +106,10 @@ export const FinanceService = {
   },
 
   updateTransaction: async (userId: string, monthId: string, transactionId: string, data: any) => {
+    // Nos aseguramos también al editar, por si editas una transacción que estaba en un mes fantasma
+    const monthRef = doc(db, `users/${userId}/finance_months/${monthId}`);
+    await setDoc(monthRef, {}, { merge: true });
+
     const transRef = doc(db, `users/${userId}/finance_months/${monthId}/transactions/${transactionId}`);
     await updateDoc(transRef, data);
 

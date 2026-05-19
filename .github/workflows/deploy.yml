@@ -28,9 +28,10 @@ jobs:
           node-version: 20
 
       - name: Install and Build 🔧
+        env:
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
         run: |
           cd frontend
-          echo "VITE_GEMINI_API_KEY=${{ secrets.VITE_GEMINI_API_KEY }}" > .env
           npm install --legacy-peer-deps
           npm run build
 

@@ -5,7 +5,7 @@ import { GEMINI_API_KEY } from '../../../../../../infrastructure/firebase/config
 
 interface Portfolio {
   id: string;
-  nombre: string;
+  nombre: string; 
 }
 
 interface InvestmentTransactionModalProps {

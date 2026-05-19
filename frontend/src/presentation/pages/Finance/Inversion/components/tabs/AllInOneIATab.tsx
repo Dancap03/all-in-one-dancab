@@ -3,7 +3,7 @@ import { useAiFinance } from '../../../../../hooks/useAiFinance'; // Nuestro Con
 
 interface AllInOneIATabProps {
   currentPositions: any[]; // Recibimos las posiciones desde Inversion.tsx
-}
+} 
 
 export const AllInOneIATab = ({ currentPositions }: AllInOneIATabProps) => {
   // Instanciamos el controlador

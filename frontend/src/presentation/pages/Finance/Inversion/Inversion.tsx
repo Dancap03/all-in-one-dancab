@@ -195,7 +195,7 @@ export const Inversion = () => {
       case 'Dividendos':
         return <DividendosTab />;
       case 'IA':
-        return <AllInOneIATab />;
+        return <AllInOneIATab currentPositions={currentPositions} />;
       default:
         return null;
     }

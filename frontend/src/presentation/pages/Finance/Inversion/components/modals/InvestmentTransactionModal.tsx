@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, Search, ChevronDown } from 'lucide-react';
+import { X, Search, ChevronDown, Sparkles } from 'lucide-react';
+import { FinanceService } from '../../../../../../infrastructure/services/FinanceService';
+import { GEMINI_API_KEY } from '../../../../../../infrastructure/firebase/config';
 
 interface Portfolio {
   id: string;
@@ -22,14 +24,18 @@ export const InvestmentTransactionModal = ({
   const [type, setType] = useState('Comprar');
   const [asset, setAsset] = useState('');
   const [cantidadInvertida, setCantidadInvertida] = useState('');
+  
+  // FECHA: Aquí se controla el día de la inversión (por defecto hoy)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [price, setPrice] = useState('');
   
-  // Estado para el selector de moneda personalizado
   const [currency, setCurrency] = useState('EUR');
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
-  
   const [nota, setNota] = useState('');
+
+  // Estados de la IA
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiData, setAiData] = useState<any>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -41,10 +47,32 @@ export const InvestmentTransactionModal = ({
       setNota('');
       setDate(new Date().toISOString().split('T')[0]);
       setIsCurrencyOpen(false);
+      setAiData(null);
     }
   }, [isOpen, activePortfolioId, portfolios]);
 
   if (!isOpen) return null;
+
+  // ESTA ES LA MAGIA DE LA IA (Búsqueda en tiempo real y auto-completado)
+  const handleAnalyzeAI = async () => {
+    if (!asset) return;
+    setIsAnalyzing(true);
+    try {
+      const data: any = await FinanceService.analyzeAssetWithAI(asset, GEMINI_API_KEY);
+      setAiData(data);
+      // Validamos y ponemos el nombre oficial
+      setAsset(`${data.name} (${data.ticker})`);
+      // Auto-completamos el precio (sigue siendo editable por el usuario)
+      setPrice(data.currentPrice.toString());
+      setCurrency(data.currency);
+      setNota(`Sector: ${data.sector}`);
+    } catch (error) {
+      console.error(error);
+      alert("La IA no ha encontrado este activo. Asegúrate de que el nombre o ticker es correcto.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const handleSave = () => {
     if (!asset || !cantidadInvertida || !price) return;
@@ -59,8 +87,9 @@ export const InvestmentTransactionModal = ({
       price: Number(price),
       shares,
       currency,
-      date,
-      nota
+      date, // Se guarda la fecha elegida
+      nota,
+      aiData: aiData || null 
     });
     
     onClose();
@@ -71,12 +100,10 @@ export const InvestmentTransactionModal = ({
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 font-sans">
       
-      {/* Estilo inyectado para ocultar la scrollbar nativa pero permitir scroll vertical si la pantalla es muy pequeña */}
       <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
 
       <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl w-full max-w-[500px] shadow-2xl flex flex-col max-h-[90vh]">
         
-        {/* Cabecera */}
         <div className="flex justify-between items-center p-6 border-b border-[#2d2d2d]">
           <h2 className="text-xl font-bold text-white">Agregar transacción</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
@@ -84,7 +111,6 @@ export const InvestmentTransactionModal = ({
           </button>
         </div>
 
-        {/* Formulario */}
         <div className="p-6 overflow-y-auto hide-scrollbar flex-1 space-y-5">
           
           <div>
@@ -100,7 +126,7 @@ export const InvestmentTransactionModal = ({
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">Tipo de transacción</label>
             <div className="relative">
-              <select value={type} onChange={(e) => { setType(e.target.value); setAsset(''); }} className="w-full bg-[#1e1e1e] border border-[#333] hover:border-[#444] rounded-lg px-4 py-3 text-sm text-white outline-none appearance-none font-medium transition-colors cursor-pointer" style={{ colorScheme: 'dark' }}>
+              <select value={type} onChange={(e) => { setType(e.target.value); setAsset(''); setAiData(null); }} className="w-full bg-[#1e1e1e] border border-[#333] hover:border-[#444] rounded-lg px-4 py-3 text-sm text-white outline-none appearance-none font-medium transition-colors cursor-pointer" style={{ colorScheme: 'dark' }}>
                 <option value="Comprar">Comprar</option>
                 <option value="Vender">Vender</option>
                 <option value="Dividendos">Dividendos</option>
@@ -111,41 +137,54 @@ export const InvestmentTransactionModal = ({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">{type === 'Vender' ? 'Seleccionar activo a vender' : 'Agregar activo'}</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">{type === 'Vender' ? 'Seleccionar activo a vender' : 'Buscar activo en mercado'}</label>
             <div className="relative">
               {type === 'Vender' ? (
                 <>
                   <select value={asset} onChange={(e) => setAsset(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] hover:border-[#444] rounded-lg px-4 py-3 text-sm text-white outline-none appearance-none font-medium transition-colors cursor-pointer" style={{ colorScheme: 'dark' }}>
                     <option value="" disabled>Selecciona una posición actual...</option>
-                    {currentPositions.map(p => <option key={p.id} value={p.name}>{p.name} ({p.ticker})</option>)}
+                    {currentPositions.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                   </select>
                   <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 </>
               ) : (
-                <>
-                  <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input type="text" placeholder="Teletipo de bolsa (ticker), ISIN..." value={asset} onChange={(e) => setAsset(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] focus:border-[#555] rounded-lg pl-11 pr-4 py-3 text-sm text-white outline-none transition-colors" />
-                </>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input type="text" placeholder="Ej: VUSA, Apple, Bitcoin..." value={asset} onChange={(e) => setAsset(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] focus:border-[#555] rounded-lg pl-11 pr-4 py-3 text-sm text-white outline-none transition-colors" />
+                  </div>
+                  {/* EL BOTÓN DE LA IA QUE TE FALTABA */}
+                  <button onClick={handleAnalyzeAI} disabled={isAnalyzing || !asset} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 rounded-lg text-sm font-bold flex items-center gap-2 transition-all disabled:opacity-50">
+                    {isAnalyzing ? 'Buscando...' : <><Sparkles size={16} /> Analizar</>}
+                  </button>
+                </div>
               )}
             </div>
+            {/* Pequeña confirmación visual de que el activo existe */}
+            {aiData && type !== 'Vender' && (
+              <div className="bg-[#1e293b]/50 border border-blue-500/30 rounded-lg p-3 mt-3 text-xs text-gray-300 space-y-1">
+                <p className="text-blue-400 font-bold">✓ Activo validado en mercado</p>
+                <p>• Tipo: {aiData.assetClass} | Región: {aiData.region}</p>
+                <p>• Precio actual en tiempo real: {aiData.currentPrice} {aiData.currency}</p>
+              </div>
+            )}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">{type === 'Vender' ? 'Cantidad a retirar' : 'Cantidad invertida'}</label>
-            <input type="number" placeholder="Por ejemplo 10,00" value={cantidadInvertida} onChange={(e) => setCantidadInvertida(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] focus:border-[#555] rounded-lg px-4 py-3 text-sm text-white outline-none transition-colors" />
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">{type === 'Vender' ? 'Cantidad a retirar (€)' : 'Cantidad invertida (€)'}</label>
+            <input type="number" placeholder="Ejemplo: 50.00" value={cantidadInvertida} onChange={(e) => setCantidadInvertida(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] focus:border-[#555] rounded-lg px-4 py-3 text-sm text-white outline-none transition-colors" />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Fecha de la operación</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">Fecha de la inversión</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] focus:border-[#555] rounded-lg px-4 py-3 text-sm text-white outline-none transition-colors" style={{ colorScheme: 'dark' }} />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">{type === 'Vender' ? 'Precio de venta (por unidad)' : 'Precio de compra (por unidad)'}</label>
             <div className="relative flex items-center">
-              <input type="number" placeholder="Por ejemplo 1000,00" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] focus:border-[#555] rounded-lg pl-4 pr-24 py-3 text-sm text-white outline-none transition-colors" />
+              <input type="number" placeholder="Búscalo con IA o ponlo a mano" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full bg-[#1e1e1e] border border-[#333] focus:border-[#555] rounded-lg pl-4 pr-24 py-3 text-sm text-white outline-none transition-colors" />
               
-              {/* Selector de moneda personalizado */}
               <div className="absolute right-2 flex items-center">
                 <button 
                   onClick={() => setIsCurrencyOpen(!isCurrencyOpen)}
@@ -180,7 +219,6 @@ export const InvestmentTransactionModal = ({
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-6 border-t border-[#2d2d2d] bg-[#151515] rounded-b-xl">
           <div className="flex justify-between items-center mb-6">
             <span className="text-sm font-bold text-white">Importe total</span>

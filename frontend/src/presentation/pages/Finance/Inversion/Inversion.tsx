@@ -5,7 +5,7 @@ import { PortfolioSettingsModal } from './components/modals/PortfolioSettingsMod
 import { InvestmentTransactionModal } from './components/modals/InvestmentTransactionModal';
 
 // Tabs
-import { PosicionesTab } from './components/tabs/PosicionesTab';
+import { PosicionesTab } from './components/tabs/PosicionesTab'; 
 import { DistribucionTab } from './components/tabs/DistribucionTab';
 import { RendimientoTab } from './components/tabs/RendimientoTab';
 import { DividendosTab } from './components/tabs/DividendosTab';

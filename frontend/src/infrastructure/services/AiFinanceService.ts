@@ -4,8 +4,8 @@ import { AiAssetAnalysis, AiPortfolioRisk } from '../../domain/models/AiAnalysis
 
 class AiFinanceService {
   private aiClient: any;
-  private modelName = 'gemini-1.5-flash';
-
+  private modelName = 'gemini-2.0-flash';
+  
   constructor() {
     if (GEMINI_API_KEY) {
       this.aiClient = new GoogleGenAI({ apiKey: GEMINI_API_KEY });

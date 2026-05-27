@@ -12,7 +12,7 @@ import { Patrimonio } from './presentation/pages/Finance/Patrimonio/Patrimonio';
 import { Ahorro } from './presentation/pages/Finance/Ahorro/Ahorro';
 import { Inversion } from './presentation/pages/Finance/Inversion/Inversion';
 
-// NUEVAS IMPORTACIONES: Tus componentes contextuales compartidos
+// Importación de las subcapas de Finanzas e IA
 import { FinanceSubNav } from './presentation/components/FinanceSubNav/FinanceSubNav';
 import { AiChatDock } from './presentation/components/AiChatDock/AiChatDock';
 
@@ -22,33 +22,28 @@ const ProtectedRoute = ({ children, user }: { children: JSX.Element, user: User 
   return children;
 };
 
-// SUB-COMPONENTE INTERNO: Permite usar useLocation dentro del Router de forma segura
+// Sub-workspace para manejar hooks de navegación dentro del contexto del Router
 const MainWorkspace = ({ user }: { user: User | null }) => {
   const location = useLocation();
-  // Detecta de forma reactiva si el usuario navega por cualquier sección financiera
   const isFinancePage = location.pathname.startsWith('/finance');
 
   return (
     <ProtectedRoute user={user}>
       <div className="min-h-screen bg-[#0c0c0c]">
-        {/* Navbar persistente y centrado */}
+        {/* Navbar persistente limpio */}
         <Navbar />
         
         <main className="max-w-7xl mx-auto p-4 md:p-6">
-          {/* 1. BURBUJAS DE SUB-NAVEGACIÓN: Aparecen arriba del contenido de finanzas */}
+          {/* Muestra las burbujas superiores solo en el módulo de finanzas */}
           {isFinancePage && <FinanceSubNav />}
 
           <Routes>
-            {/* HOME: Ahora es la página inicial al pulsar el logo o entrar */}
             <Route path="/" element={<Home />} />
-            
-            {/* FINANZAS: Cada sección en su ruta específica */}
             <Route path="/finance/diadia" element={<DiaaDia />} />
             <Route path="/finance/patrimonio" element={<Patrimonio />} />
             <Route path="/finance/ahorro" element={<Ahorro />} />
             <Route path="/finance/inversion" element={<Inversion />} />
 
-            {/* SECCIONES ADICIONALES (Placeholders) */}
             <Route path="/calendar" element={
               <div className="text-white p-10 text-center opacity-50 italic">
                 Sección de Calendario en desarrollo...
@@ -59,13 +54,11 @@ const MainWorkspace = ({ user }: { user: User | null }) => {
                 Sección de Salud en desarrollo...
               </div>
             } />
-
-            {/* Redirección por defecto para rutas no encontradas */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
 
-        {/* 2. AGENTE DE IA FLOTANTE: Te acompaña de forma fija en la zona inferior de finanzas */}
+        {/* El dock flotante del agente te acompaña en la zona inferior de finanzas */}
         {isFinancePage && <AiChatDock />}
       </div>
     </ProtectedRoute>
@@ -76,7 +69,6 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Escuchar el estado de sesión de Firebase
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -85,7 +77,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Spinner de carga inicial
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0c0c0c] flex items-center justify-center">
@@ -97,13 +88,10 @@ export default function App() {
   return (
     <HashRouter>
       <Routes>
-        {/* Ruta Pública */}
         <Route 
           path="/login" 
           element={user ? <Navigate to="/" replace /> : <Login />} 
         />
-
-        {/* Ecosistema Privado Controlado */}
         <Route path="/*" element={<MainWorkspace user={user} />} />
       </Routes>
     </HashRouter>

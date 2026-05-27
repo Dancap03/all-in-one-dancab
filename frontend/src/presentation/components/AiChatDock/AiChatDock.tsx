@@ -1,32 +1,94 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MessageSquare, X, Send, Sparkles } from 'lucide-react';
 
-export const AiChatDock = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [input, setInput] = useState('');
-  const [messages, setMessages] = useState([
-    { sender: 'ai', text: '¡Hola Daniel! Soy tu consultor de IA. Puedo analizar tu balance general, tus huchas de ahorro o tus posiciones de inversión. ¿Qué quieres revisar hoy?' }
-  ]);
+interface Message {
+  sender: 'user' | 'ai';
+  text: string;
+}
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    setMessages(prev => [...prev, { sender: 'user', text: input }]);
+export const AiChatDock = () => {
+  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [input, setInput] = useState<string>('');
+  const [isTyping, setIsTyping] = useState<boolean>(false);
+  const [messages, setMessages] = useState<Message[]>([
+    { sender: 'ai', text: '¡Hola Daniel! Soy tu consultor financiero en tiempo real. He cargado el contexto de tus activos de inversión. ¿Qué quieres que analicemos hoy?' }
+  ]);
+  const [portfolioContext, setPortfolioContext] = useState<string>('');
+
+  // Leer las posiciones reales de tu app en tiempo real para darle contexto a Gemini
+  useEffect(() => {
+    if (isOpen) {
+      try {
+        const savedPositions = localStorage.getItem('aio_positions');
+        if (savedPositions) {
+          const positions = JSON.parse(savedPositions);
+          setPortfolioContext(`Posiciones actuales de la cartera del usuario: ${JSON.stringify(positions)}`);
+        }
+      } catch (e) {
+        console.error("Error cargando contexto en el chat", e);
+      }
+    }
+  }, [isOpen]);
+
+  const handleSend = async () => {
+    if (!input.trim() || isTyping) return;
+
+    const userText = input;
+    setMessages(prev => [...prev, { sender: 'user', text: userText }]);
     setInput('');
-    
-    // Simulación de respuesta inteligente reactiva
-    setTimeout(() => {
+    setIsTyping(true);
+
+    try {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+
+      // Conexión directa y real con la API de Google Gemini 2.0 Flash
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `Eres el asesor financiero personal de Daniel dentro de su aplicación AllInOne. 
+              Responde de forma clara, directa, concisa y en español a su consulta. 
+              Utiliza este contexto de su cartera si te pregunta sobre sus inversiones o consejos de rebalanceo:
+              
+              ${portfolioContext}
+              
+              Pregunta del usuario: "${userText}"`
+            }]
+          }],
+          generationConfig: { temperature: 0.3 }
+        })
+      });
+
+      const resData = await response.json();
+      
+      if (resData.error) {
+        // Captura el error de cuota si estás en Europa sin VPN activa
+        if (resData.error.code === 429) {
+          throw new Error("Bloqueo de cuota regional de Google (Free tier no disponible en Europa). Por favor, enciende tu VPN en Estados Unidos para hablar con el agente.");
+        }
+        throw new Error(resData.error.message);
+      }
+
+      const aiText = resData.candidates?.[0]?.content?.parts?.[0]?.text || "No he podido procesar la respuesta.";
+      setMessages(prev => [...prev, { sender: 'ai', text: aiText }]);
+
+    } catch (error: any) {
+      console.error(error);
       setMessages(prev => [...prev, { 
         sender: 'ai', 
-        text: 'He analizado tus métricas financieras actuales en el sistema. Tu nivel de liquidez es óptimo para cubrir imprevistos. Te sugeriero vigilar la distribución sectorial de tu cartera de inversión.' 
+        text: `❌ Error del Agente: ${error.message || "No se pudo conectar con el servidor de IA."}` 
       }]);
-    }, 1000);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   return (
     <>
-      {/* BOTÓN FLOTANTE ADAPTADO (Limpio de Support) */}
-      {/* En móvil se eleva a bottom-20 para flotar por encima del Navbar inferior sin pisarlo */}
-      <div className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-[90] animate-in fade-in slide-in-from-bottom-5 duration-300">
+      {/* BOTÓN FLOTANTE ESTILO FAB (Perfectamente posicionado para móvil) */}
+      <div className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-[90] animate-in fade-in slide-in-from-bottom-5 duration-300">
         <button 
           onClick={() => setIsOpen(true)}
           className="flex items-center justify-center w-12 h-12 md:w-auto md:h-auto md:px-5 md:py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-full font-bold shadow-2xl transition-all cursor-pointer hover:scale-105 active:scale-95"
@@ -36,7 +98,7 @@ export const AiChatDock = () => {
         </button>
       </div>
 
-      {/* PANEL LATERAL DE CHAT DESLIZABLE */}
+      {/* PANEL DE CHAT DESLIZABLE INTERACTIVO */}
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex justify-end animate-in fade-in duration-200">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setIsOpen(false)}></div>
@@ -51,7 +113,7 @@ export const AiChatDock = () => {
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">Agente de IA</h3>
-                  <p className="text-[10px] text-[#10b981] font-bold uppercase tracking-wider mt-0.5">● En línea</p>
+                  <p className="text-[10px] text-[#10b981] font-bold uppercase tracking-wider mt-0.5">● Conectado</p>
                 </div>
               </div>
               <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white p-1 bg-[#252525] rounded-lg transition-colors">
@@ -59,10 +121,10 @@ export const AiChatDock = () => {
               </button>
             </div>
 
-            {/* Historial de Mensajes */}
+            {/* Mensajes */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4 hide-scrollbar">
               <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
-              {messages.map((msg, idx) => (
+              {messages.map((msg: Message, idx: number) => (
                 <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in duration-200`}>
                   <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                     msg.sender === 'user' 
@@ -73,14 +135,23 @@ export const AiChatDock = () => {
                   </div>
                 </div>
               ))}
+              {isTyping && (
+                <div className="flex justify-start">
+                  <div className="bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 flex gap-1 items-center">
+                    <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce"></div>
+                    <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                    <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Input de Texto */}
-            <div className="p-4 border-t border-[#2d2d2d] bg-[#181818] mb-[env(safe-area-inset-bottom)]">
+            {/* Input de envío */}
+            <div className="p-4 border-t border-[#2d2d2d] bg-[#181818]">
               <div className="flex gap-2 bg-[#0c0c0c] border border-[#2d2d2d] rounded-xl p-2 items-center focus-within:border-blue-500 transition-colors">
                 <input 
                   type="text" 
-                  placeholder="Pregúntame lo que quieras..." 
+                  placeholder="Pregúntame sobre tu portafolio..." 
                   value={input} 
                   onChange={(e) => setInput(e.target.value)} 
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()} 
@@ -88,7 +159,7 @@ export const AiChatDock = () => {
                 />
                 <button 
                   onClick={handleSend} 
-                  disabled={!input.trim()} 
+                  disabled={!input.trim() || isTyping} 
                   className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
                 >
                   <Send size={16} />

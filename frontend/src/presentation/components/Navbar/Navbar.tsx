@@ -16,13 +16,13 @@ export const Navbar = () => {
 
   return (
     <>
-      {/* NAVBAR SUPERIOR (Escritorio) */}
+      {/* NAVBAR SUPERIOR */}
       <header className="w-full bg-[#121212] border-b border-[#2d2d2d] sticky top-0 z-50 px-6 py-3.5 flex justify-between items-center">
         <Link to="/" className="text-white font-black text-lg tracking-wider select-none">
           <span className="bg-gradient-to-r from-blue-500 to-indigo-600 text-transparent bg-clip-text">ALLINONE</span>
         </Link>
 
-        {/* Menú unificado central para PC */}
+        {/* Menú unificado central: 4 Pilares limpios */}
         <nav className="hidden md:flex items-center gap-1">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -43,9 +43,10 @@ export const Navbar = () => {
           })}
         </nav>
 
-        <div className="hidden md:block w-20"></div>
+        {/* Lado derecho vacío: Sin buscar, import, campana ni mejorar */}
+        <div className="hidden md:block w-24"></div>
 
-        {/* Cabecera Móvil */}
+        {/* Cabecera para pantallas móviles */}
         <div className="flex md:hidden items-center justify-between w-full">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-[#2a2a2a] border border-[#3d3d3d] flex items-center justify-center text-xs text-gray-300 font-bold">

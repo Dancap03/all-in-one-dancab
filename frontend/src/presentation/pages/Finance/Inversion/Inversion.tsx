@@ -1,74 +1,71 @@
-import { useEffect, useState } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from './infrastructure/firebase/config';
+import { useState } from 'react';
+import { PosicionesTab } from './components/tabs/PosicionesTab';
+import { DistribucionTab } from './components/tabs/DistribucionTab';
+import { DividendosTab } from './components/tabs/DividendosTab';
+import { RendimientoTab } from './components/tabs/RendimientoTab';
+import { InvestmentSummary } from './components/InvestmentSummary';
 
-import { Login } from './presentation/pages/Login/Login';
-import { Navbar } from './presentation/components/Navbar/Navbar';
-import { Home } from './presentation/pages/Home/Home';
-import { DiaaDia } from './presentation/pages/Finance/DiaaDia/DiaaDia';
-import { Patrimonio } from './presentation/pages/Finance/Patrimonio/Patrimonio';
-import { Ahorro } from './presentation/pages/Finance/Ahorro/Ahorro';
-import { Inversion } from './presentation/pages/Finance/Inversion/Inversion';
-import { FinanceSubNav } from './presentation/components/FinanceSubNav/FinanceSubNav';
+export const Inversion = () => {
+  const [activeTab, setActiveTab] = useState<'posiciones' | 'distribucion' | 'dividendos' | 'rendimiento'>('posiciones');
 
-const ProtectedRoute = ({ children, user }: { children: JSX.Element, user: User | null }) => {
-  if (!user) return <Navigate to="/login" replace />;
-  return children;
-};
-
-const MainWorkspace = ({ user }: { user: User | null }) => {
-  const location = useLocation();
-  const isFinancePage = location.pathname.startsWith('/finance');
+  // Arrays vacíos para satisfacer los tipos estrictos de TypeScript
+  const mockPositions: any[] = [];
+  const mockVentas: any[] = [];
+  const mockTransactions: any[] = [];
+  const mockChartData: any[] = [];
 
   return (
-    <ProtectedRoute user={user}>
-      <div className="min-h-screen bg-[#0c0c0c]">
-        <Navbar />
-        <main className="max-w-7xl mx-auto p-4 md:p-6">
-          {isFinancePage && <FinanceSubNav />}
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/finance/diadia" element={<DiaaDia />} />
-            <Route path="/finance/patrimonio" element={<Patrimonio />} />
-            <Route path="/finance/ahorro" element={<Ahorro />} />
-            <Route path="/finance/inversion" element={<Inversion />} />
-            <Route path="/calendar" element={<div className="text-white p-10 text-center opacity-50 italic">Desarrollo...</div>} />
-            <Route path="/health" element={<div className="text-white p-10 text-center opacity-50 italic">Desarrollo...</div>} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
+    <div className="space-y-6 text-white pb-24 md:pb-6">
+      <InvestmentSummary 
+        balance={0}
+        chartData={mockChartData}
+        activeTimeframe="1M"
+        onTimeframeChange={() => {}}
+        totalInvested={0}
+        totalProfit={0}
+        totalProfitPercentage={0}
+        dailyChange={0}
+        dailyProfitPercentage={0}
+        loading={false}
+      />
+
+      <div className="border-b border-[#2d2d2d] flex items-center gap-2 overflow-x-auto hide-scrollbar">
+        <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
+        {([
+          { id: 'posiciones', label: 'Posiciones' },
+          { id: 'distribucion', label: 'Distribución' },
+          { id: 'dividendos', label: 'Dividendos' },
+          { id: 'rendimiento', label: 'Rendimiento' }
+        ] as const).map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2.5 text-sm font-bold border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'border-blue-500 text-white'
+                : 'border-transparent text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
-    </ProtectedRoute>
+
+      <div className="mt-4">
+        {activeTab === 'posiciones' && (
+          <PosicionesTab 
+            currentPositions={mockPositions}
+            currentVentas={mockVentas}
+            currentTransacciones={mockTransactions}
+            onAddTransaction={() => {}}
+          />
+        )}
+        {activeTab === 'distribucion' && (
+          <DistribucionTab currentPositions={mockPositions} />
+        )}
+        {activeTab === 'dividendos' && <DividendosTab />}
+        {activeTab === 'rendimiento' && <RendimientoTab />}
+      </div>
+    </div>
   );
 };
-
-export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0c0c0c] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  return (
-    <HashRouter>
-      <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
-        <Route path="/*" element={<MainWorkspace user={user} />} />
-      </Routes>
-    </HashRouter>
-  );
-}

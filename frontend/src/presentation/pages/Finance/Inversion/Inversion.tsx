@@ -16,8 +16,9 @@ export const Inversion = () => {
 
   return (
     <div className="space-y-6 text-white pb-24 md:pb-6">
+      {/* Balance actualizado con el objeto estricto que pide TypeScript */}
       <InvestmentSummary 
-        balance={0}
+        balance={{ total: "0.00", rendimiento: "0.00%", beneficio: "0.00", positivo: true }}
         chartData={mockChartData}
         activeTimeframe="1M"
         onTimeframeChange={() => {}}

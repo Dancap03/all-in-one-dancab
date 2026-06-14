@@ -3,48 +3,45 @@ import { BarChart3, Briefcase, Globe } from 'lucide-react';
 
 export const Inversion = () => {
   
-  // 1. DATOS DE BOLSAS (ETFs, Acciones, Criptos) - Inicializado totalmente vacío (0 € por defecto)
+  // 1. CARTERA DE BOLSA - Clave limpia v2 para ignorar el caché antiguo
   const [allPositions] = useState<any[]>(() => {
-    const saved = localStorage.getItem('aio_positions');
-    return saved ? JSON.parse(saved) : []; // Eliminados los datos de ejemplo de BTC y S&P
+    const saved = localStorage.getItem('aio_positions_v2');
+    return saved ? JSON.parse(saved) : []; 
   });
 
-  // 2. COMPARTIDO DESDE EL DÍA A DÍA / AHORRO
+  // 2. INTEGRACIÓN CON DÍA A DÍA 
   const [invertidoDesdeDiaDia] = useState<number>(() => {
-    const savedDiaDia = localStorage.getItem('aio_total_invertido_diadia');
-    return savedDiaDia ? Number(savedDiaDia) : 0; // 0 € por defecto hasta que entre el flujo real
+    const savedDiaDia = localStorage.getItem('aio_total_invertido_diadia_v2');
+    return savedDiaDia ? Number(savedDiaDia) : 0; 
   });
 
-  // 3. DATOS DE PROYECTOS PERSONALES - Inicializados a 0 € por defecto
+  // 3. PROYECTOS PERSONALES - Claves limpias v2 inicializadas estrictamente a 0
   const [proyectosInvertido] = useState<number>(() => {
-    const saved = localStorage.getItem('aio_proyectos_invertido');
+    const saved = localStorage.getItem('aio_proyectos_invertido_v2');
     return saved ? Number(saved) : 0;
   });
 
   const [proyectosGanado] = useState<number>(() => {
-    const saved = localStorage.getItem('aio_proyectos_ganado');
+    const saved = localStorage.getItem('aio_proyectos_ganado_v2');
     return saved ? Number(saved) : 0;
   });
 
   // ==========================================
-  // CÁLCULOS DINÁMICOS REALES (CERO HARDCODE)
+  // CÁLCULOS DINÁMICOS REALES (SI HAY 0 DATOS, DA 0)
   // ==========================================
-  
-  // Bloque Bolsa
   const bolsaInvertidoPropio = allPositions.reduce((sum, p) => sum + p.total, 0);
   const bolsaGanancias = allPositions.reduce((sum, p) => sum + (p.plVal ? Number(p.plVal) : 0), 0);
 
-  // Bloque Globales Superiores
   const globalTotalInvertido = invertidoDesdeDiaDia; 
   const globalTotalGanado = bolsaGanancias + proyectosGanado;
 
   return (
     <div className="w-full text-white animate-in fade-in duration-200">
       
-      {/* SECCIÓN ÚNICA EN PANTALLA: LOS 6 RECUADROS AUTOMATIZADOS */}
+      {/* REJILLA DE LOS 6 RECUADROS LIMPIOS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
-        {/* RECUADROS BLOQUE 1: TOTALES GLOBALES (LECTURA AUTOMÁTICA DESDE DÍA A DÍA) */}
+        {/* RECUADROS BLOQUE 1: TOTALES GLOBALES */}
         <div className="space-y-3 bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500 to-teal-500"></div>
           <div className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
@@ -68,7 +65,7 @@ export const Inversion = () => {
           </div>
         </div>
 
-        {/* RECUADROS BLOQUE 2: BOLSAS (ETFs, ACCIONES, CRIPTOS) */}
+        {/* RECUADROS BLOQUE 2: INVERSIÓN EN BOLSAS */}
         <div className="space-y-3 bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-blue-500 to-indigo-500"></div>
           <div className="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
@@ -91,7 +88,7 @@ export const Inversion = () => {
           </div>
         </div>
 
-        {/* RECUADROS BLOQUE 3: PROYECTOS PROPIOS (COMPRA-VENTA / SERVICIOS) */}
+        {/* RECUADROS BLOQUE 3: PROYECTOS PERSONALES */}
         <div className="space-y-3 bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-purple-500 to-pink-500"></div>
           <div className="text-xs font-black text-purple-400 uppercase tracking-widest flex items-center gap-2">

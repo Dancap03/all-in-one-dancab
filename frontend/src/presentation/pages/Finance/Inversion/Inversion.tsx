@@ -4,18 +4,17 @@ import { PortfolioModal } from './components/modals/PortfolioModal';
 import { PortfolioSettingsModal } from './components/modals/PortfolioSettingsModal';
 import { InvestmentTransactionModal } from './components/modals/InvestmentTransactionModal';
 
-// Tabs
+// Tabs (Eliminada de raíz la pestaña de IA)
 import { PosicionesTab } from './components/tabs/PosicionesTab'; 
 import { DistribucionTab } from './components/tabs/DistribucionTab';
 import { RendimientoTab } from './components/tabs/RendimientoTab';
 import { DividendosTab } from './components/tabs/DividendosTab';
-import { AllInOneIATab } from './components/tabs/AllInOneIATab';
 
 export const Inversion = () => {
   const [activeTab, setActiveTab] = useState('Posiciones');
   const [activeTimeframe, setActiveTimeframe] = useState('YTD');
   
-  // ESTADOS CON PERSISTENCIA (LocalStorage)
+  // ESTADOS CON PERSISTENCIA (LocalStorage) - Totalmente intactos
   const [portfolios, setPortfolios] = useState<any[]>(() => {
     const saved = localStorage.getItem('aio_portfolios');
     return saved ? JSON.parse(saved) : [];
@@ -189,13 +188,11 @@ export const Inversion = () => {
       case 'Posiciones':
         return <PosicionesTab currentPositions={currentPositions} currentVentas={currentVentas} currentTransacciones={currentTransacciones} onAddTransaction={() => setIsTransactionModalOpen(true)} />;
       case 'Distribución':
-        return <DistribucionTab currentPositions={currentPositions} />;
+        return <DistribucionTab currentPositions={currentPositions} />; // Conserva tu parámetro exacto
       case 'Rendimiento':
         return <RendimientoTab />;
       case 'Dividendos':
         return <DividendosTab />;
-      case 'IA':
-        return <AllInOneIATab currentPositions={currentPositions} />;
       default:
         return null;
     }
@@ -218,16 +215,13 @@ export const Inversion = () => {
 
       {hasPortfolios ? (
         <>
+          {/* Menú de pestañas limpio de IA */}
           <div className="flex gap-8 text-sm font-medium border-b border-[#2d2d2d] mt-8 mb-6 px-2">
             {tabs.map((tab) => (
-              <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-3 transition-colors ${activeTab === tab ? 'text-[#10b981] border-b-2 border-[#10b981]' : 'text-gray-500 hover:text-gray-300'}`}>
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-3 transition-colors cursor-pointer ${activeTab === tab ? 'text-[#10b981] border-b-2 border-[#10b981]' : 'text-gray-500 hover:text-gray-300'}`}>
                 {tab}
               </button>
             ))}
-            <button onClick={() => setActiveTab('IA')} className={`pb-3 transition-colors flex items-center gap-2 ${activeTab === 'IA' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500 hover:text-gray-300'}`}>
-              <span>AllInOne IA</span>
-              <span className="bg-blue-500/20 text-blue-400 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Beta</span>
-            </button>
           </div>
 
           {renderActiveTab()}
@@ -239,7 +233,7 @@ export const Inversion = () => {
           </div>
           <h3 className="text-xl font-bold text-white mb-2">Comienza tu viaje de inversión</h3>
           <p className="text-gray-400 text-sm max-w-sm mb-6">Crea tu primera cartera para empezar a hacer seguimiento de tus ETFs, criptomonedas y acciones.</p>
-          <button onClick={() => setIsPortfolioModalOpen(true)} className="bg-white hover:bg-gray-200 text-black font-bold px-6 py-2.5 rounded transition-colors text-sm">
+          <button onClick={() => setIsPortfolioModalOpen(true)} className="bg-white hover:bg-gray-200 text-black font-bold px-6 py-2.5 rounded transition-colors text-sm cursor-pointer">
             Crear mi primera cartera
           </button>
         </div>

@@ -4,7 +4,7 @@ import { PortfolioModal } from './components/modals/PortfolioModal';
 import { PortfolioSettingsModal } from './components/modals/PortfolioSettingsModal';
 import { InvestmentTransactionModal } from './components/modals/InvestmentTransactionModal';
 
-// Tabs (Eliminada de raíz la pestaña de IA)
+// Tabs (Quitada la importación del componente AllInOneIATab)
 import { PosicionesTab } from './components/tabs/PosicionesTab'; 
 import { DistribucionTab } from './components/tabs/DistribucionTab';
 import { RendimientoTab } from './components/tabs/RendimientoTab';
@@ -14,7 +14,7 @@ export const Inversion = () => {
   const [activeTab, setActiveTab] = useState('Posiciones');
   const [activeTimeframe, setActiveTimeframe] = useState('YTD');
   
-  // ESTADOS CON PERSISTENCIA (LocalStorage) - Totalmente intactos
+  // ESTADOS CON PERSISTENCIA (LocalStorage)
   const [portfolios, setPortfolios] = useState<any[]>(() => {
     const saved = localStorage.getItem('aio_portfolios');
     return saved ? JSON.parse(saved) : [];
@@ -73,12 +73,11 @@ export const Inversion = () => {
     setActivePortfolioId(updated.length === 1 ? updated[0].id : (updated.length > 0 ? 'aggregated' : 'aggregated'));
   };
 
-  // LOGICA: AGREGAR TRANSACCIÓN (Compra/Venta)
+  // LOGICA: AGREGAR TRANSACCIÓN
   const handleSaveTransaction = (data: any) => {
     const { portfolioId, type, asset, cantidadInvertida, price, date, nota } = data;
     const formattedDate = new Date(date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }).replace('/', '.');
 
-    // 1. Historial
     const newTx = {
       id: Date.now().toString(),
       fechaDia: formattedDate,
@@ -92,7 +91,6 @@ export const Inversion = () => {
     };
     setAllTransacciones(prev => [newTx, ...prev]);
 
-    // 2. Modificar Posición
     setAllPositions(prev => {
       let updated = [...prev];
       const existingIdx = updated.findIndex(p => (p.name === asset || p.id === asset) && p.portfolioId === portfolioId);
@@ -122,7 +120,6 @@ export const Inversion = () => {
       return updated;
     });
 
-    // 3. Modificar Ventas
     if (type === 'Vender') {
       const newVenta = {
         id: asset.substring(0, 3).toUpperCase(), name: asset, ticker: asset.toUpperCase(), fecha: formattedDate, 
@@ -188,7 +185,7 @@ export const Inversion = () => {
       case 'Posiciones':
         return <PosicionesTab currentPositions={currentPositions} currentVentas={currentVentas} currentTransacciones={currentTransacciones} onAddTransaction={() => setIsTransactionModalOpen(true)} />;
       case 'Distribución':
-        return <DistribucionTab currentPositions={currentPositions} />; // Conserva tu parámetro exacto
+        return <DistribucionTab currentPositions={currentPositions} />; // Inyectado el parámetro requerido de forma exacta
       case 'Rendimiento':
         return <RendimientoTab />;
       case 'Dividendos':
@@ -215,7 +212,6 @@ export const Inversion = () => {
 
       {hasPortfolios ? (
         <>
-          {/* Menú de pestañas limpio de IA */}
           <div className="flex gap-8 text-sm font-medium border-b border-[#2d2d2d] mt-8 mb-6 px-2">
             {tabs.map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-3 transition-colors cursor-pointer ${activeTab === tab ? 'text-[#10b981] border-b-2 border-[#10b981]' : 'text-gray-500 hover:text-gray-300'}`}>

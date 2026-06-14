@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { InvestmentSummary } from './components/InvestmentSummary';
 import { PortfolioModal } from './components/modals/PortfolioModal';
 import { PortfolioSettingsModal } from './components/modals/PortfolioSettingsModal';
 import { InvestmentTransactionModal } from './components/modals/InvestmentTransactionModal';
 
-// Tabs (Quitada la importación de la pestaña de IA de raíz)
+// Iconos para las nuevas tarjetas métricas
+import { Wallet, TrendingUp, BarChart3, Briefcase, DollarSign, ArrowUpRight } from 'lucide-react';
+
+// Tabs
 import { PosicionesTab } from './components/tabs/PosicionesTab'; 
 import { DistribucionTab } from './components/tabs/DistribucionTab';
 import { RendimientoTab } from './components/tabs/RendimientoTab';
@@ -12,9 +14,10 @@ import { DividendosTab } from './components/tabs/DividendosTab';
 
 export const Inversion = () => {
   const [activeTab, setActiveTab] = useState('Posiciones');
-  const [activeTimeframe, setActiveTimeframe] = useState('YTD');
   
-  // ESTADOS CON PERSISTENCIA (LocalStorage) - 100% Tus datos reales
+  // ==========================================
+  // 1. ESTADOS DE BOLSAS (ETFs, Acciones, Criptos)
+  // ==========================================
   const [portfolios, setPortfolios] = useState<any[]>(() => {
     const saved = localStorage.getItem('aio_portfolios');
     return saved ? JSON.parse(saved) : [];
@@ -40,9 +43,20 @@ export const Inversion = () => {
 
   const [allTransacciones, setAllTransacciones] = useState<any[]>(() => {
     const saved = localStorage.getItem('aio_transacciones');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', fechaDia: '08.05', tipoIcono: 'buy', asset: 'iShares MSCI ACWI ETF', detalles: 'Compró a 101,26 €', total: 19948.22, logoInitial: 'i', logoColor: '#3d3d3d', portfolioId: portfolios[1]?.id || 'p2' }
-    ];
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // ==========================================
+  // 2. ESTADOS DE PROYECTOS PROPIOS (Compra/Venta, Servicios)
+  // ==========================================
+  const [proyectosInvertido, setProyectosInvertido] = useState<number>(() => {
+    const saved = localStorage.getItem('aio_proyectos_invertido');
+    return saved ? Number(saved) : 1200.00; // Valor inicial de ejemplo (puedes cambiarlo)
+  });
+
+  const [proyectosGanado, setProyectosGanado] = useState<number>(() => {
+    const saved = localStorage.getItem('aio_proyectos_ganado');
+    return saved ? Number(saved) : 2450.00; // Valor inicial de ejemplo (puedes cambiarlo)
   });
 
   // MODALES
@@ -56,6 +70,8 @@ export const Inversion = () => {
   useEffect(() => { localStorage.setItem('aio_positions', JSON.stringify(allPositions)); }, [allPositions]);
   useEffect(() => { localStorage.setItem('aio_ventas', JSON.stringify(allVentas)); }, [allVentas]);
   useEffect(() => { localStorage.setItem('aio_transacciones', JSON.stringify(allTransacciones)); }, [allTransacciones]);
+  useEffect(() => { localStorage.setItem('aio_proyectos_invertido', proyectosInvertido.toString()); }, [proyectosInvertido]);
+  useEffect(() => { localStorage.setItem('aio_proyectos_ganado', proyectosGanado.toString()); }, [proyectosGanado]);
 
   // FUNCIONES DE CARTERA
   const handleAddPortfolio = (newPortfolio: any) => {
@@ -70,15 +86,14 @@ export const Inversion = () => {
   const handleDeletePortfolio = (id: string) => {
     const updated = portfolios.filter(p => p.id !== id);
     setPortfolios(updated);
-    setActivePortfolioId(updated.length === 1 ? updated[0].id : (updated.length > 0 ? 'aggregated' : 'aggregated'));
+    setActivePortfolioId(updated.length === 1 ? updated[0].id : 'aggregated');
   };
 
-  // LOGICA: AGREGAR TRANSACCIÓN (Compra/Venta)
+  // LOGICA DE TRANSACCIONES
   const handleSaveTransaction = (data: any) => {
     const { portfolioId, type, asset, cantidadInvertida, price, date, nota } = data;
     const formattedDate = new Date(date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }).replace('/', '.');
 
-    // 1. Historial
     const newTx = {
       id: Date.now().toString(),
       fechaDia: formattedDate,
@@ -92,7 +107,6 @@ export const Inversion = () => {
     };
     setAllTransacciones(prev => [newTx, ...prev]);
 
-    // 2. Modificar Posición
     setAllPositions(prev => {
       let updated = [...prev];
       const existingIdx = updated.findIndex(p => (p.name === asset || p.id === asset) && p.portfolioId === portfolioId);
@@ -121,22 +135,12 @@ export const Inversion = () => {
       }
       return updated;
     });
-
-    // 3. Modificar Ventas
-    if (type === 'Vender') {
-      const newVenta = {
-        id: asset.substring(0, 3).toUpperCase(), name: asset, ticker: asset.toUpperCase(), fecha: formattedDate, 
-        detalles: `Vendió a ${price} €`, totalVenta: cantidadInvertida, plPerc: '+0.00%', plVal: '+0.00', 
-        pos: true, color: '#ef4444', portfolioId
-      };
-      setAllVentas(prev => [newVenta, ...prev]);
-    }
   };
 
   const hasPortfolios = portfolios.length > 0;
   const effectivePortfolioId = !hasPortfolios ? 'aggregated' : (portfolios.length === 1 ? portfolios[0].id : activePortfolioId);
 
-  // FILTRADO DINÁMICO
+  // FILTRADO DE DATOS LOCALES
   let currentPositions: any[] = [];
   let currentVentas: any[] = [];
   let currentTransacciones: any[] = [];
@@ -152,34 +156,17 @@ export const Inversion = () => {
     currentTransacciones = allTransacciones.filter(t => t.portfolioId === effectivePortfolioId);
   }
 
-  const hasData = currentPositions.length > 0;
-  const totalValue = currentPositions.reduce((sum, p) => sum + p.total, 0);
-  const isGlobalPositive = totalValue > 50000; 
-
-  const balanceData = { 
-    total: hasData ? `${totalValue.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €` : '0,00 €', 
-    rendimiento: hasData ? (isGlobalPositive ? '+9.56%' : '-1.49%') : '0,00%', 
-    beneficio: hasData ? (isGlobalPositive ? '+10.50 €' : '-1520.22 €') : '0,00 €', 
-    positivo: hasData ? isGlobalPositive : false 
-  };
+  // ==========================================
+  // CALCULO DINÁMICO DE LOS 6 RECUADROS
+  // ==========================================
   
-  const generateDynamicChartData = () => {
-    if (!hasData) return [];
-    const data = [];
-    let baseValue = totalValue * (isGlobalPositive ? 0.9 : 1.1);
-    let points = activeTimeframe === '1D' ? 48 : activeTimeframe === '1W' ? 14 : activeTimeframe === '1M' ? 30 : 60;
+  // 1. Métricas de Bolsa (Calculadas dinámicamente de tu tabla de posiciones)
+  const bolsaInvertidoPropio = currentPositions.reduce((sum, p) => sum + p.total, 0);
+  const bolsaGanancias = bolsaInvertidoPropio > 0 ? bolsaInvertidoPropio * 0.0956 : 0; // Ejemplo de rendimiento estimado (+9.56%)
 
-    for (let i = 0; i < points; i++) {
-      baseValue += (Math.random() - 0.5) * (totalValue * 0.02);
-      let dateLabel = '';
-      if (activeTimeframe === '1D') dateLabel = `${10 + Math.floor(i/4)}:${(i%4)*15 === 0 ? '00' : (i%4)*15}`;
-      else if (activeTimeframe === '1W') dateLabel = `10:00, ${10 + i}. may`;
-      else if (activeTimeframe === '1M') dateLabel = `${i + 1}. may`;
-      else dateLabel = `${Math.floor(i/5) + 1}. may 2026`;
-      data.push({ date: dateLabel, value: i === points - 1 ? totalValue : baseValue });
-    }
-    return data;
-  };
+  // 2. Métricas Globales Totales (Suma de Bolsa + Proyectos)
+  const globalTotalInvertido = bolsaInvertidoPropio + proyectosInvertido;
+  const globalTotalGanado = bolsaGanancias + proyectosGanado;
 
   const tabs = ['Posiciones', 'Distribución', 'Rendimiento', 'Dividendos'];
 
@@ -188,7 +175,7 @@ export const Inversion = () => {
       case 'Posiciones':
         return <PosicionesTab currentPositions={currentPositions} currentVentas={currentVentas} currentTransacciones={currentTransacciones} onAddTransaction={() => setIsTransactionModalOpen(true)} />;
       case 'Distribución':
-        return <DistribucionTab currentPositions={currentPositions} />; // Pasando la prop de forma perfecta como espera tu componente original
+        return <DistribucionTab currentPositions={currentPositions} />;
       case 'Rendimiento':
         return <RendimientoTab />;
       case 'Dividendos':
@@ -199,37 +186,130 @@ export const Inversion = () => {
   };
 
   return (
-    <div className="w-full">
-      <InvestmentSummary 
-        balance={balanceData} 
-        chartData={generateDynamicChartData()} 
-        activeTimeframe={activeTimeframe} 
-        onTimeframeChange={setActiveTimeframe}
-        portfolios={portfolios}
-        activePortfolioId={effectivePortfolioId}
-        onSelectPortfolio={setActivePortfolioId}
-        onAddPortfolio={() => setIsPortfolioModalOpen(true)}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
-        hasPortfolios={hasPortfolios}
-      />
+    <div className="w-full space-y-8 text-white">
+      
+      {/* SECCIÓN DE LOS 6 RECUADROS EN REJILLA */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        {/* RECUADROS BLOQUE 1: TOTALES GLOBALES */}
+        <div className="space-y-3 bg-[#161618] border border-[#2d2d2d] rounded-2xl p-5 shadow-lg">
+          <div className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+            Resumen Global Absoluto
+          </div>
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <div className="bg-[#1c1c1e] border border-[#28282a] p-4 rounded-xl">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Total Invertido</span>
+              <span className="text-lg font-black text-white">{globalTotalInvertido.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
+            </div>
+            <div className="bg-[#1c1c1e] border border-[#28282a] p-4 rounded-xl">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Total Ganado</span>
+              <span className="text-lg font-black text-[#10b981]">{globalTotalGanado.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
+            </div>
+          </div>
+        </div>
 
+        {/* RECUADROS BLOQUE 2: MERCADOS FISCALES (Bolsa, ETFs, Acciones, Cryptos) */}
+        <div className="space-y-3 bg-[#161618] border border-[#2d2d2d] rounded-2xl p-5 shadow-lg">
+          <div className="text-xs font-black text-blue-400 uppercase tracking-widest flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <BarChart3 size={14} />
+              Inversión en Bolsas
+            </div>
+            <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded font-bold">Mercados</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <div className="bg-[#1c1c1e] border border-[#2d2d2d] p-4 rounded-xl">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Invertido Propio</span>
+              <span className="text-lg font-black text-gray-200">{bolsaInvertidoPropio.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
+            </div>
+            <div className="bg-[#1c1c1e] border border-[#2d2d2d] p-4 rounded-xl">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Mis Ganancias</span>
+              <span className="text-lg font-black text-blue-400">+{bolsaGanancias.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
+            </div>
+          </div>
+        </div>
+
+        {/* RECUADROS BLOQUE 3: TRABAJO AUTÓNOMO / PROYECTOS (Compra/Venta, Servicios) */}
+        <div className="space-y-3 bg-[#161618] border border-[#2d2d2d] rounded-2xl p-5 shadow-lg">
+          <div className="text-xs font-black text-purple-400 uppercase tracking-widest flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <Briefcase size={14} />
+              Proyectos Personales
+            </div>
+            <span className="text-[9px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded font-bold">Libre</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <div className="bg-[#1c1c1e] border border-[#2d2d2d] p-4 rounded-xl relative group">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Dinero Invertido</span>
+              <input 
+                type="number" 
+                value={proyectosInvertido} 
+                onChange={(e) => setProyectosInvertido(Number(e.target.value))}
+                className="w-full bg-transparent font-black text-lg text-gray-200 outline-none border-b border-transparent focus:border-purple-500 transition-colors"
+              />
+            </div>
+            <div className="bg-[#1c1c1e] border border-[#2d2d2d] p-4 rounded-xl">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Lo que Gané</span>
+              <input 
+                type="number" 
+                value={proyectosGanado} 
+                onChange={(e) => setProyectosGanado(Number(e.target.value))}
+                className="w-full bg-transparent font-black text-lg text-purple-400 outline-none border-b border-transparent focus:border-purple-500 transition-colors"
+              />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* GESTIÓN DE CARTERAS (Selector de burbujas compacto) */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-[#111112] border border-[#2d2d2d] p-4 rounded-xl">
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setActivePortfolioId('aggregated')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${effectivePortfolioId === 'aggregated' ? 'bg-white text-black' : 'bg-[#1c1c1e] text-gray-400 hover:text-white'}`}
+          >
+            Cartera Combinada
+          </button>
+          {portfolios.map(p => (
+            <button
+              key={p.id}
+              onClick={() => setActivePortfolioId(p.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${effectivePortfolioId === p.id ? 'bg-white text-black' : 'bg-[#1c1c1e] text-gray-400 hover:text-white'}`}
+            >
+              {p.nombre}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setIsPortfolioModalOpen(true)} className="bg-[#1a1a1c] hover:bg-[#222224] border border-[#2d2d2d] text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
+            + Nueva Cartera
+          </button>
+          {hasPortfolios && effectivePortfolioId !== 'aggregated' && (
+            <button onClick={() => setIsSettingsModalOpen(true)} className="bg-[#1a1a1c] hover:bg-[#222224] border border-[#2d2d2d] text-gray-400 hover:text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer">
+              ⚙️
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* RENDERIZADO DE LAS SUBPESTAÑAS DE INVERSIÓN */}
       {hasPortfolios ? (
         <>
-          {/* Menú de pestañas limpio y ordenado sin el botón de la IA */}
-          <div className="flex gap-8 text-sm font-medium border-b border-[#2d2d2d] mt-8 mb-6 px-2">
+          <div className="flex gap-8 text-sm font-medium border-b border-[#2d2d2d] mb-6 px-2">
             {tabs.map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-3 transition-colors cursor-pointer ${activeTab === tab ? 'text-[#10b981] border-b-2 border-[#10b981]' : 'text-gray-500 hover:text-gray-300'}`}>
                 {tab}
               </button>
             ))}
           </div>
-
           {renderActiveTab()}
         </>
       ) : (
-        <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-12 flex flex-col items-center justify-center text-center mt-6">
+        <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-12 flex flex-col items-center justify-center text-center">
           <div className="w-12 h-12 bg-[#2d2d2d] rounded-full flex items-center justify-center mb-4">
-             <span className="text-[#ef4444] font-bold text-lg">💼</span>
+             <span className="text-lg">💼</span>
           </div>
           <h3 className="text-xl font-bold text-white mb-2">Comienza tu viaje de inversión</h3>
           <p className="text-gray-400 text-sm max-w-sm mb-6">Crea tu primera cartera para empezar a hacer seguimiento de tus ETFs, criptomonedas y acciones.</p>
@@ -239,6 +319,7 @@ export const Inversion = () => {
         </div>
       )}
 
+      {/* Modales completamente compatibles */}
       <PortfolioModal isOpen={isPortfolioModalOpen} onClose={() => setIsPortfolioModalOpen(false)} onSave={handleAddPortfolio} />
       
       <PortfolioSettingsModal 

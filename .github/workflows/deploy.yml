@@ -28,8 +28,6 @@ jobs:
           node-version: 20
 
       - name: Install and Build 🔧
-        env:
-          VITE_GROQ_API_KEY: ${{ secrets.VITE_GROQ_API_KEY }}
         run: |
           cd frontend
           npm install --legacy-peer-deps

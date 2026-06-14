@@ -3,8 +3,8 @@ import { PortfolioModal } from './components/modals/PortfolioModal';
 import { PortfolioSettingsModal } from './components/modals/PortfolioSettingsModal';
 import { InvestmentTransactionModal } from './components/modals/InvestmentTransactionModal';
 
-// Iconos para las nuevas tarjetas métricas
-import { Wallet, TrendingUp, BarChart3, Briefcase, DollarSign, ArrowUpRight } from 'lucide-react';
+// Iconos para los 6 recuadros
+import { BarChart3, Briefcase, Wallet, TrendingUp, Globe, Activity } from 'lucide-react';
 
 // Tabs
 import { PosicionesTab } from './components/tabs/PosicionesTab'; 
@@ -14,6 +14,7 @@ import { DividendosTab } from './components/tabs/DividendosTab';
 
 export const Inversion = () => {
   const [activeTab, setActiveTab] = useState('Posiciones');
+  const [activeTimeframe, setActiveTimeframe] = useState('YTD');
   
   // ==========================================
   // 1. ESTADOS DE BOLSAS (ETFs, Acciones, Criptos)
@@ -47,17 +48,17 @@ export const Inversion = () => {
   });
 
   // ==========================================
-  // 2. ESTADOS DE PROYECTOS PROPIOS (Compra/Venta, Servicios)
+  // 2. DATO COMPARTIDO: DESDE EL DIA A DIA / AHORRO
   // ==========================================
-  const [proyectosInvertido, setProyectosInvertido] = useState<number>(() => {
-    const saved = localStorage.getItem('aio_proyectos_invertido');
-    return saved ? Number(saved) : 1200.00; // Valor inicial de ejemplo (puedes cambiarlo)
+  const [invertidoDesdeDiaDia, setInvertidoDesdeDiaDia] = useState<number>(() => {
+    // Aquí puedes leer el estado global, el localStorage de transacciones de día a día, o tu FinanceService
+    const savedDiaDia = localStorage.getItem('aio_total_invertido_diadia');
+    return savedDiaDia ? Number(savedDiaDia) : 15000.00; // Valor de ejemplo vinculado a tu flujo
   });
 
-  const [proyectosGanado, setProyectosGanado] = useState<number>(() => {
-    const saved = localStorage.getItem('aio_proyectos_ganado');
-    return saved ? Number(saved) : 2450.00; // Valor inicial de ejemplo (puedes cambiarlo)
-  });
+  // 3. ESTADOS DE PROYECTOS PROPIOS (Solo lectura en esta vista)
+  const [proyectosInvertido] = useState<number>(2500.00); 
+  const [proyectosGanado] = useState<number>(4800.00);
 
   // MODALES
   const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false);
@@ -70,8 +71,6 @@ export const Inversion = () => {
   useEffect(() => { localStorage.setItem('aio_positions', JSON.stringify(allPositions)); }, [allPositions]);
   useEffect(() => { localStorage.setItem('aio_ventas', JSON.stringify(allVentas)); }, [allVentas]);
   useEffect(() => { localStorage.setItem('aio_transacciones', JSON.stringify(allTransacciones)); }, [allTransacciones]);
-  useEffect(() => { localStorage.setItem('aio_proyectos_invertido', proyectosInvertido.toString()); }, [proyectosInvertido]);
-  useEffect(() => { localStorage.setItem('aio_proyectos_ganado', proyectosGanado.toString()); }, [proyectosGanado]);
 
   // FUNCIONES DE CARTERA
   const handleAddPortfolio = (newPortfolio: any) => {
@@ -89,7 +88,6 @@ export const Inversion = () => {
     setActivePortfolioId(updated.length === 1 ? updated[0].id : 'aggregated');
   };
 
-  // LOGICA DE TRANSACCIONES
   const handleSaveTransaction = (data: any) => {
     const { portfolioId, type, asset, cantidadInvertida, price, date, nota } = data;
     const formattedDate = new Date(date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }).replace('/', '.');
@@ -157,15 +155,13 @@ export const Inversion = () => {
   }
 
   // ==========================================
-  // CALCULO DINÁMICO DE LOS 6 RECUADROS
+  // CÁLCULOS AUTOMÁTICOS DE LAS TARJETAS
   // ==========================================
-  
-  // 1. Métricas de Bolsa (Calculadas dinámicamente de tu tabla de posiciones)
   const bolsaInvertidoPropio = currentPositions.reduce((sum, p) => sum + p.total, 0);
-  const bolsaGanancias = bolsaInvertidoPropio > 0 ? bolsaInvertidoPropio * 0.0956 : 0; // Ejemplo de rendimiento estimado (+9.56%)
+  const bolsaGanancias = bolsaInvertidoPropio > 0 ? bolsaInvertidoPropio * 0.0842 : 0; // Ganancia simulada de bolsa (+8.42%)
 
-  // 2. Métricas Globales Totales (Suma de Bolsa + Proyectos)
-  const globalTotalInvertido = bolsaInvertidoPropio + proyectosInvertido;
+  // El Total Invertido Global ahora usa "invertidoDesdeDiaDia" directamente en vez de sumas manuales
+  const globalTotalInvertido = invertidoDesdeDiaDia; 
   const globalTotalGanado = bolsaGanancias + proyectosGanado;
 
   const tabs = ['Posiciones', 'Distribución', 'Rendimiento', 'Dividendos'];
@@ -188,87 +184,75 @@ export const Inversion = () => {
   return (
     <div className="w-full space-y-8 text-white">
       
-      {/* SECCIÓN DE LOS 6 RECUADROS EN REJILLA */}
+      {/* SECCIÓN DE LOS 6 RECUADROS TOTALMENTE DE LECTURA (Cero Inputs) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
-        {/* RECUADROS BLOQUE 1: TOTALES GLOBALES */}
-        <div className="space-y-3 bg-[#161618] border border-[#2d2d2d] rounded-2xl p-5 shadow-lg">
+        {/* BLOQUE 1: TOTALES GLOBALES ABSOLUTOS */}
+        <div className="space-y-3 bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500 to-teal-500"></div>
           <div className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-            Resumen Global Absoluto
+            <Globe size={13} className="text-emerald-400" />
+            Balance Global
           </div>
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <div className="bg-[#1c1c1e] border border-[#28282a] p-4 rounded-xl">
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="bg-[#1b1b1d] border border-[#262628] p-4 rounded-xl">
               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Total Invertido</span>
               <span className="text-lg font-black text-white">{globalTotalInvertido.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
+              <span className="text-[9px] text-gray-400 block mt-0.5 font-medium italic">Sincronizado</span>
             </div>
-            <div className="bg-[#1c1c1e] border border-[#28282a] p-4 rounded-xl">
+            <div className="bg-[#1b1b1d] border border-[#262628] p-4 rounded-xl">
               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Total Ganado</span>
               <span className="text-lg font-black text-[#10b981]">{globalTotalGanado.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
             </div>
           </div>
         </div>
 
-        {/* RECUADROS BLOQUE 2: MERCADOS FISCALES (Bolsa, ETFs, Acciones, Cryptos) */}
-        <div className="space-y-3 bg-[#161618] border border-[#2d2d2d] rounded-2xl p-5 shadow-lg">
-          <div className="text-xs font-black text-blue-400 uppercase tracking-widest flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <BarChart3 size={14} />
-              Inversión en Bolsas
-            </div>
-            <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded font-bold">Mercados</span>
+        {/* BLOQUE 2: INVERSIÓN EN BOLSA (MERCADOS FISCALES) */}
+        <div className="space-y-3 bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+          <div className="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
+            <BarChart3 size={13} />
+            Inversión en Bolsas
           </div>
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <div className="bg-[#1c1c1e] border border-[#2d2d2d] p-4 rounded-xl">
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="bg-[#1b1b1d] border border-[#262628] p-4 rounded-xl">
               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Invertido Propio</span>
               <span className="text-lg font-black text-gray-200">{bolsaInvertidoPropio.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
             </div>
-            <div className="bg-[#1c1c1e] border border-[#2d2d2d] p-4 rounded-xl">
+            <div className="bg-[#1b1b1d] border border-[#262628] p-4 rounded-xl">
               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Mis Ganancias</span>
               <span className="text-lg font-black text-blue-400">+{bolsaGanancias.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
             </div>
           </div>
         </div>
 
-        {/* RECUADROS BLOQUE 3: TRABAJO AUTÓNOMO / PROYECTOS (Compra/Venta, Servicios) */}
-        <div className="space-y-3 bg-[#161618] border border-[#2d2d2d] rounded-2xl p-5 shadow-lg">
-          <div className="text-xs font-black text-purple-400 uppercase tracking-widest flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Briefcase size={14} />
-              Proyectos Personales
-            </div>
-            <span className="text-[9px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded font-bold">Libre</span>
+        {/* BLOQUE 3: PROYECTOS PROPIOS (COMPRA-VENTA / SERVICIOS) */}
+        <div className="space-y-3 bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-purple-500 to-pink-500"></div>
+          <div className="text-xs font-black text-purple-400 uppercase tracking-widest flex items-center gap-2">
+            <Briefcase size={13} />
+            Proyectos Personales
           </div>
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <div className="bg-[#1c1c1e] border border-[#2d2d2d] p-4 rounded-xl relative group">
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="bg-[#1b1b1d] border border-[#262628] p-4 rounded-xl">
               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Dinero Invertido</span>
-              <input 
-                type="number" 
-                value={proyectosInvertido} 
-                onChange={(e) => setProyectosInvertido(Number(e.target.value))}
-                className="w-full bg-transparent font-black text-lg text-gray-200 outline-none border-b border-transparent focus:border-purple-500 transition-colors"
-              />
+              <span className="text-lg font-black text-gray-200">{proyectosInvertido.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
             </div>
-            <div className="bg-[#1c1c1e] border border-[#2d2d2d] p-4 rounded-xl">
+            <div className="bg-[#1b1b1d] border border-[#262628] p-4 rounded-xl">
               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Lo que Gané</span>
-              <input 
-                type="number" 
-                value={proyectosGanado} 
-                onChange={(e) => setProyectosGanado(Number(e.target.value))}
-                className="w-full bg-transparent font-black text-lg text-purple-400 outline-none border-b border-transparent focus:border-purple-500 transition-colors"
-              />
+              <span className="text-lg font-black text-purple-400">+{proyectosGanado.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
             </div>
           </div>
         </div>
 
       </div>
 
-      {/* GESTIÓN DE CARTERAS (Selector de burbujas compacto) */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-[#111112] border border-[#2d2d2d] p-4 rounded-xl">
+      {/* BURBUJAS DE CARTERA COMPACTAS */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-[#0f0f11] border border-[#2d2d2d] p-4 rounded-xl">
         <div className="flex items-center gap-2">
           <button 
             onClick={() => setActivePortfolioId('aggregated')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${effectivePortfolioId === 'aggregated' ? 'bg-white text-black' : 'bg-[#1c1c1e] text-gray-400 hover:text-white'}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${effectivePortfolioId === 'aggregated' ? 'bg-white text-black' : 'bg-[#1b1b1d] text-gray-400 hover:text-white'}`}
           >
             Cartera Combinada
           </button>
@@ -276,25 +260,25 @@ export const Inversion = () => {
             <button
               key={p.id}
               onClick={() => setActivePortfolioId(p.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${effectivePortfolioId === p.id ? 'bg-white text-black' : 'bg-[#1c1c1e] text-gray-400 hover:text-white'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${effectivePortfolioId === p.id ? 'bg-white text-black' : 'bg-[#1b1b1d] text-gray-400 hover:text-white'}`}
             >
               {p.nombre}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setIsPortfolioModalOpen(true)} className="bg-[#1a1a1c] hover:bg-[#222224] border border-[#2d2d2d] text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
+          <button onClick={() => setIsPortfolioModalOpen(true)} className="bg-[#161618] hover:bg-[#202022] border border-[#2d2d2d] text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
             + Nueva Cartera
           </button>
           {hasPortfolios && effectivePortfolioId !== 'aggregated' && (
-            <button onClick={() => setIsSettingsModalOpen(true)} className="bg-[#1a1a1c] hover:bg-[#222224] border border-[#2d2d2d] text-gray-400 hover:text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer">
+            <button onClick={() => setIsSettingsModalOpen(true)} className="bg-[#161618] hover:bg-[#202022] border border-[#2d2d2d] text-gray-400 hover:text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer">
               ⚙️
             </button>
           )}
         </div>
       </div>
 
-      {/* RENDERIZADO DE LAS SUBPESTAÑAS DE INVERSIÓN */}
+      {/* SUBPESTAÑAS DE INVERSIÓN */}
       {hasPortfolios ? (
         <>
           <div className="flex gap-8 text-sm font-medium border-b border-[#2d2d2d] mb-6 px-2">
@@ -307,7 +291,7 @@ export const Inversion = () => {
           {renderActiveTab()}
         </>
       ) : (
-        <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-12 flex flex-col items-center justify-center text-center">
+        <div className="bg-[#141416] border border-[#2d2d2d] rounded-xl p-12 flex flex-col items-center justify-center text-center">
           <div className="w-12 h-12 bg-[#2d2d2d] rounded-full flex items-center justify-center mb-4">
              <span className="text-lg">💼</span>
           </div>
@@ -319,7 +303,7 @@ export const Inversion = () => {
         </div>
       )}
 
-      {/* Modales completamente compatibles */}
+      {/* Modales perfectamente compatibles */}
       <PortfolioModal isOpen={isPortfolioModalOpen} onClose={() => setIsPortfolioModalOpen(false)} onSave={handleAddPortfolio} />
       
       <PortfolioSettingsModal 

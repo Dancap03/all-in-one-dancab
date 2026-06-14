@@ -12,7 +12,7 @@ import { Patrimonio } from './presentation/pages/Finance/Patrimonio/Patrimonio';
 import { Ahorro } from './presentation/pages/Finance/Ahorro/Ahorro';
 import { Inversion } from './presentation/pages/Finance/Inversion/Inversion';
 
-// Mantener la subnavegación estilizada de burbujas financieros
+// Mantener la subnavegación estilizada de burbujas financieras
 import { FinanceSubNav } from './presentation/components/FinanceSubNav/FinanceSubNav';
 
 // Componente para proteger rutas privadas
@@ -29,7 +29,7 @@ const MainWorkspace = ({ user }: { user: User | null }) => {
   return (
     <ProtectedRoute user={user}>
       <div className="min-h-screen bg-[#0c0c0c]">
-        {/* Navbar persistente limpio */}
+        {/* Navbar persistente y limpio de chats de IA */}
         <Navbar />
         
         <main className="max-w-7xl mx-auto p-4 md:p-6">

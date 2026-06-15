@@ -3,19 +3,13 @@ import { BarChart3, Briefcase, Globe } from 'lucide-react';
 
 export const Inversion = () => {
   
-  // 1. CARTERA DE BOLSA - Clave limpia v2 para ignorar el caché antiguo
+  // 1. CARTERA DE BOLSA (Se mantiene reactiva por si añades posiciones en el futuro)
   const [allPositions] = useState<any[]>(() => {
     const saved = localStorage.getItem('aio_positions_v2');
     return saved ? JSON.parse(saved) : []; 
   });
 
-  // 2. INTEGRACIÓN CON DÍA A DÍA 
-  const [invertidoDesdeDiaDia] = useState<number>(() => {
-    const savedDiaDia = localStorage.getItem('aio_total_invertido_diadia_v2');
-    return savedDiaDia ? Number(savedDiaDia) : 0; 
-  });
-
-  // 3. PROYECTOS PERSONALES - Claves limpias v2 inicializadas estrictamente a 0
+  // 2. PROYECTOS PERSONALES
   const [proyectosInvertido] = useState<number>(() => {
     const saved = localStorage.getItem('aio_proyectos_invertido_v2');
     return saved ? Number(saved) : 0;
@@ -26,19 +20,21 @@ export const Inversion = () => {
     return saved ? Number(saved) : 0;
   });
 
-  // ==========================================
-  // CÁLCULOS DINÁMICOS REALES (SI HAY 0 DATOS, DA 0)
-  // ==========================================
+  // =======================================================================
+  // 🚀 CÁLCULOS DINÁMICOS LIVE (Lectura directa sin pasar por useState)
+  // =======================================================================
+  // Al leerlo directamente aquí, cada vez que la pantalla se pinte, traerá el dato real de Día a Día
+  const globalTotalInvertido = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
+
   const bolsaInvertidoPropio = allPositions.reduce((sum, p) => sum + p.total, 0);
   const bolsaGanancias = allPositions.reduce((sum, p) => sum + (p.plVal ? Number(p.plVal) : 0), 0);
 
-  const globalTotalInvertido = invertidoDesdeDiaDia; 
   const globalTotalGanado = bolsaGanancias + proyectosGanado;
 
   return (
     <div className="w-full text-white animate-in fade-in duration-200">
       
-      {/* REJILLA DE LOS 6 RECUADROS LIMPIOS */}
+      {/* REJILLA DE LOS 6 RECUADROS AUTOMATIZADOS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
         {/* RECUADROS BLOQUE 1: TOTALES GLOBALES */}

@@ -3,7 +3,7 @@ import { BarChart3, Briefcase, Globe, Calendar, ArrowUpRight } from 'lucide-reac
 
 export const Inversion = () => {
   
-  // 1. CARTERA DE BOLSA 
+  // 1. CARTERA DE BOLSA
   const [allPositions] = useState<any[]>(() => {
     const saved = localStorage.getItem('aio_positions_v2');
     return saved ? JSON.parse(saved) : []; 
@@ -20,15 +20,13 @@ export const Inversion = () => {
     return saved ? Number(saved) : 0;
   });
 
-  // 3. HISTORIAL DE MOVIMIENTOS COMPARTIDO
+  // 3. MOVIMIENTOS DEL HISTORIAL
   const [movimientos, setMovimientos] = useState<any[]>([]);
 
-  // Cargar los movimientos dinámicamente cada vez que se monta la pantalla
   useEffect(() => {
     const savedMovements = localStorage.getItem('aio_inversion_movimientos_v2');
     if (savedMovements) {
       const parsed = JSON.parse(savedMovements);
-      // Ordenar por fecha de más reciente a más antigua
       parsed.sort((a: any, b: any) => new Date(b.dateString).getTime() - new Date(a.dateString).getTime());
       setMovimientos(parsed);
     }
@@ -45,10 +43,10 @@ export const Inversion = () => {
   return (
     <div className="w-full text-white space-y-8 animate-in fade-in duration-200">
       
-      {/* REJILLA DE LOS 6 RECUADROS AUTOMATIZADOS */}
+      {/* SECCIÓN DE LOS 6 RECUADROS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
-        {/* RECUADROS BLOQUE 1: TOTALES GLOBALES */}
+        {/* BLOQUE 1: TOTALES GLOBALES */}
         <div className="space-y-3 bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500 to-teal-500"></div>
           <div className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
@@ -72,7 +70,7 @@ export const Inversion = () => {
           </div>
         </div>
 
-        {/* RECUADROS BLOQUE 2: INVERSIÓN EN BOLSAS */}
+        {/* BLOQUE 2: INVERSIÓN EN BOLSAS */}
         <div className="space-y-3 bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-blue-500 to-indigo-500"></div>
           <div className="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
@@ -95,7 +93,7 @@ export const Inversion = () => {
           </div>
         </div>
 
-        {/* RECUADROS BLOQUE 3: PROYECTOS PERSONALES */}
+        {/* BLOQUE 3: PROYECTOS PERSONALES */}
         <div className="space-y-3 bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-purple-500 to-pink-500"></div>
           <div className="text-xs font-black text-purple-400 uppercase tracking-widest flex items-center gap-2">
@@ -120,7 +118,7 @@ export const Inversion = () => {
 
       </div>
 
-      {/* 🚀 NUEVA SECCIÓN: HISTORIAL O REGISTRO DE MOVIMIENTOS */}
+      {/* BLOQUE HISTORIAL DE MOVIMIENTOS DE INVERSIÓN */}
       <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex items-center gap-2 pb-2 border-b border-[#2d2d2d]">
           <Calendar size={16} className="text-blue-500" />

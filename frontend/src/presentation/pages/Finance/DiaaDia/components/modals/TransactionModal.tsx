@@ -65,10 +65,9 @@ export const TransactionModal = ({ isOpen, onClose, monthId, type, transaction }
     const targetMonthId = date.substring(0, 7);
 
     try {
-      // =======================================================================
-      // 🚀 INTERCEPTOR METRICAS: Sincronización automática con pantalla Inversión
-      // =======================================================================
+      // 🚀 AUTOMATIZACIÓN: Sincronizar recuadro métrico e Histórico de Inversión
       const currentInvertido = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
+      const currentMovements = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
 
       if (transaction?.id) {
         // MODO EDICIÓN
@@ -76,25 +75,42 @@ export const TransactionModal = ({ isOpen, onClose, monthId, type, transaction }
         const isInvestment = type === 'transfer' && category === 'Inversión';
 
         if (wasInvestment && isInvestment) {
-          // Caso A: Sigue siendo inversión, recalculamos solo la diferencia
           const diff = Number(amount) - Number(transaction.amount);
           localStorage.setItem('aio_total_invertido_diadia_v2', (currentInvertido + diff).toString());
+          
+          const updatedMovements = currentMovements.map((m: any) => 
+            (m.id === transaction.id || (m.amount === transaction.amount && m.dateString === transaction.dateString))
+              ? { ...m, amount: Number(amount), label: description || category, dateString: date }
+              : m
+          );
+          localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify(updatedMovements));
         } else if (wasInvestment && !isInvestment) {
-          // Caso B: Antes era inversión y ahora ya no, restamos el importe viejo
           localStorage.setItem('aio_total_invertido_diadia_v2', Math.max(0, currentInvertido - Number(transaction.amount)).toString());
+          const updatedMovements = currentMovements.filter((m: any) => 
+            m.id !== transaction.id && !(m.amount === transaction.amount && m.dateString === transaction.dateString)
+          );
+          localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify(updatedMovements));
         } else if (!wasInvestment && isInvestment) {
-          // Caso C: Antes no era inversión y ahora sí lo es, sumamos el total nuevo entero
           localStorage.setItem('aio_total_invertido_diadia_v2', (currentInvertido + Number(amount)).toString());
+          const newMov = { id: transaction.id || `inv-${Date.now()}`, amount: Number(amount), label: description || category, dateString: date };
+          localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify([newMov, ...currentMovements]));
         }
       } else {
         // MODO NUEVA TRANSACCIÓN
         if (type === 'transfer' && category === 'Inversión') {
           localStorage.setItem('aio_total_invertido_diadia_v2', (currentInvertido + Number(amount)).toString());
+          
+          const newMov = {
+            id: `inv-${Date.now()}`,
+            amount: Number(amount),
+            label: description || category,
+            dateString: date
+          };
+          localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify([newMov, ...currentMovements]));
         }
       }
-      // =======================================================================
 
-      // Persistencia en Firebase Firestore (Tu código original intacto)
+      // Persistencia en Firebase
       if (transaction?.id) {
         if (targetMonthId !== monthId) {
           await FinanceService.deleteTransaction(user.uid, monthId, transaction.id);

@@ -48,10 +48,22 @@ export const Inversion = () => {
         
         {/* BLOQUE 1: TOTALES GLOBALES */}
         <div className="space-y-3 bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500 to-teal-500"></div>
-          <div className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-            <Globe size={13} className="text-emerald-400" />
-            Balance Global
+          <div className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Globe size={13} className="text-emerald-400" />
+              Balance Global
+            </div>
+            {/* Botón temporal de reinicio para desarrollo */}
+            <button 
+              onClick={() => {
+                localStorage.removeItem('aio_total_invertido_diadia_v2');
+                localStorage.removeItem('aio_inversion_movimientos_v2');
+                window.location.reload();
+              }}
+              className="text-[10px] text-gray-500 hover:text-red-400 font-bold transition-colors cursor-pointer"
+            >
+              🗑️ Reiniciar pruebas
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-3 pt-1">
             <div className="bg-[#1b1b1d] border border-[#262628] p-4 rounded-xl">

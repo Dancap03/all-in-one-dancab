@@ -34,22 +34,25 @@ export const TransfersList = ({ transactions, monthId, monthLabel }: TransfersLi
   const handleAddNew = () => { setSelectedTransaction(null); setIsModalOpen(true); };
   const handleDeleteRequest = (id: string) => { setDeletingId(id); setIsDeleteOpen(true); };
 
-  // 🚀 INTERCEPTOR DE ELIMINACIÓN DEFINITIVO
   const confirmDelete = async () => {
     if (!deletingId || !auth.currentUser) return;
     setIsDeleting(true);
 
     try {
-      // 1. Buscamos la transacción en el array de props antes de que sea borrada de Firestore
       const txToDelete = transactions.find(t => t.id === deletingId);
 
-      // 2. Si existía y era de categoría Inversión, la restamos del total acumulado de la otra pantalla
+      // 🚀 LIMPIEZA HISTÓRICO Y BALANCES AL BORRAR
       if (txToDelete && txToDelete.type === 'transfer' && txToDelete.category === 'Inversión') {
         const currentInvertido = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
         localStorage.setItem('aio_total_invertido_diadia_v2', Math.max(0, currentInvertido - Number(txToDelete.amount)).toString());
+        
+        const currentMovements = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
+        const updatedMovements = currentMovements.filter((m: any) => 
+          m.id !== deletingId && !(m.amount === txToDelete.amount && m.dateString === txToDelete.dateString)
+        );
+        localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify(updatedMovements));
       }
 
-      // 3. Procedemos con el borrado normal de tu servicio
       await FinanceService.deleteTransaction(auth.currentUser.uid, monthId, deletingId);
     } catch (error) {
       console.error("Error al eliminar la transacción:", error);
@@ -63,7 +66,6 @@ export const TransfersList = ({ transactions, monthId, monthLabel }: TransfersLi
   return (
     <>
       <div className="bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl p-6 h-full flex flex-col shadow-sm">
-        
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-2">
             <h2 className="font-bold text-gray-200">Transacciones</h2>

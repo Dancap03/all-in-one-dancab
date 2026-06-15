@@ -1,145 +1,310 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
-import { FinanceService } from '../../../../../../infrastructure/services/FinanceService';
-import { auth } from '../../../../../../infrastructure/firebase/config';
 
-interface TransactionModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  monthId: string;
-  type: 'income' | 'expense' | 'other_expense' | 'transfer';
-  transaction?: any;
-}
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const CATEGORIES = {
-  income: ['Nómina', 'Intereses', 'Dividendos', 'Venta', 'Freelance', 'Otros ingresos'],
-  expense: ['Comida', 'Transporte', 'Ocio', 'Salud', 'Ropa', 'Hogar', 'Suscripciones', 'Educación', 'Regalos', 'Otros'],
-  other_expense: ['Imprevistos', 'Impuestos', 'Multas', 'Ropa', 'Salud', 'Comida', 'Educación', 'Otros'],
-  transfer: ['Ahorro', 'Inversión']
-};
+import { FinanceService } from '../../../../infrastructure/services/FinanceService';
 
-const TITLES = {
-  income: { add: 'Añadir ingreso', edit: 'Editar ingreso' },
-  expense: { add: 'Añadir gasta', edit: 'Editar gasto' },
-  other_expense: { add: 'Añadir otro gasto', edit: 'Editar otro gasto' },
-  transfer: { add: 'Añadir transacción', edit: 'Editar transacción' }
-};
+import { auth } from '../../../../infrastructure/firebase/config';
 
-export const TransactionModal = ({ isOpen, onClose, monthId, type, transaction }: TransactionModalProps) => {
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
-  const [description, setDescription] = useState('');
-  const [date, setDate] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
 
-  const categoriesList = CATEGORIES[type] || [];
-  const modalTitle = transaction ? TITLES[type].edit : TITLES[type].add;
+
+import { SummaryCards } from './components/SummaryCards';
+
+import { ExpensesChart } from './components/ExpensesChart';
+
+import { ComparisonChart } from './components/ComparisonChart';
+
+import { BudgetCard } from './components/BudgetCard';
+
+import { IncomeList } from './components/IncomeList';
+
+import { OtherExpensesList } from './components/OtherExpensesList';
+
+import { TransfersList } from './components/TransfersList';
+
+ 
+
+export const DiaaDia = () => {
+
+  const [date, setDate] = useState(new Date()); 
+
+  const [loading, setLoading] = useState(true); 
+
+  const [history, setHistory] = useState<Record<string, any>>({});
+
+  
+
+  // NUEVO: Estado para almacenar el balance acumulado de los meses pasados
+
+  const [carryOverBalance, setCarryOverBalance] = useState(0);
+
+  
+
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+
+  const [pickerYear, setPickerYear] = useState(date.getFullYear());
+
+
+
+  const monthId = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+  const monthLabel = date.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+
+  const monthNamesShort = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+
+
+  const realNow = new Date();
+
+  const currentYear = realNow.getFullYear();
+
+  const currentMonth = realNow.getMonth();
+
+  const isCurrentMonth = date.getFullYear() === currentYear && date.getMonth() === currentMonth;
+
+
 
   useEffect(() => {
-    if (transaction && isOpen) {
-      setAmount(transaction.amount.toString());
-      setCategory(transaction.category);
-      setDescription(transaction.label === transaction.category ? '' : transaction.label);
-      setDate(transaction.dateString || new Date().toISOString().split('T')[0]);
-    } else if (isOpen) {
-      setAmount(''); setCategory(''); setDescription('');
-      setDate(new Date().toISOString().split('T')[0]);
-    }
-  }, [transaction, isOpen]);
 
-  if (!isOpen) return null;
-
-  const handleSave = async () => {
     const user = auth.currentUser;
-    if (!user || !amount || !category) return;
-    
-    setIsSaving(true);
-    const data = {
-      amount: Number(amount),
-      category,
-      label: description || category,
-      type,
-      dateString: date
-    };
 
-    const targetMonthId = date.substring(0, 7);
+    if (!user) return;
 
-    try {
-      // 🚀 CONEXIÓN CON LA PANTALLA DE INVERSIÓN (Sincronización LocalStorage v2)
-      if (type === 'transfer' && category === 'Inversión') {
-        const currentInvertido = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
-        let diff = Number(amount);
 
-        // Si estamos EDITANDO una inversión existente, calculamos la diferencia real
-        if (transaction?.id && transaction.category === 'Inversión') {
-          diff -= Number(transaction.amount);
-        }
-        
-        localStorage.setItem('aio_total_invertido_diadia_v2', (currentInvertido + diff).toString());
-      } 
-      // Si la transacción ANTES era una inversión, pero ahora la cambiaste de categoría, la restamos
-      else if (transaction?.id && transaction.type === 'transfer' && transaction.category === 'Inversión') {
-        const currentInvertido = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
-        localStorage.setItem('aio_total_invertido_diadia_v2', Math.max(0, currentInvertido - Number(transaction.amount)).toString());
+
+    setLoading(true);
+
+
+
+    // 1. Recalcular el remanente de los meses anteriores al cambiar de mes
+
+    FinanceService.getCarryOverBalance(user.uid, monthId).then(balance => {
+
+      setCarryOverBalance(balance);
+
+    });
+
+
+
+    // 2. Suscribirse siempre en tiempo real (eliminado el return prematuro que rompía la sincronización)
+
+    const unsubscribe = FinanceService.subscribeToMonthData(
+
+      user.uid, monthId, (newData: any) => {
+
+        setHistory(prev => ({ ...prev, [monthId]: newData }));
+
+        setLoading(false);
+
       }
 
-      // Guardar en Firestore Database
-      if (transaction?.id) {
-        if (targetMonthId !== monthId) {
-          await FinanceService.deleteTransaction(user.uid, monthId, transaction.id);
-          await FinanceService.addTransaction(user.uid, targetMonthId, data);
-        } else {
-          await FinanceService.updateTransaction(user.uid, targetMonthId, transaction.id, data);
-        }
-      } else {
-        await FinanceService.addTransaction(user.uid, targetMonthId, data);
-      }
-      onClose();
-    } catch (error) {
-      console.error("Error al guardar", error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
+    );
+
+
+
+    return () => unsubscribe();
+
+  }, [monthId]);
+
+
+
+  const handlePrevMonth = () => setDate(new Date(date.getFullYear(), date.getMonth() - 1));
+
+  const handleNextMonth = () => { if (!isCurrentMonth) setDate(new Date(date.getFullYear(), date.getMonth() + 1)); };
+
+
+
+  const monthData = history[monthId] || { budget: 0, transactions: [] };
+
+
+
+  if (loading && !history[monthId]) {
+
+    return <div className="flex items-center justify-center min-h-[calc(100vh-80px)] bg-[#0c0c0c]"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div></div>;
+
+  }
+
+
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl w-full max-w-sm p-6 shadow-2xl relative">
-        <button onClick={onClose} className="absolute right-4 top-4 text-gray-400 hover:text-white">
-          <X size={18} />
+
+    <div className="min-h-screen bg-[#0c0c0c] text-white p-4 md:p-6">
+
+      
+
+      <div className="flex items-center gap-4 mb-8">
+
+        <button onClick={handlePrevMonth} className="text-gray-500 hover:text-white transition-colors p-1 rounded-md hover:bg-[#1a1a1a]">
+
+          <ChevronLeft size={24} />
+
         </button>
+
         
-        <h2 className="text-xl font-bold text-white mb-6">{modalTitle}</h2>
-        
-        <div className="space-y-4 mb-8">
-          <div>
-            <label className="block text-sm font-medium text-white mb-1">Cantidad (€)</label>
-            <input type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] focus:border-[#10b981] rounded-lg px-4 py-2.5 text-white outline-none" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-white mb-1">Categoría</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] focus:border-[#10b981] rounded-lg px-4 py-2.5 text-white outline-none appearance-none">
-              <option value="" disabled>Selecciona...</option>
-              {categoriesList.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-white mb-1">Descripción (opcional)</label>
-            <input type="text" placeholder="Nota..." value={description} onChange={(e) => setDescription(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] focus:border-[#10b981] rounded-lg px-4 py-2.5 text-white outline-none" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-white mb-1">Fecha</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] focus:border-[#10b981] rounded-lg px-4 py-2.5 text-white outline-none color-scheme-dark" style={{ colorScheme: 'dark' }} />
-          </div>
+
+        <div className="relative flex items-center justify-center group">
+
+          <h1 
+
+            onClick={() => { setPickerYear(date.getFullYear()); setIsDatePickerOpen(true); }}
+
+            className="text-xl font-bold capitalize cursor-pointer hover:text-blue-500 transition-colors"
+
+          >
+
+            {monthLabel}
+
+          </h1>
+
+          
+
+          {isDatePickerOpen && (
+
+            <>
+
+              <div className="fixed inset-0 z-40" onClick={() => setIsDatePickerOpen(false)}></div>
+
+              <div className="absolute top-full mt-2 left-0 bg-[#1a1a1a] border border-[#2d2d2d] rounded-xl shadow-2xl z-50 p-4 w-72">
+
+                <div className="flex justify-between items-center mb-4">
+
+                  <button onClick={() => setPickerYear(prev => prev - 1)} className="p-1 hover:bg-[#252525] rounded transition-colors text-gray-400 hover:text-white">
+
+                    <ChevronLeft size={18} />
+
+                  </button>
+
+                  <span className="font-bold text-lg text-white">{pickerYear}</span>
+
+                  <button 
+
+                    onClick={() => setPickerYear(prev => prev + 1)} 
+
+                    disabled={pickerYear >= currentYear}
+
+                    className={`p-1 rounded transition-colors ${pickerYear >= currentYear ? 'text-[#2d2d2d] cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-[#252525]'}`}
+
+                  >
+
+                    <ChevronRight size={18} />
+
+                  </button>
+
+                </div>
+
+                
+
+                <div className="grid grid-cols-3 gap-2">
+
+                  {monthNamesShort.map((m, i) => {
+
+                    const isDisabled = pickerYear === currentYear && i > currentMonth;
+
+                    const isSelected = date.getFullYear() === pickerYear && date.getMonth() === i;
+
+                    return (
+
+                      <button
+
+                        key={m}
+
+                        disabled={isDisabled}
+
+                        onClick={() => { setDate(new Date(pickerYear, i)); setIsDatePickerOpen(false); }}
+
+                        className={`py-2 text-sm rounded-lg transition-all ${
+
+                          isDisabled ? 'opacity-20 cursor-not-allowed' : 
+
+                          isSelected ? 'bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20' : 
+
+                          'bg-[#151515] border border-[#2d2d2d] hover:border-gray-500 text-gray-300 hover:text-white'
+
+                        }`}
+
+                      >
+
+                        {m}
+
+                      </button>
+
+                    )
+
+                  })}
+
+                </div>
+
+              </div>
+
+            </>
+
+          )}
+
         </div>
 
-        <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#1a1a1a] border border-[#2d2d2d] hover:bg-[#252525] transition-colors">Cancelar</button>
-          <button onClick={handleSave} disabled={isSaving || !amount || !category} className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#3b82f6] hover:bg-blue-600 transition-colors disabled:opacity-50">
-            {isSaving ? 'Guardando...' : 'Guardar'}
-          </button>
-        </div>
+
+
+        <button 
+
+          onClick={handleNextMonth} 
+
+          disabled={isCurrentMonth}
+
+          className={`p-1 rounded-md transition-colors ${isCurrentMonth ? 'text-[#2d2d2d] cursor-not-allowed' : 'text-gray-500 hover:text-white hover:bg-[#1a1a1a]'}`}
+
+        >
+
+          <ChevronRight size={24} />
+
+        </button>
+
       </div>
+
+
+
+      {/* ENVIAMOS EL REMANENTE ACUMULADO A LAS TARJETAS */}
+
+      <SummaryCards transactions={monthData.transactions} carryOverBalance={carryOverBalance} />
+
+
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+        <ExpensesChart transactions={monthData.transactions} />
+
+        <ComparisonChart transactions={monthData.transactions} />
+
+      </div>
+
+
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <div className="flex flex-col gap-6">
+
+          <BudgetCard budget={monthData.budget} transactions={monthData.transactions} monthId={monthId} />
+
+          <OtherExpensesList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />
+
+        </div>
+
+        
+
+        <div className="flex flex-col gap-6">
+
+          <IncomeList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />
+
+          <TransfersList transactions={monthData.transactions} monthId={monthId} monthLabel={monthLabel.split(' ')[0]} />
+
+        </div>
+
+      </div>
+
+      
+
     </div>
+
   );
-};
+
+}; 
+

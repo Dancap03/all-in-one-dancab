@@ -34,13 +34,30 @@ export const TransfersList = ({ transactions, monthId, monthLabel }: TransfersLi
   const handleAddNew = () => { setSelectedTransaction(null); setIsModalOpen(true); };
   const handleDeleteRequest = (id: string) => { setDeletingId(id); setIsDeleteOpen(true); };
 
+  // 🚀 INTERCEPTOR DE ELIMINACIÓN DEFINITIVO
   const confirmDelete = async () => {
     if (!deletingId || !auth.currentUser) return;
     setIsDeleting(true);
-    await FinanceService.deleteTransaction(auth.currentUser.uid, monthId, deletingId);
-    setIsDeleting(false);
-    setIsDeleteOpen(false);
-    setDeletingId(null);
+
+    try {
+      // 1. Buscamos la transacción en el array de props antes de que sea borrada de Firestore
+      const txToDelete = transactions.find(t => t.id === deletingId);
+
+      // 2. Si existía y era de categoría Inversión, la restamos del total acumulado de la otra pantalla
+      if (txToDelete && txToDelete.type === 'transfer' && txToDelete.category === 'Inversión') {
+        const currentInvertido = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
+        localStorage.setItem('aio_total_invertido_diadia_v2', Math.max(0, currentInvertido - Number(txToDelete.amount)).toString());
+      }
+
+      // 3. Procedemos con el borrado normal de tu servicio
+      await FinanceService.deleteTransaction(auth.currentUser.uid, monthId, deletingId);
+    } catch (error) {
+      console.error("Error al eliminar la transacción:", error);
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteOpen(false);
+      setDeletingId(null);
+    }
   };
 
   return (

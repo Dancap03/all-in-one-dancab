@@ -62,21 +62,47 @@ export const TransactionModal = ({ isOpen, onClose, monthId, type, transaction }
       dateString: date
     };
 
-    // SOLUCIÓN: Extraemos el "YYYY-MM" de la fecha seleccionada ("YYYY-MM-DD")
     const targetMonthId = date.substring(0, 7);
 
     try {
+      // =======================================================================
+      // 🚀 INTERCEPTOR METRICAS: Sincronización automática con pantalla Inversión
+      // =======================================================================
+      const currentInvertido = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
+
       if (transaction?.id) {
-        // Si estamos editando y el mes ha cambiado, borramos la vieja y creamos la nueva
+        // MODO EDICIÓN
+        const wasInvestment = transaction.type === 'transfer' && transaction.category === 'Inversión';
+        const isInvestment = type === 'transfer' && category === 'Inversión';
+
+        if (wasInvestment && isInvestment) {
+          // Caso A: Sigue siendo inversión, recalculamos solo la diferencia
+          const diff = Number(amount) - Number(transaction.amount);
+          localStorage.setItem('aio_total_invertido_diadia_v2', (currentInvertido + diff).toString());
+        } else if (wasInvestment && !isInvestment) {
+          // Caso B: Antes era inversión y ahora ya no, restamos el importe viejo
+          localStorage.setItem('aio_total_invertido_diadia_v2', Math.max(0, currentInvertido - Number(transaction.amount)).toString());
+        } else if (!wasInvestment && isInvestment) {
+          // Caso C: Antes no era inversión y ahora sí lo es, sumamos el total nuevo entero
+          localStorage.setItem('aio_total_invertido_diadia_v2', (currentInvertido + Number(amount)).toString());
+        }
+      } else {
+        // MODO NUEVA TRANSACCIÓN
+        if (type === 'transfer' && category === 'Inversión') {
+          localStorage.setItem('aio_total_invertido_diadia_v2', (currentInvertido + Number(amount)).toString());
+        }
+      }
+      // =======================================================================
+
+      // Persistencia en Firebase Firestore (Tu código original intacto)
+      if (transaction?.id) {
         if (targetMonthId !== monthId) {
           await FinanceService.deleteTransaction(user.uid, monthId, transaction.id);
           await FinanceService.addTransaction(user.uid, targetMonthId, data);
         } else {
-          // Si es el mismo mes, actualizamos normalmente
           await FinanceService.updateTransaction(user.uid, targetMonthId, transaction.id, data);
         }
       } else {
-        // Si es nueva, la guardamos en el mes que le corresponde según SU fecha (no la de la pantalla)
         await FinanceService.addTransaction(user.uid, targetMonthId, data);
       }
       onClose();

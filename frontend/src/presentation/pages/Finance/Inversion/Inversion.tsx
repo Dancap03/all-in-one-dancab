@@ -6,10 +6,10 @@ export const Inversion = () => {
   return (
     <div className="w-full text-white space-y-8 animate-in fade-in duration-200 pb-12">
       
-      {/* COMPONENTE MODULAR DE LOS 6 RECUADROS INTERACTIVOS */}
+      {/* TARJETAS INTERACTIVAS CON FLUJO DE DISPONIBLES */}
       <InvestmentSummaryCards />
 
-      {/* BLOQUE SEPARADO: TÍTULO DEL HISTORIAL */}
+      {/* TÍTULO DEL HISTORIAL */}
       <div className="flex items-center justify-between pt-4 px-1">
         <div className="flex items-center gap-2">
           <Calendar size={18} className="text-blue-500" />
@@ -19,9 +19,12 @@ export const Inversion = () => {
           onClick={() => {
             localStorage.removeItem('aio_total_invertido_diadia_v2');
             localStorage.removeItem('aio_inversion_movimientos_v2');
-            localStorage.removeItem('aio_inv_disponible_global');
-            localStorage.removeItem('aio_inv_disponible_bolsa');
-            localStorage.removeItem('aio_inv_disponible_proyectos');
+            localStorage.removeItem('aio_inv_bolsa_disponible');
+            localStorage.removeItem('aio_inv_bolsa_invertido');
+            localStorage.removeItem('aio_inv_bolsa_ganancias');
+            localStorage.removeItem('aio_inv_proyecto_disponible');
+            localStorage.removeItem('aio_inv_proyecto_invertido');
+            localStorage.removeItem('aio_inv_proyecto_ganado');
             window.location.reload();
           }}
           className="text-[10px] text-gray-600 hover:text-red-400 transition-colors font-bold cursor-pointer"
@@ -30,7 +33,7 @@ export const Inversion = () => {
         </button>
       </div>
 
-      {/* COMPONENTE MODULAR DEL HISTORIAL POR BLOQUES SEPARADOS */}
+      {/* HISTORIAL POR BLOQUES SEPARADOS */}
       <InvestmentHistory />
 
     </div>

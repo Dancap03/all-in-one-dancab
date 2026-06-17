@@ -13,9 +13,8 @@ export const GlobalDetails = ({ disponibleGlobal, totalInvertido, onTransferir, 
 
   const handleEjecutar = (destino: 'bolsa' | 'proyecto' | 'diadia') => {
     const valor = Number(monto);
-    if (!valor || valor <= 0) return alert('Introduce una cantidad válida.');
+    if (!valor || valor <= 0) return alert('Introduce un importe válido.');
     if (destino !== 'diadia' && valor > disponibleGlobal) return alert('Saldo disponible insuficiente.');
-    if (destino === 'diadia' && valor > totalInvertido) return alert('No puedes retirar más capital del que tienes invertido total.');
 
     onTransferir(valor, destino);
     setMonto('');
@@ -40,7 +39,7 @@ export const GlobalDetails = ({ disponibleGlobal, totalInvertido, onTransferir, 
           </div>
           <div className="bg-[#1b1b1d] border border-[#262628] p-4 rounded-xl">
             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Capital Invertido Total</span>
-            <span className="text-xl font-black text-gray-300">{totalInvertido.toLocaleString('es-ES')} €</span>
+            <span className="text-xl font-black text-gray-400">{totalInvertido.toLocaleString('es-ES')} €</span>
           </div>
         </div>
 

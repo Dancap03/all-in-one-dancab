@@ -44,7 +44,7 @@ export const useInvestment = () => {
 
   const handleTransferirGlobal = (monto: number, destino: 'bolsa' | 'proyecto' | 'diadia') => {
     if (destino === 'diadia') {
-      const nuevoGlobal = Math.max(0, disponibleGlobal - monto);
+      const nuevoGlobal = disponibleGlobal + monto;
       setDisponibleGlobal(nuevoGlobal);
       saveStorage('aio_total_invertido_diadia_v2', nuevoGlobal);
       registrarMovimientoHistorial(-monto, 'Retirada de capital disponible a Día a Día');

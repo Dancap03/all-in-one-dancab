@@ -5,18 +5,20 @@ interface BolsaDetailsProps {
   bolsaDisponible: number;
   bolsaInvertido: number;
   bolsaGanancias: number;
-  onEjecutarBolsa: (monto: number, tipo: 'propio' | 'ganancia' | 'diadia') => void;
+  onEjecutarBolsa: (monto: number, tipo: 'propio' | 'ganancia' | 'balance') => void;
   onBack: () => void;
 }
 
 export const BolsaDetails = ({ bolsaDisponible, bolsaInvertido, bolsaGanancias, onEjecutarBolsa, onBack }: BolsaDetailsProps) => {
   const [monto, setMonto] = useState('');
-  const [selectType, setSelectType] = useState<'propio' | 'ganancia' | 'diadia'>('propio');
+  const [selectType, setSelectType] = useState<'propio' | 'ganancia' | 'balance'>('propio');
 
   const handleSave = () => {
     const qty = Number(monto);
     if (!qty || qty <= 0) return alert('Introduce un importe válido.');
-    if ((selectType === 'propio' || selectType === 'diadia') && qty > bolsaDisponible) return alert('Saldo disponible en bolsa insuficiente.');
+    if ((selectType === 'propio' || selectType === 'balance') && qty > bolsaDisponible) {
+      return alert('Saldo disponible en bolsa insuficiente.');
+    }
 
     onEjecutarBolsa(qty, selectType);
     setMonto('');
@@ -57,7 +59,7 @@ export const BolsaDetails = ({ bolsaDisponible, bolsaInvertido, bolsaGanancias, 
             <select value={selectType} onChange={(e) => setSelectType(e.target.value as any)} className="w-full bg-[#141416] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500">
               <option value="propio">Invertir desde mi Disponible de Bolsa</option>
               <option value="ganancia">Registrar Dividendos / Recompensas externas</option>
-              <option value="diadia">Pasar Disponible a Día a Día</option>
+              <option value="balance">Pasar Disponible a Balance Global</option>
             </select>
             <input type="number" placeholder="Cantidad en €" value={monto} onChange={(e) => setMonto(e.target.value)} className="w-full bg-[#141416] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500" />
           </div>

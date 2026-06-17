@@ -16,9 +16,7 @@ export const BolsaDetails = ({ bolsaDisponible, bolsaInvertido, bolsaGanancias, 
   const handleSave = () => {
     const qty = Number(monto);
     if (!qty || qty <= 0) return alert('Introduce un importe válido.');
-    if ((selectType === 'propio' || selectType === 'diadia') && qty > bolsaDisponible) {
-      return alert('Saldo disponible en bolsa insuficiente.');
-    }
+    if ((selectType === 'propio' || selectType === 'diadia') && qty > bolsaDisponible) return alert('Saldo disponible en bolsa insuficiente.');
 
     onEjecutarBolsa(qty, selectType);
     setMonto('');

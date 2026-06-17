@@ -31,12 +31,12 @@ export const useInvestment = () => {
     localStorage.setItem(key, value.toString());
   };
 
-  const registrarRetiradaHistorial = (monto: number, procedencia: string) => {
+  const registrarMovimientoHistorial = (monto: number, descripcion: string) => {
     const currentMovements = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
     const newMov = {
-      id: `ret-${Date.now()}`,
-      amount: -monto,
-      label: `Retirada para Día a Día (${procedencia})`,
+      id: `mov-${Date.now()}`,
+      amount: monto,
+      label: descripcion,
       dateString: new Date().toISOString().split('T')[0]
     };
     localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify([newMov, ...currentMovements]));
@@ -44,10 +44,10 @@ export const useInvestment = () => {
 
   const handleTransferirGlobal = (monto: number, destino: 'bolsa' | 'proyecto' | 'diadia') => {
     if (destino === 'diadia') {
-      const nuevoGlobal = disponibleGlobal + monto;
+      const nuevoGlobal = Math.max(0, disponibleGlobal - monto);
       setDisponibleGlobal(nuevoGlobal);
       saveStorage('aio_total_invertido_diadia_v2', nuevoGlobal);
-      registrarRetiradaHistorial(monto, 'Balance Global');
+      registrarMovimientoHistorial(-monto, 'Retirada de capital disponible a Día a Día');
     } else {
       const nuevoGlobal = Math.max(0, disponibleGlobal - monto);
       setDisponibleGlobal(nuevoGlobal);
@@ -55,8 +55,10 @@ export const useInvestment = () => {
 
       if (destino === 'bolsa') {
         const v = bolsaDisponible + monto; setBolsaDisponible(v); saveStorage('aio_inv_bolsa_disponible', v);
+        registrarMovimientoHistorial(monto, 'Asignación de capital a Disponible de Bolsa');
       } else {
         const v = proyectoDisponible + monto; setProyectoDisponible(v); saveStorage('aio_inv_proyecto_disponible', v);
+        registrarMovimientoHistorial(monto, 'Asignación de capital a Disponible de Proyectos');
       }
     }
     cargarSaldos();
@@ -66,14 +68,16 @@ export const useInvestment = () => {
     if (tipo === 'propio') {
       const nDisp = Math.max(0, bolsaDisponible - monto); setBolsaDisponible(nDisp); saveStorage('aio_inv_bolsa_disponible', nDisp);
       const nInv = bolsaInvertido + monto; setBolsaInvertido(nInv); saveStorage('aio_inv_bolsa_invertido', nInv);
+      registrarMovimientoHistorial(monto, 'Inversión de fondos propios en Bolsa');
     } else if (tipo === 'ganancia') {
       const nGan = bolsaGanancias + monto; setBolsaGanancias(nGan); saveStorage('aio_inv_bolsa_ganancias', nGan);
       const nDisp = bolsaDisponible + monto; setBolsaDisponible(nDisp); saveStorage('aio_inv_bolsa_disponible', nDisp);
+      registrarMovimientoHistorial(monto, 'Cobro de Dividendos / Premios reinvertidos');
     } else if (tipo === 'diadia') {
       const nDisp = Math.max(0, bolsaDisponible - monto); setBolsaDisponible(nDisp); saveStorage('aio_inv_bolsa_disponible', nDisp);
       const currentGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
       saveStorage('aio_total_invertido_diadia_v2', currentGlobal + monto);
-      registrarRetiradaHistorial(monto, 'Bolsa');
+      registrarMovimientoHistorial(-monto, 'Retirada de fondos de Bolsa a Día a Día');
     }
     cargarSaldos();
   };
@@ -82,16 +86,18 @@ export const useInvestment = () => {
     if (modo === 'comprar') {
       const nDisp = Math.max(0, proyectoDisponible - coste); setProyectoDisponible(nDisp); saveStorage('aio_inv_proyecto_disponible', nDisp);
       const nInv = proyectoInvertido + coste; setProyectoInvertido(nInv); saveStorage('aio_inv_proyecto_invertido', nInv);
+      registrarMovimientoHistorial(coste, 'Compra de stock / Material para proyectos');
     } else if (modo === 'vender' && venta) {
       const ganancia = venta - coste;
       const nGan = proyectoGanado + ganancia; setProyectoGanado(nGan); saveStorage('aio_inv_proyecto_ganado', nGan);
       const nDisp = proyectoDisponible + venta; setProyectoDisponible(nDisp); saveStorage('aio_inv_proyecto_disponible', nDisp);
       const nInv = Math.max(0, proyectoInvertido - coste); setProyectoInvertido(nInv); saveStorage('aio_inv_proyecto_invertido', nInv);
+      registrarMovimientoHistorial(ganancia, `Venta completada (Coste: ${coste}€ | Venta: ${venta}€)`);
     } else if (modo === 'diadia') {
       const nDisp = Math.max(0, proyectoDisponible - coste); setProyectoDisponible(nDisp); saveStorage('aio_inv_proyecto_disponible', nDisp);
       const currentGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
       saveStorage('aio_total_invertido_diadia_v2', currentGlobal + coste);
-      registrarRetiradaHistorial(coste, 'Proyectos Propios');
+      registrarMovimientoHistorial(-coste, 'Retirada de fondos de Proyectos a Día a Día');
     }
     cargarSaldos();
   };

@@ -1,86 +1,104 @@
+import { useState, useEffect } from 'react';
 import { Calendar } from 'lucide-react';
-import { useInvestment } from './hooks/useInvestment';
 import { InvestmentSummaryCards } from './components/InvestmentSummaryCards';
 import { InvestmentHistory } from './components/InvestmentHistory';
 import { GlobalDetails } from './components/pages/GlobalDetails';
 import { BolsaDetails } from './components/pages/BolsaDetails';
 import { ProyectoDetails } from './components/pages/ProyectoDetails';
 
+type ViewState = 'summary' | 'global' | 'bolsa' | 'proyecto';
+
 export const Inversion = () => {
-  const {
-    currentView,
-    setCurrentView,
-    disponibleGlobal,
-    totalInvertidoCalculado,
-    bolsaDisponible,
-    bolsaInvertido,
-    bolsaGanancias,
-    proyectoDisponible,
-    proyectoInvertido,
-    proyectoGanado,
-    handleTransferirGlobal,
-    handleEjecutarBolsa,
-    handleEjecutarProyecto
-  } = useInvestment();
+  const [currentView, setCurrentView] = useState<ViewState>('summary');
+  const [disponibleGlobal, setDisponibleGlobal] = useState(0);
+  const [bolsaDisponible, setBolsaDisponible] = useState(0);
+  const [bolsaInvertido, setBolsaInvertido] = useState(0);
+  const [bolsaGanancias, setBolsaGanancias] = useState(0);
+  const [proyectoDisponible, setProyectoDisponible] = useState(0);
+  const [proyectoInvertido, setProyectoInvertido] = useState(0);
+  const [proyectoGanado, setProyectoGanado] = useState(0);
 
-  return (
-    <div className="w-full text-white space-y-8 animate-in fade-in duration-200 pb-12">
-      {currentView === 'global' && (
-        <GlobalDetails 
-          disponibleGlobal={disponibleGlobal} 
-          totalInvertido={totalInvertidoCalculado} 
-          onTransferir={handleTransferirGlobal} 
-          onBack={() => setCurrentView('summary')} 
-        />
-      )}
+  const cargarSaldos = () => {
+    setDisponibleGlobal(Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0));
+    setBolsaDisponible(Number(localStorage.getItem('aio_inv_bolsa_disponible') || 0));
+    setBolsaInvertido(Number(localStorage.getItem('aio_inv_bolsa_invertido') || 0));
+    setBolsaGanancias(Number(localStorage.getItem('aio_inv_bolsa_ganancias') || 0));
+    setProyectoDisponible(Number(localStorage.getItem('aio_inv_proyecto_disponible') || 0));
+    setProyectoInvertido(Number(localStorage.getItem('aio_inv_proyecto_invertido') || 0));
+    setProyectoGanado(Number(localStorage.getItem('aio_inv_proyecto_ganado') || 0));
+  };
 
-      {currentView === 'bolsa' && (
-        <BolsaDetails 
-          bolsaDisponible={bolsaDisponible} 
-          bolsaInvertido={bolsaInvertido} 
-          bolsaGanancias={bolsaGanancias} 
-          onEjecutarBolsa={handleEjecutarBolsa} 
-          onBack={() => setCurrentView('summary')} 
-        />
-      )}
+  useEffect(() => {
+    cargarSaldos();
+  }, [currentView]);
 
-      {currentView === 'proyecto' && (
-        <ProyectoDetails 
-          proyectoDisponible={proyectoDisponible} 
-          proyectoInvertido={proyectoInvertido} 
-          proyectoGanado={proyectoGanado} 
-          onEjecutarProyecto={handleEjecutarProyecto} 
-          onBack={() => setCurrentView('summary')} 
-        />
-      )}
+  const saveStorage = (key: string, value: number) => {
+    localStorage.setItem(key, value.toString());
+  };
 
-      {currentView === 'summary' && (
-        <>
-          <InvestmentSummaryCards 
-            disponibleGlobal={disponibleGlobal} 
-            totalInvertido={totalInvertidoCalculado}
-            bolsaDisponible={bolsaDisponible} 
-            bolsaInvertido={bolsaInvertido} 
-            bolsaGanancias={bolsaGanancias}
-            proyectoDisponible={proyectoDisponible} 
-            proyectoInvertido={proyectoInvertido} 
-            proyectoGanado={proyectoGanado}
-            onTransferirGlobal={handleTransferirGlobal} 
-            onEjecutarBolsa={handleEjecutarBolsa} 
-            onEjecutarProyecto={handleEjecutarProyecto}
-            onNavigate={(page) => setCurrentView(page)} 
-          />
-          
-          <div className="flex items-center justify-between pt-4 px-1">
-            <div className="flex items-center gap-2">
-              <Calendar size={18} className="text-blue-500" />
-              <h2 className="text-base font-black text-gray-200 uppercase tracking-widest">Historial de Capital Invertido</h2>
-            </div>
-          </div>
-          
-          <InvestmentHistory />
-        </>
-      )}
-    </div>
-  );
-};
+  const registrarMovimientoHistorial = (monto: number, descripcion: string) => {
+    const currentMovements = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
+    const newMov = {
+      id: `mov-${Date.now()}`,
+      amount: monto,
+      label: descripcion,
+      dateString: new Date().toISOString().split('T')[0]
+    };
+    localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify([newMov, ...currentMovements]));
+  };
+
+  const handleTransferirGlobal = (monto: number, destino: 'bolsa' | 'proyecto' | 'diadia') => {
+    if (destino === 'diadia') {
+      const nuevoGlobal = disponibleGlobal + monto;
+      setDisponibleGlobal(nuevoGlobal);
+      saveStorage('aio_total_invertido_diadia_v2', nuevoGlobal);
+      registrarMovimientoHistorial(-monto, 'Retirada de capital disponible a Día a Día');
+    } else {
+      const nuevoGlobal = Math.max(0, disponibleGlobal - monto);
+      setDisponibleGlobal(nuevoGlobal);
+      saveStorage('aio_total_invertido_diadia_v2', nuevoGlobal);
+      if (destino === 'bolsa') {
+        const v = bolsaDisponible + monto; setBolsaDisponible(v); saveStorage('aio_inv_bolsa_disponible', v);
+        registrarMovimientoHistorial(monto, 'Asignación de capital a Disponible de Bolsa');
+      } else {
+        const v = proyectoDisponible + monto; setProyectoDisponible(v); saveStorage('aio_inv_proyecto_disponible', v);
+        registrarMovimientoHistorial(monto, 'Asignación de capital a Disponible de Proyectos');
+      }
+    }
+    cargarSaldos();
+  };
+
+  const handleEjecutarBolsa = (monto: number, tipo: 'propio' | 'ganancia' | 'diadia') => {
+    if (tipo === 'propio') {
+      const nDisp = Math.max(0, bolsaDisponible - monto); setBolsaDisponible(nDisp); saveStorage('aio_inv_bolsa_disponible', nDisp);
+      const nInv = bolsaInvertido + monto; setBolsaInvertido(nInv); saveStorage('aio_inv_bolsa_invertido', nInv);
+      registrarMovimientoHistorial(monto, 'Inversión de fondos propios en Bolsa');
+    } else if (tipo === 'ganancia') {
+      const nGan = bolsaGanancias + monto; setBolsaGanancias(nGan); saveStorage('aio_inv_bolsa_ganancias', nGan);
+      const nDisp = bolsaDisponible + monto; setBolsaDisponible(nDisp); saveStorage('aio_inv_bolsa_disponible', nDisp);
+      registrarMovimientoHistorial(monto, 'Cobro de Dividendos / Premios reinvertidos');
+    } else if (tipo === 'diadia') {
+      const nDisp = Math.max(0, bolsaDisponible - monto); setBolsaDisponible(nDisp); saveStorage('aio_inv_bolsa_disponible', nDisp);
+      const currentGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
+      saveStorage('aio_total_invertido_diadia_v2', currentGlobal + monto);
+      registrarMovimientoHistorial(-monto, 'Retirada de fondos de Bolsa a Día a Día');
+    }
+    cargarSaldos();
+  };
+
+  const handleEjecutarProyecto = (modo: 'comprar' | 'vender' | 'diadia', coste: number, venta?: number) => {
+    if (modo === 'comprar') {
+      const nDisp = Math.max(0, proyectoDisponible - coste); setProyectoDisponible(nDisp); saveStorage('aio_inv_proyecto_disponible', nDisp);
+      const nInv = proyectoInvertido + coste; setProyectoInvertido(nInv); saveStorage('aio_inv_proyecto_invertido', nInv);
+      registrarMovimientoHistorial(coste, 'Compra de stock / Material para proyectos');
+    } else if (modo === 'vender' && venta) {
+      const ganancia = venta - coste;
+      const nGan = proyectoGanado + ganancia; setProyectoGanado(nGan); saveStorage('aio_inv_proyecto_ganado', nGan);
+      const nDisp = proyectoDisponible + venta; setProyectoDisponible(nDisp); saveStorage('aio_inv_proyecto_disponible', nDisp);
+      const nInv = Math.max(0, proyectoInvertido - coste); setProyectoInvertido(nInv); saveStorage('aio_inv_proyecto_invertido', nInv);
+      registrarMovimientoHistorial(ganancia, `Venta completada (Coste: ${coste}€ | Venta: ${venta}€)`);
+    } else if (modo === 'diadia') {
+      const nDisp = Math.max(0, proyectoDisponible - coste); setProyectoDisponible(nDisp); saveStorage('aio_inv_proyecto_disponible', nDisp);
+      const currentGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
+      saveStorage('aio_total_invertido_diadia_v2', currentGlobal + coste);
+      registrarMovimientoHistorial(-coste, 'Retir

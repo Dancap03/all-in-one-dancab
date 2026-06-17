@@ -101,4 +101,66 @@ export const Inversion = () => {
       const nDisp = Math.max(0, proyectoDisponible - coste); setProyectoDisponible(nDisp); saveStorage('aio_inv_proyecto_disponible', nDisp);
       const currentGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
       saveStorage('aio_total_invertido_diadia_v2', currentGlobal + coste);
-      registrarMovimientoHistorial(-coste, 'Retir
+      registrarMovimientoHistorial(-coste, 'Retirada de fondos de Proyectos a Día a Día');
+    }
+    cargarSaldos();
+  };
+
+  const totalInvertidoCalculado = bolsaInvertido + proyectoInvertido;
+
+  return (
+    <div className="w-full text-white space-y-8 animate-in fade-in duration-200 pb-12">
+      {currentView === 'global' && (
+        <GlobalDetails 
+          disponibleGlobal={disponibleGlobal} 
+          totalInvertido={totalInvertidoCalculado} 
+          onTransferir={handleTransferirGlobal} 
+          onBack={() => setCurrentView('summary')} 
+        />
+      )}
+      {currentView === 'bolsa' && (
+        <BolsaDetails 
+          bolsaDisponible={bolsaDisponible} 
+          bolsaInvertido={bolsaInvertido} 
+          bolsaGanancias={bolsaGanancias} 
+          onEjecutarBolsa={handleEjecutarBolsa} 
+          onBack={() => setCurrentView('summary')} 
+        />
+      )}
+      {currentView === 'proyecto' && (
+        <ProyectoDetails 
+          proyectoDisponible={proyectoDisponible} 
+          proyectoInvertido={proyectoInvertido} 
+          proyectoGanado={proyectoGanado} 
+          onEjecutarProyecto={handleEjecutarProyecto} 
+          onBack={() => setCurrentView('summary')} 
+        />
+      )}
+      {currentView === 'summary' && (
+        <>
+          <InvestmentSummaryCards 
+            disponibleGlobal={disponibleGlobal} 
+            totalInvertido={totalInvertidoCalculado}
+            bolsaDisponible={bolsaDisponible} 
+            bolsaInvertido={bolsaInvertido} 
+            bolsaGanancias={bolsaGanancias}
+            proyectoDisponible={proyectoDisponible} 
+            proyectoInvertido={proyectoInvertido} 
+            proyectoGanado={proyectoGanado}
+            onTransferirGlobal={handleTransferirGlobal} 
+            onEjecutarBolsa={handleEjecutarBolsa} 
+            onEjecutarProyecto={handleEjecutarProyecto}
+            onNavigate={(page) => setCurrentView(page)} 
+          />
+          <div className="flex items-center justify-between pt-4 px-1">
+            <div className="flex items-center gap-2">
+              <Calendar size={18} className="text-blue-500" />
+              <h2 className="text-base font-black text-gray-200 uppercase tracking-widest">Historial de Capital Invertido</h2>
+            </div>
+          </div>
+          <InvestmentHistory />
+        </>
+      )}
+    </div>
+  );
+};

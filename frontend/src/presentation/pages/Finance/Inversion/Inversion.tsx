@@ -118,6 +118,7 @@ export const Inversion = () => {
           onBack={() => setCurrentView('summary')} 
         />
       )}
+
       {currentView === 'bolsa' && (
         <BolsaDetails 
           bolsaDisponible={bolsaDisponible} 
@@ -127,6 +128,7 @@ export const Inversion = () => {
           onBack={() => setCurrentView('summary')} 
         />
       )}
+
       {currentView === 'proyecto' && (
         <ProyectoDetails 
           proyectoDisponible={proyectoDisponible} 
@@ -136,6 +138,7 @@ export const Inversion = () => {
           onBack={() => setCurrentView('summary')} 
         />
       )}
+
       {currentView === 'summary' && (
         <>
           <InvestmentSummaryCards 
@@ -152,12 +155,14 @@ export const Inversion = () => {
             onEjecutarProyecto={handleEjecutarProyecto}
             onNavigate={(page) => setCurrentView(page)} 
           />
+          
           <div className="flex items-center justify-between pt-4 px-1">
             <div className="flex items-center gap-2">
               <Calendar size={18} className="text-blue-500" />
               <h2 className="text-base font-black text-gray-200 uppercase tracking-widest">Historial de Capital Invertido</h2>
             </div>
           </div>
+          
           <InvestmentHistory />
         </>
       )}

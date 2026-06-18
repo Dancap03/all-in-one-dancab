@@ -5,12 +5,12 @@ interface ProyectoDetailsProps {
   proyectoDisponible: number;
   proyectoInvertido: number;
   proyectoGanado: number;
-  onEjecutarProyecto: (modo: 'comprar' | 'vender' | 'diadia', coste: number, venta?: number) => void;
+  onEjecutarProyecto: (modo: 'comprar' | 'vender' | 'balance', coste: number, venta?: number) => void;
   onBack: () => void;
 }
 
 export const ProyectoDetails = ({ proyectoDisponible, proyectoInvertido, proyectoGanado, onEjecutarProyecto, onBack }: ProyectoDetailsProps) => {
-  const [tabModo, setTabModo] = useState<'comprar' | 'vender' | 'diadia'>('comprar');
+  const [tabModo, setTabModo] = useState<'comprar' | 'vender' | 'balance'>('comprar');
   const [coste, setCoste] = useState('');
   const [venta, setVenta] = useState('');
 
@@ -25,9 +25,9 @@ export const ProyectoDetails = ({ proyectoDisponible, proyectoInvertido, proyect
     } else if (tabModo === 'vender') {
       if (!costVal || !ventVal || ventVal < costVal) return alert('Los datos comerciales no cuadran.');
       onEjecutarProyecto('vender', costVal, ventVal);
-    } else if (tabModo === 'diadia') {
+    } else if (tabModo === 'balance') {
       if (!costVal || costVal <= 0 || costVal > proyectoDisponible) return alert('Cantidad superior al disponible.');
-      onEjecutarProyecto('diadia', costVal);
+      onEjecutarProyecto('balance', costVal);
     }
 
     setCoste('');
@@ -66,13 +66,13 @@ export const ProyectoDetails = ({ proyectoDisponible, proyectoInvertido, proyect
             <div className="grid grid-cols-3 gap-2 bg-[#141416] p-1 rounded-lg border border-[#2d2d2d] w-full max-w-md">
               <button onClick={() => setTabModo('comprar')} className={`text-[10px] py-1.5 font-bold rounded cursor-pointer ${tabModo === 'comprar' ? 'bg-[#2d2d2d] text-white' : 'text-gray-500'}`}>1. Comprar Artículo</button>
               <button onClick={() => setTabModo('vender')} className={`text-[10px] py-1.5 font-bold rounded cursor-pointer ${tabModo === 'vender' ? 'bg-[#2d2d2d] text-emerald-400' : 'text-gray-500'}`}>2. Liquidar Venta</button>
-              <button onClick={() => setTabModo('diadia')} className={`text-[10px] py-1.5 font-bold rounded cursor-pointer ${tabModo === 'diadia' ? 'bg-[#2d2d2d] text-purple-400' : 'text-gray-500'}`}>3. A Día a Día</button>
+              <button onClick={() => setTabModo('balance')} className={`text-[10px] py-1.5 font-bold rounded cursor-pointer ${tabModo === 'balance' ? 'bg-[#2d2d2d] text-purple-400' : 'text-gray-500'}`}>3. A Balance</button>
             </div>
           </div>
 
           <div className="space-y-3">
             {tabModo === 'comprar' && (
-              <input type="number" placeholder="Inversión/Coste de adquisición (€)" value={coste} onChange={(e) => setCoste(e.target.value)} className="w-full bg-[#141416] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-purple-500" />
+              <input type="number" placeholder="Coste de adquisición (€)" value={coste} onChange={(e) => setCoste(e.target.value)} className="w-full bg-[#141416] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-purple-500" />
             )}
             {tabModo === 'vender' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -80,8 +80,8 @@ export const ProyectoDetails = ({ proyectoDisponible, proyectoInvertido, proyect
                 <input type="number" placeholder="Precio final de venta (€)" value={venta} onChange={(e) => setVenta(e.target.value)} className="w-full bg-[#141416] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-emerald-500" />
               </div>
             )}
-            {tabModo === 'diadia' && (
-              <input type="number" placeholder="Cantidad a retirar a Día a Día (€)" value={coste} onChange={(e) => setCoste(e.target.value)} className="w-full bg-[#141416] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-purple-500" />
+            {tabModo === 'balance' && (
+              <input type="number" placeholder="Cantidad a retornar a Balance Global (€)" value={coste} onChange={(e) => setCoste(e.target.value)} className="w-full bg-[#141416] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-purple-500" />
             )}
             <button onClick={handleEjecutar} className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold py-2.5 rounded-lg transition-colors uppercase tracking-wider cursor-pointer">Procesar Operación</button>
           </div>

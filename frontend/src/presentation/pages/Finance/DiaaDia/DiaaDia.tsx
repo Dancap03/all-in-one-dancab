@@ -22,6 +22,8 @@ import { OtherExpensesList } from './components/OtherExpensesList';
 
 import { TransfersList } from './components/TransfersList';
 
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
  
 
 export const DiaaDia = () => {
@@ -32,7 +34,7 @@ export const DiaaDia = () => {
 
   const [history, setHistory] = useState<Record<string, any>>({});
 
-  
+  const navigate = useNavigate();
 
   // NUEVO: Estado para almacenar el balance acumulado de los meses pasados
 
@@ -130,7 +132,14 @@ export const DiaaDia = () => {
 
     <div className="min-h-screen bg-[#0c0c0c] text-white p-4 md:p-6">
 
-      
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={() => navigate(-1)} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer">
+          <ArrowLeft size={24} />
+        </button>
+        <h1 className="text-3xl font-black tracking-tight text-white">
+          Día a día
+        </h1>
+      </div>
 
       <div className="flex items-center gap-4 mb-8">
 

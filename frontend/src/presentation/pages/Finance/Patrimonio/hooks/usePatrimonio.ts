@@ -4,9 +4,9 @@ import { db, auth } from '../../../../../infrastructure/firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
 
 export const usePatrimonio = () => {
-  const [modoFiltro, setModoFiltro] = useState<'Total' | 'Año' | 'Mes'>('Total');
+  // Eliminamos el filtro de mes, solo nos quedamos con Total y Año
+  const [modoFiltro, setModoFiltro] = useState<'Total' | 'Año'>('Total');
   const [yearSeleccionado, setYearSeleccionado] = useState(new Date().getFullYear());
-  const [mesSeleccionado, setMesSeleccionado] = useState(new Date().getMonth());
 
   const [patrimonioTotal, setPatrimonioTotal] = useState(0);
   const [liquidez, setLiquidez] = useState(0);
@@ -18,14 +18,19 @@ export const usePatrimonio = () => {
   useEffect(() => {
     const loadRealData = async (user: any) => {
       try {
-        // 1. INVERSIÓN (Se mantiene en Local Storage por ahora)
-        const invBolsa = Number(localStorage.getItem('aio_inv_bolsa_invertido') || 0);
-        const invProy = Number(localStorage.getItem('aio_inv_proyecto_invertido') || 0);
-        const saldoInversion = invBolsa + invProy;
+        // 1. INVERSIÓN (CORRECCIÓN: Sumamos tanto el dinero invertido como el disponible en liquidez)
+        const invBolsaInv = Number(localStorage.getItem('aio_inv_bolsa_invertido') || 0);
+        const invBolsaDisp = Number(localStorage.getItem('aio_inv_bolsa_disponible') || 0);
+        
+        const invProyInv = Number(localStorage.getItem('aio_inv_proyecto_invertido') || 0);
+        const invProyDisp = Number(localStorage.getItem('aio_inv_proyecto_disponible') || 0);
+        
+        const saldoInversion = invBolsaInv + invBolsaDisp + invProyInv + invProyDisp;
         setInversion(saldoInversion);
+        
         const movInversion = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
 
-        // 2. DÍA A DÍA (Lectura estricta desde Firebase)
+        // 2. DÍA A DÍA
         let saldoLiquidez = 0;
         let movDiaADia: any[] = [];
         const monthsRef = collection(db, `users/${user.uid}/finance_months`);
@@ -39,11 +44,9 @@ export const usePatrimonio = () => {
             const t = d.data();
             const amt = Number(t.amount) || 0;
             
-            // Cálculos matemáticos de balance
             if (t.type === 'income' || t.type === 'savings_return') saldoLiquidez += amt;
             if (t.type === 'expense' || t.type === 'other_expense' || t.type === 'transfer') saldoLiquidez -= amt;
             
-            // Preparar para la gráfica y conteo
             movDiaADia.push({
               dateString: t.dateString,
               amount: t.type === 'expense' || t.type === 'other_expense' || t.type === 'transfer' ? -amt : amt
@@ -52,7 +55,7 @@ export const usePatrimonio = () => {
         }
         setLiquidez(saldoLiquidez);
 
-        // 3. AHORRO (Lectura estricta desde Firebase)
+        // 3. AHORRO
         let saldoAhorro = 0;
         let movAhorro: any[] = [];
         const savTransRef = collection(db, `users/${user.uid}/savings_transactions`);
@@ -62,7 +65,6 @@ export const usePatrimonio = () => {
           const t = d.data();
           const amt = Number(t.amount) || 0;
           
-          // Solo los depósitos netos y retiros netos afectan al total global de Ahorro
           if (t.type === 'deposit') saldoAhorro += amt;
           if (t.type === 'withdrawal') saldoAhorro -= amt;
           
@@ -114,12 +116,11 @@ export const usePatrimonio = () => {
     });
 
     return () => unsubscribe();
-  }, [modoFiltro, yearSeleccionado, mesSeleccionado]);
+  }, [modoFiltro, yearSeleccionado]);
 
   return {
     modoFiltro, setModoFiltro,
     yearSeleccionado, setYearSeleccionado,
-    mesSeleccionado, setMesSeleccionado,
     patrimonioTotal, liquidez, ahorro, inversion,
     datosGrafica, totalMovimientos
   };

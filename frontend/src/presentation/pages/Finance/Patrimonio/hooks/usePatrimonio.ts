@@ -17,9 +17,9 @@ export const usePatrimonio = () => {
   useEffect(() => {
     const loadRealData = async (user: any) => {
       try {
-        // 1. SALDOS ACTUALES REALES
-        const currentAhorro = Number(localStorage.getItem('aio_ahorro_total') || 0);
-        
+        const todosLosMovimientos: any[] = [];
+
+        // 1. INVERSIÓN
         const invBalanceGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
         const invBolsaInv = Number(localStorage.getItem('aio_inv_bolsa_invertido') || 0);
         const invBolsaDisp = Number(localStorage.getItem('aio_inv_bolsa_disponible') || 0);
@@ -27,23 +27,55 @@ export const usePatrimonio = () => {
         const invProyDisp = Number(localStorage.getItem('aio_inv_proyecto_disponible') || 0);
         const currentInversion = invBalanceGlobal + invBolsaInv + invBolsaDisp + invProyInv + invProyDisp;
 
-        const todosLosMovimientos: any[] = [];
-
-        // 2. RECOPILACIÓN DE MOVIMIENTOS
-        // - Inversión
         const movInv = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
         movInv.forEach((m: any) => {
-          todosLosMovimientos.push({ ...m, categoria: 'Inversión', netAmount: Number(m.amount) });
+          todosLosMovimientos.push({ dateString: m.dateString, amount: Number(m.amount), netAmount: Number(m.amount), categoria: 'Inversión' });
         });
 
-        // - Ahorro
-        const movAh = JSON.parse(localStorage.getItem('aio_ahorro_movimientos') || '[]');
-        movAh.forEach((m: any) => {
-          // Confiamos en el signo del importe para saber si sumó o restó al ahorro total
-          todosLosMovimientos.push({ dateString: m.dateString || m.date, amount: Number(m.amount), netAmount: Number(m.amount), categoria: 'Ahorro' });
+        // 2. AHORRO (Lectura directa desde Firebase + LocalStorage para no perder nada)
+        let currentAhorro = 0;
+        
+        // A) Datos de Firebase
+        const savTransSnap = await getDocs(collection(db, `users/${user.uid}/savings_transactions`));
+        savTransSnap.docs.forEach(d => {
+          const t = d.data();
+          const amt = Number(t.amount) || 0;
+          let net = 0;
+          
+          // Depósitos suman al global, retiros restan (to_vault / from_vault son internos y no cambian el saldo neto global)
+          if (t.type === 'deposit') net = amt;
+          else if (t.type === 'withdrawal') net = -amt;
+          
+          currentAhorro += net;
+
+          // Extraer fecha con seguridad
+          let dString = new Date().toISOString();
+          if (t.date?.seconds) dString = new Date(t.date.seconds * 1000).toISOString();
+          else if (t.dateString) dString = t.dateString;
+          else if (t.date) dString = t.date;
+
+          todosLosMovimientos.push({
+            dateString: dString,
+            amount: amt,
+            netAmount: net,
+            categoria: 'Ahorro'
+          });
         });
 
-        // - Día a Día (Firebase)
+        // B) Datos Antiguos Locales (Por si metiste datos el año pasado)
+        const movAhLocal = JSON.parse(localStorage.getItem('aio_ahorro_movimientos') || '[]');
+        movAhLocal.forEach((m: any) => {
+          const amt = Number(m.amount) || 0;
+          currentAhorro += amt; 
+          todosLosMovimientos.push({
+            dateString: m.dateString || m.date || new Date().toISOString(),
+            amount: Math.abs(amt),
+            netAmount: amt,
+            categoria: 'Ahorro'
+          });
+        });
+
+        // 3. DÍA A DÍA (Lectura directa desde Firebase)
         let currentLiquidez = 0;
         const monthsSnap = await getDocs(collection(db, `users/${user.uid}/finance_months`));
         
@@ -55,13 +87,16 @@ export const usePatrimonio = () => {
             const isIncome = t.type === 'income' || t.type === 'savings_return';
             const isExpense = t.type === 'expense' || t.type === 'other_expense' || t.type === 'transfer';
             
-            if (isIncome) currentLiquidez += amt;
-            if (isExpense) currentLiquidez -= amt;
+            let net = 0;
+            if (isIncome) net = amt;
+            else if (isExpense) net = -amt;
+
+            currentLiquidez += net;
             
             todosLosMovimientos.push({
               dateString: t.dateString,
-              amount: isIncome ? amt : -amt,
-              netAmount: isIncome ? amt : -amt,
+              amount: amt,
+              netAmount: net,
               in: isIncome ? amt : 0,
               out: isExpense ? amt : 0,
               categoria: 'Día a Día'
@@ -69,14 +104,14 @@ export const usePatrimonio = () => {
           });
         }
 
-        // 3. ACTUALIZAR TARJETAS
+        // 4. ACTUALIZAR TARJETAS FRONTEND
         setAhorro(currentAhorro);
         setInversion(currentInversion);
         setLiquidez(currentLiquidez);
         setPatrimonioTotal(currentLiquidez + currentAhorro + currentInversion);
         setTotalMovimientos(todosLosMovimientos.length);
 
-        // 4. AGRUPAR FLUJOS POR MES Y BUSCAR EL INICIO DE LOS TIEMPOS
+        // 5. CÁLCULO DE GRÁFICA (Matemática Inversa Precisa)
         const now = new Date();
         let minYear = now.getFullYear();
         let minMonth = now.getMonth();
@@ -109,7 +144,7 @@ export const usePatrimonio = () => {
           }
         });
 
-        // 5. CALCULAR SALDO INICIAL E IR HACIA ADELANTE (Fórmula infalible)
+        // 6. DIBUJAR LA GRÁFICA HACIA ADELANTE
         let sumLq = 0, sumAh = 0, sumInv = 0;
         Object.values(flujosPorMes).forEach(f => { sumLq += f.lq; sumAh += f.ah; sumInv += f.inv; });
 
@@ -147,7 +182,7 @@ export const usePatrimonio = () => {
           if (currM > 11) { currM = 0; currY++; }
         }
 
-        // 6. FILTRAR SEGÚN LO QUE ELIJA EL USUARIO
+        // 7. APLICAR FILTRO DE VISTA (Total o Año)
         if (modoFiltro === 'Año') {
           const yearData = [];
           for (let i = 0; i < 12; i++) {
@@ -155,17 +190,11 @@ export const usePatrimonio = () => {
             if (dp) {
               yearData.push(dp);
             } else {
-              // Si es un mes del futuro, dejamos las líneas en null para que no caigan a 0
-              if (yearSeleccionado === targetY && i > targetM) {
-                yearData.push({ name: MONTHS[i], Saldo: null, Ahorro: null, Inversion: null, Ingresos: null, Gastos: null });
-              } else {
-                yearData.push({ name: MONTHS[i], Saldo: null, Ahorro: null, Inversion: null, Ingresos: null, Gastos: null });
-              }
+              yearData.push({ name: MONTHS[i], Saldo: null, Ahorro: null, Inversion: null, Ingresos: null, Gastos: null });
             }
           }
           setDatosGrafica(yearData);
         } else {
-          // 'Total': Muestra todo el historial disponible sin cortes
           setDatosGrafica(dataPoints);
         }
 

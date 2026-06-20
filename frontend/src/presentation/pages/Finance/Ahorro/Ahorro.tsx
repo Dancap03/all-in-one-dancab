@@ -9,6 +9,8 @@ import { SavingsHistory } from './components/SavingsHistory';
 import { VaultModal } from './components/modals/VaultModal';
 import { SavingsTransactionModal } from './components/modals/SavingsTransactionModal';
 import { ConfirmDeleteModal } from './components/modals/ConfirmDeleteModal'; // IMPORTACIÓN NUEVA
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 
 export const Ahorro = () => {
   const [available, setAvailable] = useState(0);
@@ -16,6 +18,8 @@ export const Ahorro = () => {
   const [transactions, setTransactions] = useState<SavingsTransaction[]>([]);
   const [vaults, setVaults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const navigate = useNavigate();
 
   // Estados para los modales de creación/edición
   const [isVaultModalOpen, setIsVaultModalOpen] = useState(false);
@@ -86,6 +90,14 @@ export const Ahorro = () => {
 
   return (
     <div className="min-h-screen bg-[#0c0c0c] text-white p-4 md:p-6 font-sans">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={() => navigate(-1)} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer">
+          <ArrowLeft size={24} />
+        </button>
+        <h1 className="text-3xl font-black tracking-tight text-white leading-none">
+          Ahorro
+        </h1>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-5 shadow-sm">
           <p className="text-gray-400 text-sm font-medium mb-1">Disponible</p>

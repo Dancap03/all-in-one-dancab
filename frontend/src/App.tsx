@@ -11,54 +11,40 @@ import { DiaaDia } from './presentation/pages/Finance/DiaaDia/DiaaDia';
 import { Patrimonio } from './presentation/pages/Finance/Patrimonio/Patrimonio';
 import { Ahorro } from './presentation/pages/Finance/Ahorro/Ahorro';
 import { Inversion } from './presentation/pages/Finance/Inversion/Inversion';
+import { Historial } from './presentation/pages/Finance/Historial/Historial'; // <-- IMPORTACIÓN CLAVE AÑADIDA
 
-// Mantener la subnavegación estilizada de burbujas financieras
 import { FinanceSubNav } from './presentation/components/FinanceSubNav/FinanceSubNav';
 
-// Componente para proteger rutas privadas
 const ProtectedRoute = ({ children, user }: { children: JSX.Element, user: User | null }) => {
   if (!user) return <Navigate to="/login" replace />;
   return children;
 };
 
-// Workspace interno para usar useLocation de forma segura dentro del HashRouter
 const MainWorkspace = ({ user }: { user: User | null }) => {
   const location = useLocation();
-  const isFinancePage = location.pathname.startsWith('/finance');
+  // El Historial no tiene sub-menú, así que solo mostramos el subnav en las 4 principales
+  const isFinanceMainPage = ['/finance/patrimonio', '/finance/diadia', '/finance/ahorro', '/finance/inversion'].includes(location.pathname);
 
   return (
     <ProtectedRoute user={user}>
       <div className="min-h-screen bg-[#0c0c0c]">
-        {/* Navbar persistente y limpio de chats de IA */}
         <Navbar />
         
         <main className="max-w-7xl mx-auto p-4 md:p-6">
-          {/* Conservamos tus burbujas financieras arriba */}
-          {isFinancePage && <FinanceSubNav />}
+          {isFinanceMainPage && <FinanceSubNav />}
 
           <Routes>
-            {/* HOME */}
             <Route path="/" element={<Home />} />
             
-            {/* FINANZAS */}
             <Route path="/finance/diadia" element={<DiaaDia />} />
             <Route path="/finance/patrimonio" element={<Patrimonio />} />
             <Route path="/finance/ahorro" element={<Ahorro />} />
             <Route path="/finance/inversion" element={<Inversion />} />
+            <Route path="/finance/historial" element={<Historial />} /> {/* <-- RUTA CLAVE AÑADIDA */}
 
-            {/* SECCIONES ADICIONALES */}
-            <Route path="/calendar" element={
-              <div className="text-white p-10 text-center opacity-50 italic">
-                Sección de Calendario en desarrollo...
-              </div>
-            } />
-            <Route path="/health" element={
-              <div className="text-white p-10 text-center opacity-50 italic">
-                Sección de Salud en desarrollo...
-              </div>
-            } />
+            <Route path="/calendar" element={<div className="text-white p-10 text-center opacity-50 italic">Sección de Calendario en desarrollo...</div>} />
+            <Route path="/health" element={<div className="text-white p-10 text-center opacity-50 italic">Sección de Salud en desarrollo...</div>} />
 
-            {/* Redirección por defecto */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
@@ -71,7 +57,6 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Escuchar el estado de sesión de Firebase
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -80,7 +65,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Spinner de carga inicial
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0c0c0c] flex items-center justify-center">
@@ -92,13 +76,7 @@ export default function App() {
   return (
     <HashRouter>
       <Routes>
-        {/* Ruta Pública */}
-        <Route 
-          path="/login" 
-          element={user ? <Navigate to="/" replace /> : <Login />} 
-        />
-
-        {/* Ecosistema Privado Controlado */}
+        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/*" element={<MainWorkspace user={user} />} />
       </Routes>
     </HashRouter>

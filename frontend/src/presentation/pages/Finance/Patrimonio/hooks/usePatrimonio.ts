@@ -17,18 +17,21 @@ export const usePatrimonio = () => {
   useEffect(() => {
     const loadRealData = async (user: any) => {
       try {
-        // 1. INVERSIÓN (CORRECCIÓN: Ahora sumamos también el Balance Global disponible)
+        // 1. INVERSIÓN
         const invBalanceGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
         const invBolsaInv = Number(localStorage.getItem('aio_inv_bolsa_invertido') || 0);
         const invBolsaDisp = Number(localStorage.getItem('aio_inv_bolsa_disponible') || 0);
         const invProyInv = Number(localStorage.getItem('aio_inv_proyecto_invertido') || 0);
         const invProyDisp = Number(localStorage.getItem('aio_inv_proyecto_disponible') || 0);
         
-        // Sumamos absolutamente todo el capital que esté dentro del ecosistema de inversión
         const saldoInversion = invBalanceGlobal + invBolsaInv + invBolsaDisp + invProyInv + invProyDisp;
         setInversion(saldoInversion);
         
-        const movInversion = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
+        const movInversion = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]').map((m: any) => ({
+          ...m, 
+          categoria: 'Inversión',
+          netAmount: m.amount // Asumimos que los movimientos guardados son flujo neto
+        }));
 
         // 2. DÍA A DÍA
         let saldoLiquidez = 0;
@@ -49,7 +52,8 @@ export const usePatrimonio = () => {
             
             movDiaADia.push({
               dateString: t.dateString,
-              amount: t.type === 'expense' || t.type === 'other_expense' || t.type === 'transfer' ? -amt : amt
+              amount: t.type === 'expense' || t.type === 'other_expense' || t.type === 'transfer' ? -amt : amt,
+              categoria: 'Día a Día'
             });
           });
         }
@@ -70,38 +74,75 @@ export const usePatrimonio = () => {
           
           movAhorro.push({
             dateString: t.date?.seconds ? new Date(t.date.seconds * 1000).toISOString() : new Date().toISOString(),
-            amount: t.type === 'withdrawal' || t.type === 'to_vault' ? -amt : amt
+            amount: t.type === 'withdrawal' || t.type === 'to_vault' ? -amt : amt,
+            netAmount: t.type === 'deposit' ? amt : (t.type === 'withdrawal' ? -amt : 0), // El cambio real en el balance total
+            categoria: 'Ahorro'
           });
         });
         setAhorro(saldoAhorro);
 
-        // 4. CÁLCULO DE PATRIMONIO TOTAL
+        // 4. PATRIMONIO TOTAL
         setPatrimonioTotal(saldoLiquidez + saldoAhorro + saldoInversion);
 
-        // 5. UNIFICACIÓN PARA LA GRÁFICA Y CONTADOR
+        // 5. CÁLCULO DE GRÁFICA (Matemática Inversa Precisa)
         const todosLosMovimientos = [...movInversion, ...movDiaADia, ...movAhorro];
         setTotalMovimientos(todosLosMovimientos.length);
 
         const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
         const graficaBase = meses.map(m => ({ name: m, Saldo: 0, Ingresos: 0, Gastos: 0, Ahorro: 0, Inversion: 0 }));
 
+        // Agrupar flujos netos por "Año-Mes"
+        const flujosPorMes: Record<string, { lq: number, ah: number, inv: number, in: number, out: number }> = {};
+        
         todosLosMovimientos.forEach(mov => {
           if (!mov.dateString) return;
-          const fecha = new Date(mov.dateString);
-          if (fecha.getFullYear() === yearSeleccionado) {
-            const mesIndex = fecha.getMonth();
-            if (mov.amount > 0) graficaBase[mesIndex].Ingresos += mov.amount;
-            if (mov.amount < 0) graficaBase[mesIndex].Gastos += Math.abs(mov.amount);
+          const f = new Date(mov.dateString);
+          const key = `${f.getFullYear()}-${f.getMonth()}`;
+          if (!flujosPorMes[key]) flujosPorMes[key] = { lq: 0, ah: 0, inv: 0, in: 0, out: 0 };
+
+          if (mov.categoria === 'Día a Día') {
+            flujosPorMes[key].lq += mov.amount;
+            if (mov.amount > 0) flujosPorMes[key].in += mov.amount;
+            else flujosPorMes[key].out += Math.abs(mov.amount);
+          } else if (mov.categoria === 'Ahorro') {
+            flujosPorMes[key].ah += mov.netAmount || 0;
+          } else if (mov.categoria === 'Inversión') {
+            flujosPorMes[key].inv += mov.amount;
           }
         });
 
-        let saldoAcumulado = saldoLiquidez;
-        for (let i = 11; i >= 0; i--) {
-          graficaBase[i].Saldo = saldoAcumulado;
-          graficaBase[i].Ahorro = saldoAhorro;
-          graficaBase[i].Inversion = saldoInversion;
-          const flujoNeto = graficaBase[i].Ingresos - graficaBase[i].Gastos;
-          saldoAcumulado -= flujoNeto;
+        // Retroceder en el tiempo desde el balance de HOY hacia atrás
+        let runningLq = saldoLiquidez;
+        let runningAh = saldoAhorro;
+        let runningInv = saldoInversion;
+
+        const now = new Date();
+        let currY = now.getFullYear();
+        let currM = now.getMonth();
+
+        // Bucle temporal inverso (Desde el mes actual hasta Enero del año seleccionado)
+        while (currY > yearSeleccionado || (currY === yearSeleccionado && currM >= 0)) {
+          const key = `${currY}-${currM}`;
+          const flow = flujosPorMes[key] || { lq: 0, ah: 0, inv: 0, in: 0, out: 0 };
+
+          if (currY === yearSeleccionado) {
+            graficaBase[currM].Saldo = runningLq;
+            graficaBase[currM].Ahorro = runningAh;
+            graficaBase[currM].Inversion = runningInv;
+            graficaBase[currM].Ingresos = flow.in;
+            graficaBase[currM].Gastos = flow.out;
+          }
+
+          // Restar el flujo de este mes para obtener el balance del mes anterior
+          runningLq -= flow.lq;
+          runningAh -= flow.ah;
+          runningInv -= flow.inv;
+
+          currM--;
+          if (currM < 0) {
+            currM = 11;
+            currY--;
+          }
         }
 
         setDatosGrafica(graficaBase);

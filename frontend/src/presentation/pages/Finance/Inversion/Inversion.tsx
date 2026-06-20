@@ -6,7 +6,11 @@ import { GlobalDetails } from './components/pages/GlobalDetails';
 import { BolsaDetails } from './components/pages/BolsaDetails';
 import { ProyectoDetails } from './components/pages/ProyectoDetails';
 
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
+
 export const Inversion = () => {
+  const navigate = useNavigate();
   const {
     currentView,
     setCurrentView,
@@ -25,6 +29,14 @@ export const Inversion = () => {
 
   return (
     <div className="w-full text-white space-y-8 animate-in fade-in duration-200 pb-12">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={() => navigate(-1)} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer">
+          <ArrowLeft size={24} />
+        </button>
+        <h1 className="text-3xl font-black tracking-tight text-white leading-none">
+          Inversión
+        </h1>
+      </div>
       {currentView === 'global' && (
         <GlobalDetails 
           disponibleGlobal={disponibleGlobal} 

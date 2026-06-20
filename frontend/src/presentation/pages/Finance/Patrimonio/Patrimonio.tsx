@@ -8,7 +8,6 @@ export const Patrimonio = () => {
   const {
     modoFiltro, setModoFiltro,
     yearSeleccionado, setYearSeleccionado,
-    mesSeleccionado, setMesSeleccionado,
     patrimonioTotal, liquidez, ahorro, inversion,
     datosGrafica, totalMovimientos
   } = usePatrimonio();
@@ -21,8 +20,6 @@ export const Patrimonio = () => {
         setModoFiltro={setModoFiltro} 
         yearSeleccionado={yearSeleccionado} 
         setYearSeleccionado={setYearSeleccionado} 
-        mesSeleccionado={mesSeleccionado} 
-        setMesSeleccionado={setMesSeleccionado} 
       />
 
       <PatrimonioSummaryCard 

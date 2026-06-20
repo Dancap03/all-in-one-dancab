@@ -45,11 +45,15 @@ export const PatrimonioChart = ({ datosGrafica }: Props) => {
             <XAxis dataKey="name" stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} dy={10} />
             <YAxis stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} dx={-10} tickFormatter={(value) => `${value}€`} />
             <RechartsTooltip content={<CustomTooltip />} cursor={{ stroke: '#2d2d2d', strokeWidth: 1, strokeDasharray: '4 4' }} />
+            
+            {/* LÍNEA CONTINUA (Únicamente Saldo) */}
             <Line type="monotone" dataKey="Saldo" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }} activeDot={{ r: 6 }} />
+            
+            {/* LÍNEAS PUNTEADAS */}
             <Line type="monotone" dataKey="Ingresos" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} />
             <Line type="monotone" dataKey="Gastos" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-            <Line type="monotone" dataKey="Ahorro" stroke="#818cf8" strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="Inversion" stroke="#f59e0b" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="Ahorro" stroke="#818cf8" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+            <Line type="monotone" dataKey="Inversion" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>

@@ -1,6 +1,3 @@
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-
 interface Props {
   modoFiltro: 'Total' | 'Año';
   setModoFiltro: (modo: 'Total' | 'Año') => void;
@@ -12,16 +9,9 @@ export const PatrimonioHeader = ({
   modoFiltro, setModoFiltro, 
   yearSeleccionado, setYearSeleccionado 
 }: Props) => {
-  const navigate = useNavigate();
-
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
-      <div className="flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer">
-          <ArrowLeft size={24} />
-        </button>
-        <h1 className="text-3xl font-black tracking-tight text-white leading-none">Resumen<br/>financiero</h1>
-      </div>
+      <h1 className="text-3xl font-black tracking-tight text-white leading-none">Resumen<br/>financiero</h1>
       
       <div className="flex bg-[#141416] border border-[#2d2d2d] rounded-xl p-1 w-fit items-center">
         <button 

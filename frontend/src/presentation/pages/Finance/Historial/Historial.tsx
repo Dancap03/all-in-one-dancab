@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { History, ArrowLeft, ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs } from 'firebase/firestore';
-import { db, auth } from '../../../../../infrastructure/firebase/config';
+// CORRECCIÓN AQUÍ: Le hemos quitado un '../' a la ruta
+import { db, auth } from '../../../../infrastructure/firebase/config';
 
 export const Historial = () => {
   const navigate = useNavigate();

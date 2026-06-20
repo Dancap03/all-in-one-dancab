@@ -1,12 +1,12 @@
 import { useState } from 'react';
 
 export const useInvestment = () => {
-  // Gestión de Vistas (que faltaba en mi código anterior)
-  const [currentView, setCurrentView] = useState<'global' | 'bolsa' | 'proyecto'>('global');
+  // 1. Añadimos 'summary' para solucionar los errores TS2345 en Inversion.tsx
+  const [currentView, setCurrentView] = useState<'summary' | 'global' | 'bolsa' | 'proyecto'>('summary');
 
   // Estados de dinero
   const [disponibleGlobal, setDisponibleGlobal] = useState(1250);
-  const [totalInvertido, setTotalInvertido] = useState(8400); // Lo mantenemos por si lo usas
+  const [totalInvertido, setTotalInvertido] = useState(8400); 
   const [bolsaDisponible, setBolsaDisponible] = useState(450);
   const [bolsaInvertido, setBolsaInvertido] = useState(5200);
   const [bolsaGanancias, setBolsaGanancias] = useState(320);
@@ -14,11 +14,9 @@ export const useInvestment = () => {
   const [proyectoInvertido, setProyectoInvertido] = useState(3200);
   const [proyectoGanado, setProyectoGanado] = useState(1150);
 
-  // Variable calculada que pedía tu Inversion.tsx
+  // Variable calculada 
   const totalInvertidoCalculado = bolsaInvertido + proyectoInvertido;
 
-  // --- Funciones Manejadoras (Con los prefijos 'handle' correctos) ---
-  
   const handleTransferirGlobal = (monto: number, destino: 'bolsa' | 'proyecto' | 'diadia') => {
     if (monto <= 0) return;
     if (destino !== 'diadia' && monto > disponibleGlobal) return;
@@ -31,12 +29,13 @@ export const useInvestment = () => {
       setProyectoDisponible(prev => prev + monto);
     } else if (destino === 'diadia') {
       setDisponibleGlobal(prev => prev - monto);
-      // Lógica extra para enviar al Día a Día
+      // Lógica extra para Día a Día
     }
   };
 
-  // AQUÍ ESTÁ LA CORRECCIÓN: 'diadia' -> 'balance'
-  const handleEjecutarBolsa = (monto: number, tipo: 'propio' | 'ganancia' | 'balance') => {
+  // 2. Mantenemos el tipo 'diadia' para que no choque con InvestmentSummaryCards.tsx, 
+  // pero cambiamos la lógica para que el dinero vaya al disponibleGlobal.
+  const handleEjecutarBolsa = (monto: number, tipo: 'propio' | 'ganancia' | 'diadia') => {
     if (monto <= 0) return;
     
     if (tipo === 'propio') {
@@ -45,15 +44,14 @@ export const useInvestment = () => {
     } else if (tipo === 'ganancia') {
       setBolsaGanancias(prev => prev + monto);
       setBolsaDisponible(prev => prev + monto);
-    } else if (tipo === 'balance') {
-      // Regla de negocio: De disponible bolsa a Balance Global
+    } else if (tipo === 'diadia') {
+      // NUEVA REGLA: Retorna a Balance Global
       setBolsaDisponible(prev => prev - monto);
       setDisponibleGlobal(prev => prev + monto);
     }
   };
 
-  // AQUÍ ESTÁ LA CORRECCIÓN: 'diadia' -> 'balance'
-  const handleEjecutarProyecto = (modo: 'comprar' | 'vender' | 'balance', coste: number, venta?: number) => {
+  const handleEjecutarProyecto = (modo: 'comprar' | 'vender' | 'diadia', coste: number, venta?: number) => {
     if (coste <= 0) return;
     
     if (modo === 'comprar') {
@@ -63,8 +61,8 @@ export const useInvestment = () => {
       setProyectoInvertido(prev => prev - coste);
       setProyectoDisponible(prev => prev + venta);
       setProyectoGanado(prev => prev + (venta - coste));
-    } else if (modo === 'balance') {
-      // Regla de negocio: De disponible proyecto a Balance Global
+    } else if (modo === 'diadia') {
+      // NUEVA REGLA: Retorna a Balance Global
       setProyectoDisponible(prev => prev - coste);
       setDisponibleGlobal(prev => prev + coste);
     }

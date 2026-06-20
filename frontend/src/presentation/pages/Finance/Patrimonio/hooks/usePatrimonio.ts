@@ -4,7 +4,6 @@ import { db, auth } from '../../../../../infrastructure/firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
 
 export const usePatrimonio = () => {
-  // Eliminamos el filtro de mes, solo nos quedamos con Total y Año
   const [modoFiltro, setModoFiltro] = useState<'Total' | 'Año'>('Total');
   const [yearSeleccionado, setYearSeleccionado] = useState(new Date().getFullYear());
 
@@ -18,14 +17,15 @@ export const usePatrimonio = () => {
   useEffect(() => {
     const loadRealData = async (user: any) => {
       try {
-        // 1. INVERSIÓN (CORRECCIÓN: Sumamos tanto el dinero invertido como el disponible en liquidez)
+        // 1. INVERSIÓN (CORRECCIÓN: Ahora sumamos también el Balance Global disponible)
+        const invBalanceGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
         const invBolsaInv = Number(localStorage.getItem('aio_inv_bolsa_invertido') || 0);
         const invBolsaDisp = Number(localStorage.getItem('aio_inv_bolsa_disponible') || 0);
-        
         const invProyInv = Number(localStorage.getItem('aio_inv_proyecto_invertido') || 0);
         const invProyDisp = Number(localStorage.getItem('aio_inv_proyecto_disponible') || 0);
         
-        const saldoInversion = invBolsaInv + invBolsaDisp + invProyInv + invProyDisp;
+        // Sumamos absolutamente todo el capital que esté dentro del ecosistema de inversión
+        const saldoInversion = invBalanceGlobal + invBolsaInv + invBolsaDisp + invProyInv + invProyDisp;
         setInversion(saldoInversion);
         
         const movInversion = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');

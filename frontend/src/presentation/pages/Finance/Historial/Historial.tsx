@@ -26,54 +26,30 @@ export const Historial = () => {
       let todos: any[] = [];
 
       try {
-        // 1. Inversión
         const movInversion = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
         movInversion.forEach((m: any) => {
           todos.push({
-            id: m.id,
-            amount: m.amount,
-            title: m.label,
-            subtitle: 'Bolsa / Proyectos',
-            type: 'inversión',
-            dateString: m.dateString
+            id: m.id, amount: Number(m.amount), title: m.label, subtitle: 'Bolsa / Proyectos', type: 'inversión', dateString: m.dateString
           });
         });
 
-        // 2. Día a Día
-        const monthsRef = collection(db, `users/${user.uid}/finance_months`);
-        const monthsSnap = await getDocs(monthsRef);
+        const monthsSnap = await getDocs(collection(db, `users/${user.uid}/finance_months`));
         for (const monthDoc of monthsSnap.docs) {
-          const transRef = collection(db, `users/${user.uid}/finance_months/${monthDoc.id}/transactions`);
-          const transSnap = await getDocs(transRef);
+          const transSnap = await getDocs(collection(db, `users/${user.uid}/finance_months/${monthDoc.id}/transactions`));
           transSnap.docs.forEach(d => {
             const t = d.data();
             const amt = Number(t.amount);
             const isIncome = t.type === 'income' || t.type === 'savings_return';
             todos.push({
-              id: d.id,
-              amount: isIncome ? amt : -amt,
-              title: t.label || t.category,
-              subtitle: t.category || 'Categoría general',
-              type: isIncome ? 'ingreso' : 'gasto',
-              dateString: t.dateString
+              id: d.id, amount: isIncome ? amt : -amt, title: t.label || t.category, subtitle: t.category || 'Categoría general', type: isIncome ? 'ingreso' : 'gasto', dateString: t.dateString
             });
           });
         }
 
-        // 3. Ahorro
-        const savTransRef = collection(db, `users/${user.uid}/savings_transactions`);
-        const savTransSnap = await getDocs(savTransRef);
-        savTransSnap.docs.forEach(d => {
-          const t = d.data();
-          const amt = Number(t.amount);
-          const isDeposit = t.type === 'deposit' || t.type === 'from_vault';
+        const movAh = JSON.parse(localStorage.getItem('aio_ahorro_movimientos') || '[]');
+        movAh.forEach((m: any) => {
           todos.push({
-            id: d.id,
-            amount: isDeposit ? amt : -amt,
-            title: t.label || t.type,
-            subtitle: 'Transferencia',
-            type: 'ahorro',
-            dateString: t.date?.seconds ? new Date(t.date.seconds * 1000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+            id: m.id || Math.random().toString(), amount: Number(m.amount), title: m.label || m.type, subtitle: 'Transferencia', type: 'ahorro', dateString: m.dateString || m.date
           });
         });
 
@@ -88,7 +64,6 @@ export const Historial = () => {
     fetchData();
   }, []);
 
-  // FILTRADO DINÁMICO
   const filteredMovimientos = useMemo(() => {
     return movimientos.filter(mov => {
       const matchSearch = (mov.title + ' ' + mov.subtitle).toLowerCase().includes(searchTerm.toLowerCase());
@@ -103,13 +78,14 @@ export const Historial = () => {
     });
   }, [movimientos, searchTerm, activeFilter]);
 
-  // AGRUPACIÓN JERÁRQUICA
   const groupedData: Record<string, Record<string, any[]>> = {};
   filteredMovimientos.forEach(mov => {
     if (!mov.dateString) return;
-    const [y, m, d] = mov.dateString.split('-');
-    const year = y;
-    const monthName = `${MONTH_NAMES[parseInt(m, 10) - 1]} ${year}`;
+    const f = new Date(mov.dateString);
+    if (isNaN(f.getTime())) return;
+    
+    const year = f.getFullYear().toString();
+    const monthName = `${MONTH_NAMES[f.getMonth()]} ${year}`;
 
     if (!groupedData[year]) groupedData[year] = {};
     if (!groupedData[year][monthName]) groupedData[year][monthName] = [];
@@ -121,7 +97,6 @@ export const Historial = () => {
   const toggleYear = (y: string) => setExpandedYears(p => ({ ...p, [y]: !p[y] }));
   const toggleMonth = (m: string) => setExpandedMonths(p => ({ ...p, [m]: !p[m] }));
 
-  // ASIGNADOR DE ESTILOS VISUALES
   const getStyles = (type: string) => {
     if (type === 'gasto') return { badge: 'bg-red-500/20 text-red-500', amount: 'text-red-400', icon: <ShoppingCart size={16}/> };
     if (type === 'ingreso') return { badge: 'bg-emerald-500/20 text-emerald-500', amount: 'text-emerald-400', icon: <Landmark size={16}/> };
@@ -135,13 +110,11 @@ export const Historial = () => {
   return (
     <div className="w-full text-white min-h-screen bg-[#0c0c0c] pb-12 font-sans animate-in fade-in duration-300">
       
-      {/* CABECERA (Idéntica a la imagen) */}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate(-1)} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer"><ArrowLeft size={20} /></button>
         <h1 className="text-xl font-bold tracking-tight">Historial de movimientos</h1>
       </div>
 
-      {/* BUSCADOR */}
       <div className="relative mb-5">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
         <input 
@@ -153,7 +126,6 @@ export const Historial = () => {
         />
       </div>
 
-      {/* FILTROS (Pills) */}
       <div className="flex gap-2 overflow-x-auto hide-scrollbar mb-8 pb-2">
         <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
         {['Todos', 'Gastos', 'Ingresos', 'Ahorro', 'Inversión'].map(filter => (
@@ -171,19 +143,17 @@ export const Historial = () => {
         ))}
       </div>
 
-      {/* ESTRUCTURA DE CARPETAS */}
       <div className="space-y-4">
         {sortedYears.map(year => {
           const isYearOpen = !!expandedYears[year];
           const monthsInYear = groupedData[year];
           const totalMovs = Object.values(monthsInYear).flat().length;
 
-          // Cálculo aproximado de suma para la carpeta del año (Ignorando transferencias internas para no ensuciar)
+          // Suma matemática real del año
           const sumYear = Object.values(monthsInYear).flat().reduce((acc, mov) => acc + (mov.type === 'ingreso' || mov.type === 'gasto' ? mov.amount : 0), 0);
 
           return (
             <div key={year} className="space-y-1">
-              {/* CARPETA DE AÑO */}
               <button onClick={() => toggleYear(year)} className="w-full flex justify-between items-center py-2 text-left cursor-pointer outline-none">
                 <div className="flex items-center gap-3">
                   {isYearOpen ? <FolderOpen size={20} className="text-[#f59e0b]" /> : <Folder size={20} className="text-[#f59e0b]" />}
@@ -194,7 +164,6 @@ export const Historial = () => {
                 </span>
               </button>
 
-              {/* MESES DEL AÑO */}
               {isYearOpen && (
                 <div className="pl-2 pt-2 space-y-4">
                   {Object.keys(monthsInYear).map(monthName => {
@@ -203,7 +172,6 @@ export const Historial = () => {
 
                     return (
                       <div key={monthName} className="space-y-1">
-                        {/* CARPETA DE MES */}
                         <button onClick={() => toggleMonth(monthName)} className="w-full flex justify-between items-center py-2 text-left cursor-pointer outline-none">
                           <div className="flex items-center gap-3">
                             {isMonthOpen ? <FolderOpen size={18} className="text-[#f59e0b]" strokeWidth={1.5} /> : <Folder size={18} className="text-[#f59e0b]" strokeWidth={1.5} />}
@@ -212,12 +180,12 @@ export const Historial = () => {
                           <span className="text-xs text-gray-500">{movs.length} movimientos</span>
                         </button>
 
-                        {/* LISTA DE TRANSACCIONES DEL MES */}
                         {isMonthOpen && (
                           <div className="pl-6 pt-1 space-y-4 pb-3">
                             {movs.map((mov, idx) => {
                               const style = getStyles(mov.type);
-                              const day = mov.dateString.split('-')[2];
+                              const fDate = new Date(mov.dateString);
+                              const day = isNaN(fDate.getTime()) ? '--' : fDate.getDate();
                               const shortMonth = monthName.split(' ')[0].substring(0, 3).toLowerCase();
                               const prefix = mov.amount > 0 ? '+' : '';
 
@@ -256,7 +224,7 @@ export const Historial = () => {
           );
         })}
         {sortedYears.length === 0 && (
-          <div className="text-center py-10 text-gray-500 text-sm">No se encontraron movimientos.</div>
+          <div className="text-center py-10 text-gray-500 text-sm">No se encontraron movimientos con los filtros aplicados.</div>
         )}
       </div>
     </div>

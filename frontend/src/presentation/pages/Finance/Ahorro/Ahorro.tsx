@@ -7,10 +7,7 @@ import {
   MoreVertical, Pencil, Trash2, PiggyBank 
 } from 'lucide-react';
 
-// Importamos el mapa de iconos que acabas de crear
 import { iconMap } from './components/IconPicker';
-
-// Componentes Reales
 import { VaultModal } from './components/modals/VaultModal';
 import { SavingsTransactionModal } from './components/modals/SavingsTransactionModal';
 import { ConfirmDeleteModal } from './components/modals/ConfirmDeleteModal';
@@ -50,18 +47,51 @@ export const Ahorro = () => {
     if (!user) return;
 
     try {
-      // 1. Cargar Historial y Calcular Total Ahorrado
-      let totalAhorro = 0;
+      // 1. CARGAR HUCHAS (Firebase + LocalStorage antiguo)
+      const vaultsData: any[] = [];
+      let enHuchasCalc = 0;
+
+      // A) Desde Firebase
+      const vaultsSnap = await getDocs(collection(db, `users/${user.uid}/vaults`));
+      vaultsSnap.docs.forEach(d => {
+        const vData = d.data();
+        const current = Number(vData.currentAmount) || Number(vData.current) || 0;
+        enHuchasCalc += current;
+        vaultsData.push({ id: d.id, ...vData, currentAmount: current });
+      });
+
+      // B) Desde LocalStorage (Para rescatar tus huchas antiguas)
+      const localVaults = JSON.parse(localStorage.getItem('aio_ahorro_huchas') || '[]');
+      localVaults.forEach((v: any) => {
+        // Solo las añadimos si no existen ya en Firebase
+        if (!vaultsData.find(fbV => fbV.id === v.id || fbV.title === v.name || fbV.title === v.title)) {
+          const current = Number(v.currentAmount) || Number(v.current) || Number(v.amount) || 0;
+          enHuchasCalc += current;
+          vaultsData.push({
+            id: v.id || Math.random().toString(),
+            title: v.name || v.title || 'Hucha',
+            subtitle: v.description || v.subtitle || 'Fondo de ahorro',
+            currentAmount: current,
+            targetAmount: Number(v.targetAmount) || Number(v.target) || 0,
+            color: v.color || 'emerald',
+            iconName: v.iconName || v.icon || 'PiggyBank'
+          });
+        }
+      });
+
+      setHuchas(vaultsData);
+
+      // 2. CARGAR MOVIMIENTOS (Firebase + LocalStorage)
+      let ahorroGlobal = 0;
       const todosLosMovs: any[] = [];
+
+      // A) Desde Firebase
       const savTransSnap = await getDocs(collection(db, `users/${user.uid}/savings_transactions`));
-      
       savTransSnap.docs.forEach(d => {
         const t = d.data();
         const amt = Number(t.amount) || 0;
-        
-        // Sumamos y restamos para saber el AHORRO TOTAL REAL
-        if (t.type === 'deposit') totalAhorro += amt;
-        if (t.type === 'withdrawal') totalAhorro -= amt;
+        if (t.type === 'deposit') ahorroGlobal += amt;
+        if (t.type === 'withdrawal') ahorroGlobal -= amt;
 
         todosLosMovs.push({
           id: d.id,
@@ -70,21 +100,45 @@ export const Ahorro = () => {
           dateString: t.date?.seconds ? new Date(t.date.seconds * 1000).toISOString() : new Date().toISOString()
         });
       });
+
+      // B) Desde LocalStorage
+      const localMovs = JSON.parse(localStorage.getItem('aio_ahorro_movimientos') || '[]');
+      localMovs.forEach((m: any) => {
+        if (!todosLosMovs.find(tx => tx.id === m.id)) {
+          const amt = Number(m.amount) || 0;
+          
+          let type = m.type;
+          if (!type) {
+            if (amt > 0) type = 'deposit';
+            else if (amt < 0 && (m.title?.includes('->') || m.label?.includes('->'))) type = 'to_vault';
+            else if (amt < 0) type = 'withdrawal';
+          }
+
+          if (type === 'deposit') ahorroGlobal += Math.abs(amt);
+          if (type === 'withdrawal') ahorroGlobal -= Math.abs(amt);
+
+          todosLosMovs.push({
+            id: m.id || Math.random().toString(),
+            ...m,
+            type: type || m.type,
+            amount: Math.abs(amt),
+            dateString: m.dateString || m.date || new Date().toISOString()
+          });
+        }
+      });
+
       todosLosMovs.sort((a, b) => new Date(b.dateString).getTime() - new Date(a.dateString).getTime());
       setMovimientos(todosLosMovs);
 
-      // 2. Cargar Huchas
-      let enHuchasCalc = 0;
-      const vaultsSnap = await getDocs(collection(db, `users/${user.uid}/vaults`));
-      const vaultsData = vaultsSnap.docs.map(d => {
-        const vData = d.data();
-        enHuchasCalc += Number(vData.currentAmount) || 0;
-        return { id: d.id, ...vData };
-      });
-      setHuchas(vaultsData);
+      // 3. CÁLCULO FINAL DE DISPONIBLE
+      // Red de seguridad: si el cálculo dinámico falla, leemos tu ahorro total local.
+      const localAhorroTotal = Number(localStorage.getItem('aio_ahorro_total')) || 0;
+      if (ahorroGlobal === 0 && localAhorroTotal > 0) {
+        ahorroGlobal = localAhorroTotal;
+      }
 
-      // 3. CALCULAR DISPONIBLE REAL (Ahorro Total - Lo que está atrapado en huchas)
-      const disp = totalAhorro - enHuchasCalc;
+      // Disponible = Todo el ahorro global MENOS lo que está metido en huchas
+      const disp = ahorroGlobal - enHuchasCalc;
       setDisponible(disp > 0 ? disp : 0);
 
     } catch (error) {
@@ -172,7 +226,7 @@ export const Ahorro = () => {
         </button>
       </div>
 
-      {/* LISTA DE HUCHAS REALES */}
+      {/* LISTA DE HUCHAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-12" ref={dropdownRef}>
         {huchas.map((hucha) => {
           const current = Number(hucha.currentAmount) || 0;
@@ -185,7 +239,7 @@ export const Ahorro = () => {
           const remaining = target - current;
           const isDropdownOpen = dropdownOpen === hucha.id;
           
-          // Renderiza el icono correcto según la BBDD, si no existe pone el cerdito por defecto
+          // Renderiza el icono correcto
           const IconComponent = iconMap[hucha.iconName as keyof typeof iconMap] || <PiggyBank size={20} />;
 
           return (

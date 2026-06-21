@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs } from 'firebase/firestore';
-import { db, auth } from '../../../../../infrastructure/firebase/config';
+import { db, auth } from '../../../../infrastructure/firebase/config';
 import { 
   ArrowLeft, ArrowDown, ArrowUp, ArrowRightLeft, Plus, 
   Plane, Car, ShieldCheck, ShoppingBag, GraduationCap, 
@@ -174,7 +174,7 @@ export const Ahorro = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-12" ref={dropdownRef}>
         {huchas.map((hucha) => {
           const style = colorStyles[hucha.color] || colorStyles.emerald;
-          const percentage = Math.min(Math.round((hucha.current / hucha.target) * 100), 100);
+          const percentage = hucha.target > 0 ? Math.min(Math.round((hucha.current / hucha.target) * 100), 100) : 0;
           const remaining = hucha.target - hucha.current;
           const isDropdownOpen = dropdownOpen === hucha.id;
 

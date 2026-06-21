@@ -1,96 +1,42 @@
-import { useState, useEffect } from 'react';
-import { ArrowDown, ArrowUp, ArrowRightLeft, Plus } from 'lucide-react';
-import { SavingsService, SavingsTransaction } from '../../../../infrastructure/services/SavingsService';
-import { auth } from '../../../../infrastructure/firebase/config';
-
-import { SavingsChart } from './components/SavingsChart';
-import { VaultsList } from './components/VaultsList';
-import { SavingsHistory } from './components/SavingsHistory';
-import { VaultModal } from './components/modals/VaultModal';
-import { SavingsTransactionModal } from './components/modals/SavingsTransactionModal';
-import { ConfirmDeleteModal } from './components/modals/ConfirmDeleteModal'; // IMPORTACIÓN NUEVA
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { 
+  ArrowLeft, ArrowDown, ArrowUp, ArrowRightLeft, Plus, 
+  Plane, Car, ShieldCheck, ShoppingBag, GraduationCap, 
+  MoreVertical, Calendar, Folder, FolderOpen 
+} from 'lucide-react';
 
 export const Ahorro = () => {
-  const [available, setAvailable] = useState(0);
-  const [inVaults, setInVaults] = useState(0);
-  const [transactions, setTransactions] = useState<SavingsTransaction[]>([]);
-  const [vaults, setVaults] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const navigate = useNavigate();
 
-  // Estados para los modales de creación/edición
-  const [isVaultModalOpen, setIsVaultModalOpen] = useState(false);
-  const [selectedVault, setSelectedVault] = useState<any>(null);
-  const [isTransModalOpen, setIsTransModalOpen] = useState(false);
-  const [transType, setTransType] = useState<'to_vault' | 'from_vault' | 'withdrawal'>('to_vault');
-  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+  // --- DATOS MOCK BASADOS EN TUS CAPTURAS (A conectar con Firebase) ---
+  const disponible = 0.00;
+  const enHuchas = 4917.96;
 
-  // NUEVO: Estados para los modales de borrado
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deletingData, setDeletingData] = useState<{ id: string, type: 'transaction' | 'vault' } | null>(null);
+  const huchas = [
+    { id: '1', title: 'Ahorro emergencia', subtitle: 'Reserva para imprevistos', current: 1800.00, target: 6000, color: 'rose', icon: <ShieldCheck size={20} /> },
+    { id: '2', title: 'Leroy Merlin Acciones', subtitle: 'Inversión empresa', current: 1817.96, target: 3000, color: 'emerald', icon: <ShoppingBag size={20} /> },
+    { id: '3', title: 'Uni', subtitle: 'Gastos universitarios', current: 1000.00, target: 2000, color: 'blue', icon: <GraduationCap size={20} /> },
+    { id: '4', title: 'Viajes', subtitle: 'Fondo para vacaciones', current: 300.00, target: 1500, color: 'blue', icon: <Plane size={20} /> },
+    { id: '5', title: 'Coche', subtitle: 'Entrada vehículo nuevo', current: 0.00, target: 5000, color: 'amber', icon: <Car size={20} /> }
+  ];
 
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) return;
-    const unsubTrans = SavingsService.subscribeToSavings(user.uid, (data) => {
-      setAvailable(data.available); setInVaults(data.inVaults); setTransactions(data.transactions); setLoading(false);
-    });
-    const unsubVaults = SavingsService.subscribeToVaults(user.uid, (data) => { setVaults(data); });
-    return () => { unsubTrans(); unsubVaults(); };
-  }, []);
-
-  const vaultBalances: Record<string, number> = {};
-  vaults.forEach(v => vaultBalances[v.id] = 0);
-  transactions.forEach(t => {
-    if (t.type === 'to_vault' && t.vaultId) vaultBalances[t.vaultId] = (vaultBalances[t.vaultId] || 0) + t.amount;
-    if (t.type === 'from_vault' && t.vaultId) vaultBalances[t.vaultId] = (vaultBalances[t.vaultId] || 0) - t.amount;
-  });
-
-  // Funciones para Transacciones
-  const handleOpenTransModal = (type: 'to_vault' | 'from_vault' | 'withdrawal') => { setTransType(type); setSelectedTransaction(null); setIsTransModalOpen(true); };
-  const handleEditTransaction = (t: any) => { setTransType(t.type); setSelectedTransaction(t); setIsTransModalOpen(true); };
-  
-  // NUEVO: Abre modal en vez de usar window.confirm
-  const handleDeleteTransactionRequest = (id: string) => {
-    const t = transactions.find(tr => tr.id === id);
-    if (!t) return;
-
-    // Validación antifraude (esta se queda)
-    if (t.type === 'to_vault' && (vaultBalances[t.vaultId!] || 0) - t.amount < 0) { alert("No puedes borrar este movimiento porque la hucha se quedaría en negativo."); return; }
-    if (t.type === 'from_vault' && available - t.amount < 0) { alert("No puedes borrar esta retirada porque tu disponible quedaría en negativo."); return; }
-
-    setDeletingData({ id, type: 'transaction' }); setIsDeleteModalOpen(true);
-  };
-  
-  // Funciones para Huchas
-  const handleEditVault = (vault: any) => { setSelectedVault(vault); setIsVaultModalOpen(true); };
-  
-  // NUEVO: Abre modal en vez de usar window.confirm
-  const handleDeleteVaultRequest = (id: string) => { setDeletingData({ id, type: 'vault' }); setIsDeleteModalOpen(true); };
-
-  // NUEVO: Función final que ejecuta el borrado en Firebase
-  const handleConfirmDelete = async () => {
-    if (!deletingData || !auth.currentUser) return;
-    setIsDeleting(true);
-    try {
-      if (deletingData.type === 'transaction') {
-        await SavingsService.deleteSavingsTransaction(auth.currentUser.uid, deletingData.id);
-      } else if (deletingData.type === 'vault') {
-        await SavingsService.deleteVault(auth.currentUser.uid, deletingData.id);
-      }
-      setIsDeleteModalOpen(false);
-    } catch (e) { console.error(e); } finally { setIsDeleting(false); setDeletingData(null); }
+  const colorStyles: Record<string, { bg: string, text: string, bar: string }> = {
+    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', bar: 'bg-emerald-500' },
+    rose: { bg: 'bg-rose-500/10', text: 'text-rose-400', bar: 'bg-rose-400' },
+    amber: { bg: 'bg-amber-500/10', text: 'text-amber-400', bar: 'bg-amber-400' },
+    blue: { bg: 'bg-blue-500/10', text: 'text-blue-400', bar: 'bg-blue-500' },
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-[calc(100vh-80px)] bg-[#0c0c0c]"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#10b981]"></div></div>;
+  // Estados para el historial desplegable
+  const [is2026Open, setIs2026Open] = useState(true);
+  const [isJunioOpen, setIsJunioOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#0c0c0c] text-white p-4 md:p-6 font-sans">
-      <div className="flex items-center gap-3 mb-6">
+    <div className="w-full text-white min-h-screen pb-12 animate-in fade-in duration-300">
+      
+      {/* CABECERA */}
+      <div className="flex items-center gap-3 mb-8">
         <button onClick={() => navigate(-1)} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer">
           <ArrowLeft size={24} />
         </button>
@@ -98,46 +44,110 @@ export const Ahorro = () => {
           Ahorro
         </h1>
       </div>
+
+      {/* TARJETAS SUPERIORES */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-5 shadow-sm">
+        <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5">
           <p className="text-gray-400 text-sm font-medium mb-1">Disponible</p>
-          <p className="text-4xl font-bold text-[#10b981]">{available.toFixed(2)}€</p>
+          <p className="text-emerald-400 text-3xl font-black">{disponible.toFixed(2)} €</p>
         </div>
-        <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl p-5 shadow-sm">
+        <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5">
           <p className="text-gray-400 text-sm font-medium mb-1">En huchas</p>
-          <p className="text-4xl font-bold text-white">{inVaults.toFixed(2)}€</p>
+          <p className="text-white text-3xl font-black">{enHuchas.toFixed(2)} €</p>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-        <div className="flex flex-wrap gap-3">
-          <button onClick={() => handleOpenTransModal('to_vault')} className="flex items-center gap-2 px-4 py-2 bg-[#10b981]/10 border border-[#10b981] text-[#10b981] rounded-lg text-sm font-medium hover:bg-[#10b981]/20 transition-colors"><ArrowDown size={16} /> Mover a hucha</button>
-          <button onClick={() => handleOpenTransModal('from_vault')} className="flex items-center gap-2 px-4 py-2 bg-transparent border border-[#2d2d2d] text-gray-300 rounded-lg text-sm font-medium hover:bg-[#1a1a1a] transition-colors"><ArrowUp size={16} /> Mover de hucha</button>
-          <button onClick={() => handleOpenTransModal('withdrawal')} className="flex items-center gap-2 px-4 py-2 bg-transparent border border-[#2d2d2d] text-gray-300 rounded-lg text-sm font-medium hover:bg-[#1a1a1a] transition-colors"><ArrowRightLeft size={16} /> Pasar a día a día</button>
+      {/* BOTONERA DE ACCIÓN */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-10">
+        <div className="flex flex-wrap items-center gap-3">
+          <button className="flex items-center gap-2 px-4 py-2 border border-emerald-500/50 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/10 transition-colors">
+            <ArrowDown size={16} /> Mover a hucha
+          </button>
+          <button className="flex items-center gap-2 px-4 py-2 border border-[#2d2d2d] text-gray-300 rounded-lg text-sm font-medium hover:bg-[#1a1a1c] transition-colors">
+            <ArrowUp size={16} /> Mover de hucha
+          </button>
+          <button className="flex items-center gap-2 px-4 py-2 border border-[#2d2d2d] text-gray-300 rounded-lg text-sm font-medium hover:bg-[#1a1a1c] transition-colors">
+            <ArrowRightLeft size={16} /> Pasar a día a día
+          </button>
         </div>
-        <button onClick={() => { setSelectedVault(null); setIsVaultModalOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-transparent border border-[#2d2d2d] text-gray-300 rounded-lg text-sm font-medium hover:bg-[#1a1a1a] transition-colors ml-auto"><Plus size={16} /> Nueva hucha</button>
+        <button className="flex items-center gap-2 px-4 py-2 bg-[#2d2d2d] text-white rounded-lg text-sm font-medium hover:bg-[#3d3d3d] transition-colors">
+          <Plus size={16} /> Nueva hucha
+        </button>
       </div>
 
-      <SavingsChart transactions={transactions} />
-      
-      {/* CORRECCIÓN DE PROPS: Ahora pasamos las funciones de borrado al modal */}
-      <VaultsList vaults={vaults} vaultBalances={vaultBalances} onEditVault={handleEditVault} onDeleteVault={handleDeleteVaultRequest} />
-      
-      <SavingsHistory transactions={transactions} vaults={vaults} onEdit={handleEditTransaction} onDelete={handleDeleteTransactionRequest} />
-      
-      {/* Inyección de Modales */}
-      <VaultModal isOpen={isVaultModalOpen} onClose={() => setIsVaultModalOpen(false)} vault={selectedVault} />
-      <SavingsTransactionModal isOpen={isTransModalOpen} onClose={() => setIsTransModalOpen(false)} type={transType} vaults={vaults} transaction={selectedTransaction} available={available} vaultBalances={vaultBalances} />
-      
-      {/* NUEVO: Modal de Confirmación de Borrado unificado */}
-      <ConfirmDeleteModal 
-        isOpen={isDeleteModalOpen} 
-        onClose={() => setIsDeleteModalOpen(false)} 
-        onConfirm={handleConfirmDelete} 
-        isDeleting={isDeleting} 
-        title={deletingData?.type === 'vault' ? "Eliminar hucha" : "Eliminar transacción"}
-        message={deletingData?.type === 'vault' ? "¿Estás seguro de que quieres eliminar esta hucha? Sus movimientos quedarán huérfanos." : "¿Estás seguro de que quieres eliminar esta transacción? Esta acción no se puede deshacer."}
-      />
+      {/* NUEVO DISEÑO DE HUCHAS (GRID) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-12">
+        {huchas.map((hucha) => {
+          const style = colorStyles[hucha.color] || colorStyles.emerald;
+          const percentage = Math.min(Math.round((hucha.current / hucha.target) * 100), 100);
+          const remaining = hucha.target - hucha.current;
+
+          return (
+            <div key={hucha.id} className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 relative group hover:border-[#3d3d3d] transition-colors">
+              <button className="absolute top-5 right-4 text-gray-500 hover:text-white transition-colors">
+                <MoreVertical size={18} />
+              </button>
+
+              <div className="flex items-start gap-4 mb-4">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${style.bg} ${style.text}`}>
+                  {hucha.icon}
+                </div>
+                <div className="pr-6">
+                  <h3 className="text-lg font-bold text-white leading-tight">{hucha.title}</h3>
+                  <p className="text-sm text-gray-500 font-medium">{hucha.subtitle}</p>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-end mb-2">
+                <div>
+                  <p className="text-2xl font-black text-white">{hucha.current.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
+                  <p className="text-xs text-gray-500 font-medium bg-[#1c1c1e] px-2 py-0.5 rounded mt-1 inline-block">
+                    de {hucha.target.toLocaleString('es-ES')} € · quedan {remaining.toLocaleString('es-ES')} €
+                  </p>
+                </div>
+                <span className={`text-sm font-bold ${style.text}`}>{percentage}%</span>
+              </div>
+
+              <div className="w-full bg-[#2d2d2d] h-1.5 rounded-full overflow-hidden mt-3">
+                <div className={`h-full rounded-full ${style.bar} transition-all duration-500 ease-out`} style={{ width: `${percentage}%` }}></div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* HISTORIAL (Mantenido visualmente como lo tenías) */}
+      <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5">
+        <div className="flex items-center gap-3 mb-6 border-b border-[#2d2d2d] pb-4">
+          <Calendar className="text-emerald-500" size={20} />
+          <h2 className="text-lg font-bold text-white">Historial de movimientos</h2>
+        </div>
+
+        <div className="space-y-2">
+          {/* Año */}
+          <button onClick={() => setIs2026Open(!is2026Open)} className="w-full flex items-center justify-between p-2 hover:bg-[#1a1a1c] rounded-lg transition-colors">
+            <div className="flex items-center gap-3">
+              {is2026Open ? <FolderOpen size={18} className="text-emerald-500" /> : <Folder size={18} className="text-emerald-500" />}
+              <span className="font-bold text-white">2026</span>
+            </div>
+            <span className="text-xs text-gray-500 bg-[#1c1c1e] px-2 py-1 rounded">11 movs</span>
+          </button>
+
+          {/* Meses */}
+          {is2026Open && (
+            <div className="pl-6 pt-2">
+              <button onClick={() => setIsJunioOpen(!isJunioOpen)} className="w-full flex items-center justify-between p-2 hover:bg-[#1a1a1c] rounded-lg transition-colors">
+                <div className="flex items-center gap-3">
+                  <ArrowRightLeft size={14} className="text-gray-500" />
+                  <span className="text-sm font-medium text-gray-300">Junio</span>
+                </div>
+                <span className="text-xs text-gray-500">6 transacciones</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 };

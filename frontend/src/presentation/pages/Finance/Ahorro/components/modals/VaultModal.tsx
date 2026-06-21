@@ -1,77 +1,133 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { SavingsService } from '../../../../../../infrastructure/services/SavingsService';
-import { auth } from '../../../../../../infrastructure/firebase/config';
+import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
+import { db, auth } from '../../../../../../infrastructure/firebase/config';
+import { IconPicker } from '../IconPicker';
 
-interface VaultModalProps {
+interface Props {
   isOpen: boolean;
   onClose: () => void;
-  vault?: any;
-} 
+  vaultToEdit?: any; // Recibe la hucha si vamos a editar
+}
 
-const COLORS = ['#34d399', '#60a5fa', '#fbbf24', '#a78bfa', '#fb923c', '#f87171', '#e879f9', '#2dd4bf'];
+const colors = [
+  { id: 'emerald', bg: 'bg-emerald-500' },
+  { id: 'rose', bg: 'bg-rose-500' },
+  { id: 'amber', bg: 'bg-amber-500' },
+  { id: 'blue', bg: 'bg-blue-500' },
+  { id: 'purple', bg: 'bg-purple-500' }
+];
 
-export const VaultModal = ({ isOpen, onClose, vault }: VaultModalProps) => {
-  const [name, setName] = useState('');
-  const [color, setColor] = useState(COLORS[0]);
-  const [target, setTarget] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+export const VaultModal = ({ isOpen, onClose, vaultToEdit }: Props) => {
+  const [title, setTitle] = useState('');
+  const [subtitle, setSubtitle] = useState('');
+  const [targetAmount, setTargetAmount] = useState('');
+  const [color, setColor] = useState('emerald');
+  const [iconName, setIconName] = useState('PiggyBank');
+  const [loading, setLoading] = useState(false);
 
+  // Si estamos editando, rellenamos los campos con los datos de la hucha
   useEffect(() => {
-    if (vault && isOpen) {
-      setName(vault.name); setColor(vault.color); setTarget(vault.target ? vault.target.toString() : '');
-    } else if (isOpen) {
-      setName(''); setColor(COLORS[0]); setTarget('');
+    if (vaultToEdit) {
+      setTitle(vaultToEdit.title || vaultToEdit.name || '');
+      setSubtitle(vaultToEdit.subtitle || vaultToEdit.description || '');
+      setTargetAmount(vaultToEdit.targetAmount?.toString() || vaultToEdit.target?.toString() || '');
+      setColor(vaultToEdit.color || 'emerald');
+      setIconName(vaultToEdit.iconName || 'PiggyBank');
+    } else {
+      setTitle('');
+      setSubtitle('');
+      setTargetAmount('');
+      setColor('emerald');
+      setIconName('PiggyBank');
     }
-  }, [vault, isOpen]);
+  }, [vaultToEdit, isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSave = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     const user = auth.currentUser;
-    if (!user || !name) return;
-    setIsSaving(true);
-    const data = { name, color, target: target ? Number(target) : null };
+    if (!user || !title || !targetAmount) return;
+
+    setLoading(true);
     try {
-      if (vault?.id) await SavingsService.updateVault(user.uid, vault.id, data);
-      else await SavingsService.addVault(user.uid, data);
+      const vaultData = {
+        title,
+        subtitle,
+        targetAmount: Number(targetAmount),
+        color,
+        iconName,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (vaultToEdit) {
+        // Editar hucha existente
+        await updateDoc(doc(db, `users/${user.uid}/vaults`, vaultToEdit.id), vaultData);
+      } else {
+        // Crear hucha nueva (empieza con 0€)
+        await addDoc(collection(db, `users/${user.uid}/vaults`), {
+          ...vaultData,
+          currentAmount: 0,
+          createdAt: new Date().toISOString()
+        });
+      }
       onClose();
     } catch (error) {
-      console.error(error);
+      console.error("Error guardando hucha:", error);
     } finally {
-      setIsSaving(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl w-full max-w-sm p-6 shadow-2xl relative">
-        <button onClick={onClose} className="absolute right-4 top-4 text-gray-400 hover:text-white"><X size={18} /></button>
-        <h2 className="text-xl font-bold text-white mb-6">{vault ? 'Editar hucha' : 'Nueva hucha'}</h2>
-        
-        <div className="space-y-4 mb-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">
+          <h2 className="text-xl font-bold text-white">
+            {vaultToEdit ? 'Editar hucha' : 'Nueva hucha'}
+          </h2>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-[#2d2d2d] cursor-pointer">
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-5">
           <div>
-            <label className="block text-sm font-medium text-white mb-1">Nombre</label>
-            <input type="text" placeholder="Ej: Imprevistos" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] focus:border-[#10b981] rounded-lg px-4 py-2.5 text-white outline-none" />
+            <label className="block text-sm font-medium text-gray-400 mb-1.5">Nombre de la meta</label>
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Ej: Viaje a Japón" className="w-full bg-[#1c1c1e] text-white border border-[#2d2d2d] rounded-xl px-4 py-3 outline-none focus:border-emerald-500 transition-colors" />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-white mb-2">Color</label>
-            <div className="flex gap-2 flex-wrap">
-              {COLORS.map(c => (
-                <button key={c} onClick={() => setColor(c)} className={`w-8 h-8 rounded-full border-2 transition-all ${color === c ? 'border-white scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />
+            <label className="block text-sm font-medium text-gray-400 mb-1.5">Descripción (Opcional)</label>
+            <input type="text" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="Ej: Vacaciones de verano 2026" className="w-full bg-[#1c1c1e] text-white border border-[#2d2d2d] rounded-xl px-4 py-3 outline-none focus:border-emerald-500 transition-colors" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1.5">Objetivo a alcanzar (€)</label>
+            <input type="number" step="0.01" value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} required placeholder="3000" className="w-full bg-[#1c1c1e] text-white border border-[#2d2d2d] rounded-xl px-4 py-3 outline-none focus:border-emerald-500 transition-colors" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1.5">Color</label>
+            <div className="flex gap-3">
+              {colors.map(c => (
+                <button key={c.id} type="button" onClick={() => setColor(c.id)} className={`w-8 h-8 rounded-full ${c.bg} transition-transform cursor-pointer ${color === c.id ? 'ring-2 ring-white ring-offset-2 ring-offset-[#141416] scale-110' : 'opacity-50 hover:opacity-100'}`} />
               ))}
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-white mb-1">Objetivo (€, opcional)</label>
-            <input type="number" placeholder="Sin objetivo" value={target} onChange={(e) => setTarget(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] focus:border-[#10b981] rounded-lg px-4 py-2.5 text-white outline-none" />
-          </div>
-        </div>
 
-        <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#1a1a1a] border border-[#2d2d2d] hover:bg-[#252525]">Cancelar</button>
-          <button onClick={handleSave} disabled={isSaving || !name} className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#10b981] hover:bg-[#059669] disabled:opacity-50">Guardar</button>
-        </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1.5">Icono</label>
+            <IconPicker selectedIcon={iconName} onSelect={setIconName} />
+          </div>
+
+          <div className="pt-2">
+            <button type="submit" disabled={loading} className="w-full bg-emerald-500 text-black font-bold py-3.5 rounded-xl hover:bg-emerald-400 transition-colors cursor-pointer disabled:opacity-50">
+              {loading ? 'Guardando...' : (vaultToEdit ? 'Guardar cambios' : 'Crear hucha')}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

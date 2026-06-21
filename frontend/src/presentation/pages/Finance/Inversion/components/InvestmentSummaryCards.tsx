@@ -67,7 +67,6 @@ export const InvestmentSummaryCards = ({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
       
-      {/* ======================= TARJETA GLOBAL ======================= */}
       <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl overflow-hidden flex flex-col shadow-sm group transition-all hover:border-[#3d3d3d]">
         <button onClick={() => onNavigate('global')} className="p-5 text-left w-full hover:bg-[#1a1a1c] transition-colors cursor-pointer flex-1 outline-none">
           <div className="flex justify-between items-center mb-5">
@@ -97,7 +96,6 @@ export const InvestmentSummaryCards = ({
         </div>
       </div>
 
-      {/* ======================= TARJETA BOLSA ======================= */}
       <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl overflow-hidden flex flex-col shadow-sm group transition-all hover:border-[#3d3d3d]">
         <button onClick={() => onNavigate('bolsa')} className="p-5 text-left w-full hover:bg-[#1a1a1c] transition-colors cursor-pointer flex-1 outline-none">
           <div className="flex justify-between items-center mb-3">
@@ -131,7 +129,6 @@ export const InvestmentSummaryCards = ({
         </div>
       </div>
 
-      {/* ======================= TARJETA PROYECTOS ======================= */}
       <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl overflow-hidden flex flex-col shadow-sm group transition-all hover:border-[#3d3d3d]">
         <button onClick={() => onNavigate('proyecto')} className="p-5 text-left w-full hover:bg-[#1a1a1c] transition-colors cursor-pointer flex-1 outline-none">
           <div className="flex justify-between items-center mb-3">
@@ -164,10 +161,123 @@ export const InvestmentSummaryCards = ({
           </button>
         </div>
       </div>
-
-      {/* ================================================================
-          MODALES ADAPTADOS A MÓVIL Y ESCRITORIO
-      ================================================================ */}
       
       {activeModal === 'global' && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">
+              <h3 className="text-base font-bold text-white tracking-tight">Distribuir Capital Propio</h3>
+              <button onClick={cerrarModal} className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-[#2d2d2d] cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Monto a mover</label>
+                <input type="number" placeholder="Ej: 500" value={inputAmount1} onChange={(e) => setInputAmount1(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3.5 text-base text-white outline-none focus:border-emerald-500 transition-colors" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Selecciona el destino</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button onClick={() => handleGlobal('bolsa')} className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-sm font-bold py-3 rounded-xl transition-colors cursor-pointer">A Bolsa</button>
+                  <button onClick={() => handleGlobal('proyecto')} className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 text-sm font-bold py-3 rounded-xl transition-colors cursor-pointer">A Proyectos</button>
+                  <button onClick={() => handleGlobal('diadia')} className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-sm font-bold py-3 rounded-xl transition-colors cursor-pointer">A Día a Día</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'bolsa' && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">
+              <h3 className="text-base font-bold text-white tracking-tight">Gestionar Bolsa</h3>
+              <button onClick={cerrarModal} className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-[#2d2d2d] cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Tipo de operación</label>
+                <select value={selectType} onChange={(e) => setSelectType(e.target.value as any)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3.5 text-base text-white outline-none focus:border-blue-500 transition-colors appearance-none">
+                  <option value="propio">Invertir desde mi Disponible</option>
+                  <option value="ganancia">Cobrar Dividendos / Premios</option>
+                  <option value="diadia">Pasar Disponible a Balance Global</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Importe de la operación</label>
+                <input type="number" placeholder="Ej: 150" value={inputAmount1} onChange={(e) => setInputAmount1(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3.5 text-base text-white outline-none focus:border-blue-500 transition-colors" />
+              </div>
+              <button onClick={handleBolsa} className="w-full bg-blue-600 hover:bg-blue-500 text-base font-bold py-3.5 rounded-xl text-white transition-colors cursor-pointer mt-2">
+                Ejecutar Orden
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'proyecto' && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">
+              <h3 className="text-base font-bold text-white tracking-tight">Registro Comercial</h3>
+              <button onClick={cerrarModal} className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-[#2d2d2d] cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 space-y-5">
+              <div className="grid grid-cols-3 gap-1 bg-[#1c1c1e] p-1.5 rounded-xl border border-[#2d2d2d]">
+                <button onClick={() => setSelectType('propio')} className={`text-xs py-2 font-bold rounded-lg transition-colors ${selectType === 'propio' ? 'bg-[#2d2d2d] text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>Comprar</button>
+                <button onClick={() => setSelectType('ganancia')} className={`text-xs py-2 font-bold rounded-lg transition-colors ${selectType === 'ganancia' ? 'bg-[#2d2d2d] text-emerald-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>Vender</button>
+                <button onClick={() => setSelectType('diadia')} className={`text-xs py-2 font-bold rounded-lg transition-colors ${selectType === 'diadia' ? 'bg-[#2d2d2d] text-purple-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>Retirar</button>
+              </div>
+
+              {selectType === 'propio' && (
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1.5">Coste de la compra</label>
+                    <input type="number" placeholder="Ej: 50" value={inputAmount1} onChange={(e) => setInputAmount1(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3.5 text-base text-white outline-none focus:border-purple-500 transition-colors" />
+                  </div>
+                  <button onClick={() => handleProyecto('comprar')} className="w-full bg-purple-600 hover:bg-purple-500 text-base font-bold py-3.5 rounded-xl text-white transition-colors cursor-pointer">
+                    Invertir Capital
+                  </button>
+                </div>
+              )}
+
+              {selectType === 'ganancia' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1.5">Coste original del producto</label>
+                    <input type="number" placeholder="Ej: 50" value={inputAmount1} onChange={(e) => setInputAmount1(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-emerald-500 transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1.5">Precio de venta final</label>
+                    <input type="number" placeholder="Ej: 120" value={inputAmount2} onChange={(e) => setInputAmount2(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-emerald-500 transition-colors" />
+                  </div>
+                  <button onClick={() => handleProyecto('vender')} className="w-full bg-emerald-600 hover:bg-emerald-500 text-base font-bold py-3.5 rounded-xl text-white transition-colors cursor-pointer mt-2">
+                    Completar Operación
+                  </button>
+                </div>
+              )}
+
+              {selectType === 'diadia' && (
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1.5">Cantidad a retirar al Balance</label>
+                    <input type="number" placeholder="Ej: 100" value={inputAmount1} onChange={(e) => setInputAmount1(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3.5 text-base text-white outline-none focus:border-purple-500 transition-colors" />
+                  </div>
+                  <button onClick={() => handleProyecto('diadia')} className="w-full bg-purple-600 hover:bg-purple-500 text-base font-bold py-3.5 rounded-xl text-white transition-colors cursor-pointer">
+                    Pasar a Balance Global
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

@@ -4,8 +4,11 @@ import { db, auth } from '../../../../../infrastructure/firebase/config';
 
 export const usePatrimonio = () => {
   // --- ESTADOS DE LA INTERFAZ (Filtros de tu gráfica) ---
-  const [modoFiltro, setModoFiltro] = useState('anual');
-  const [yearSeleccionado, setYearSeleccionado] = useState(new Date().getFullYear().toString());
+  // CORRECCIÓN 1: Forzamos a que el tipo sea exactamente "Total" o "Año"
+  const [modoFiltro, setModoFiltro] = useState<'Total' | 'Año'>('Año');
+  
+  // CORRECCIÓN 2: Le pasamos el año como un NÚMERO, no como texto
+  const [yearSeleccionado, setYearSeleccionado] = useState<number>(new Date().getFullYear());
 
   // --- ESTADOS DE DATOS FINANCIEROS ---
   const [patrimonioTotal, setPatrimonioTotal] = useState(0);
@@ -73,10 +76,7 @@ export const usePatrimonio = () => {
   }, []);
 
   // --- VARIABLES DERIVADAS PARA LA GRÁFICA ---
-  // Mapeamos el historial en función de los filtros para que la UI no rompa
   const datosGrafica = useMemo(() => {
-    // Por ahora le pasamos el historial completo para no romper la visualización.
-    // Aquí puedes añadir tu lógica original de filtrado si la necesitas.
     return historialPatrimonio;
   }, [historialPatrimonio, modoFiltro, yearSeleccionado]);
 

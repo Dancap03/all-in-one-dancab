@@ -26,7 +26,6 @@ export const Ahorro = () => {
   const [isVaultModalOpen, setIsVaultModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  // CORRECCIÓN 3: Eliminamos 'deposit' de los tipos permitidos para que coincida con tu Modal
   const [transactionType, setTransactionType] = useState<'to_vault' | 'from_vault' | 'withdrawal'>('to_vault');
   const [vaultToEdit, setVaultToEdit] = useState<any>(null);
 
@@ -106,6 +105,12 @@ export const Ahorro = () => {
   };
 
   const enHuchas = huchas.reduce((acc, h) => acc + (Number(h.currentAmount) || Number(h.current) || 0), 0);
+
+  // NUEVO: Creamos el mapa de saldos que exige el SavingsTransactionModal
+  const vaultBalances = huchas.reduce((acc, h) => {
+    acc[h.id] = Number(h.currentAmount) || Number(h.current) || 0;
+    return acc;
+  }, {} as Record<string, number>);
 
   // --- DICCIONARIO DE COLORES ---
   const colorStyles: Record<string, { bg: string, text: string, bar: string }> = {
@@ -247,7 +252,6 @@ export const Ahorro = () => {
         )}
       </div>
 
-      {/* CORRECCIÓN 1: Pasamos las props requeridas a SavingsHistory */}
       <SavingsHistory 
         transactions={movimientos}
         vaults={huchas}
@@ -260,7 +264,6 @@ export const Ahorro = () => {
         <VaultModal 
           isOpen={isVaultModalOpen} 
           onClose={() => { setIsVaultModalOpen(false); setVaultToEdit(null); fetchData(); }} 
-          // CORRECCIÓN 2: Quitamos vaultToEdit porque el Modal original no soporta edición nativamente
         />
       )}
 
@@ -270,6 +273,8 @@ export const Ahorro = () => {
           onClose={() => { setIsTransactionModalOpen(false); fetchData(); }} 
           type={transactionType} 
           vaults={huchas} 
+          available={disponible}          {/* CORRECCIÓN: Le pasamos el saldo disponible */}
+          vaultBalances={vaultBalances}   {/* CORRECCIÓN: Le pasamos el mapa de saldos de las huchas */}
         />
       )}
 

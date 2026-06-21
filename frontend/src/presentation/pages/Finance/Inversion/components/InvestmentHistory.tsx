@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Folder, FolderOpen, ArrowUpRight } from 'lucide-react';
+import { collection, getDocs, setDoc, doc } from 'firebase/firestore';
+import { db, auth } from '../../../../../infrastructure/firebase/config';
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
@@ -9,17 +11,54 @@ const MONTH_NAMES = [
 export const InvestmentHistory = () => {
   const [movimientos, setMovimientos] = useState<any[]>([]);
   
-  // Estado para controlar las carpetas desplegables (El año actual viene abierto por defecto)
   const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({
     [new Date().getFullYear().toString()]: true 
   });
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    const savedMovements = localStorage.getItem('aio_inversion_movimientos_v2');
-    if (savedMovements) {
-      setMovimientos(JSON.parse(savedMovements));
-    }
+    const fetchHistory = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      try {
+        const todosLosMovs: any[] = [];
+        
+        // 1. Cargar desde Firebase
+        const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
+        transSnap.docs.forEach(d => {
+          todosLosMovs.push({ id: d.id, ...d.data() });
+        });
+
+        // 2. MIGRACIÓN: Rescatar del PC y subir lo que falte a la nube
+        const savedMovements = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
+        
+        for (const m of savedMovements) {
+          // Comprueba si ese movimiento ya se subió a Firebase para no duplicarlo
+          const exists = todosLosMovs.some(tx => tx.label === m.label && tx.amount === m.amount && tx.dateString.split('T')[0] === m.dateString.split('T')[0]);
+          if (!exists) {
+            const newMov = {
+              amount: m.amount,
+              label: m.label,
+              dateString: m.dateString || new Date().toISOString(),
+              createdAt: new Date()
+            };
+            todosLosMovs.push({ id: m.id || Math.random().toString(), ...newMov });
+            // Se envía a Firebase en segundo plano silenciosamente
+            setDoc(doc(collection(db, `users/${user.uid}/investment_transactions`)), newMov);
+          }
+        }
+
+        // Ordenar del más reciente al más antiguo
+        todosLosMovs.sort((a, b) => new Date(b.dateString).getTime() - new Date(a.dateString).getTime());
+        setMovimientos(todosLosMovs);
+
+      } catch (error) {
+        console.error("Error cargando historial de inversión:", error);
+      }
+    };
+
+    fetchHistory();
   }, []);
 
   const toggleYear = (year: string) => {
@@ -31,7 +70,7 @@ export const InvestmentHistory = () => {
   };
 
   // =======================================================================
-  // 📊 AGRUPACIÓN JERÁRQUICA POR BLOQUES INDEPENDIENTES
+  // 📊 AGRUPACIÓN JERÁRQUICA
   // =======================================================================
   const groupedData: Record<string, Record<string, any[]>> = {};
 
@@ -70,8 +109,6 @@ export const InvestmentHistory = () => {
 
         return (
           <div key={year} className="bg-[#141416] border border-[#2d2d2d] rounded-2xl shadow-xl overflow-hidden">
-            
-            {/* ENCABEZADO DEL BLOQUE DEL AÑO */}
             <button
               onClick={() => toggleYear(year)}
               className="w-full flex items-center justify-between p-4 bg-[#141416] hover:bg-[#1c1c1e] transition-colors text-left font-black text-sm tracking-wider text-gray-300 cursor-pointer outline-none"
@@ -86,7 +123,6 @@ export const InvestmentHistory = () => {
               </span>
             </button>
 
-            {/* SUB-BLOQUES DE MESES */}
             {isYearOpen && (
               <div className="p-4 space-y-3 bg-black/10 border-t border-[#2d2d2d]/40">
                 {sortedMonths.map(month => {
@@ -96,7 +132,6 @@ export const InvestmentHistory = () => {
 
                   return (
                     <div key={month} className="rounded-xl overflow-hidden border border-[#2d2d2d]/40 bg-[#161618]/60">
-                      
                       <button
                         onClick={() => toggleMonth(yearMonthKey)}
                         className="w-full flex items-center justify-between px-4 py-3 bg-[#1c1c1e] hover:bg-[#222224] transition-colors text-left text-xs font-bold text-gray-400 cursor-pointer outline-none"
@@ -110,7 +145,6 @@ export const InvestmentHistory = () => {
                         </span>
                       </button>
 
-                      {/* DETALLE DE TRANSACCIONES */}
                       {isMonthOpen && (
                         <div className="divide-y divide-[#2d2d2d]/30 bg-[#111112]">
                           {movements.map((mov: any, idx: number) => {
@@ -138,13 +172,11 @@ export const InvestmentHistory = () => {
                           })}
                         </div>
                       )}
-
                     </div>
                   );
                 })}
               </div>
             )}
-
           </div>
         );
       })}

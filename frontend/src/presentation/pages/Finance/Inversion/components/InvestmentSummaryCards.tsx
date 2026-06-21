@@ -17,8 +17,16 @@ interface InvestmentSummaryCardsProps {
 }
 
 export const InvestmentSummaryCards = ({
-  disponibleGlobal, totalInvertido, bolsaInvertido, proyectoInvertido,
-  onTransferirGlobal, onNavigate
+  disponibleGlobal, 
+  totalInvertido, 
+  bolsaDisponible, 
+  bolsaInvertido, 
+  bolsaGanancias, 
+  proyectoDisponible, 
+  proyectoInvertido, 
+  proyectoGanado,
+  onTransferirGlobal, 
+  onNavigate
 }: InvestmentSummaryCardsProps) => {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,10 +41,21 @@ export const InvestmentSummaryCards = ({
     setInputAmount('');
   };
 
-  // Cálculos para el Donut Chart dinámico
-  const total = bolsaInvertido + proyectoInvertido;
-  const pctBolsa = total > 0 ? (bolsaInvertido / total) * 100 : 0;
-  const pctProyectos = total > 0 ? (proyectoInvertido / total) * 100 : 0;
+  // 1. CÁLCULOS EXACTOS DE TODO EL MÓDULO DE INVERSIÓN
+  const valBolsa = (Number(bolsaInvertido) || 0) + (Number(bolsaDisponible) || 0) + (Number(bolsaGanancias) || 0);
+  const valProyecto = (Number(proyectoInvertido) || 0) + (Number(proyectoDisponible) || 0) + (Number(proyectoGanado) || 0);
+  const valDisponible = Number(disponibleGlobal) || 0;
+  
+  // La Cartera Total ahora suma TODO tu dinero en la sección
+  const carteraTotal = valBolsa + valProyecto + valDisponible;
+
+  // 2. PORCENTAJES PARA EL DONUT CHART
+  const pctDisponible = carteraTotal > 0 ? (valDisponible / carteraTotal) * 100 : 0;
+  const pctProyectos = carteraTotal > 0 ? (valProyecto / carteraTotal) * 100 : 0;
+  const pctBolsa = carteraTotal > 0 ? (valBolsa / carteraTotal) * 100 : 0;
+
+  // Formateador para el centro del donut (Ej: 6.3k o 450)
+  const formatK = (num: number) => num >= 1000 ? `${(num / 1000).toFixed(1)}k` : num.toLocaleString('es-ES', { maximumFractionDigits: 1 });
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 mb-8">
@@ -46,7 +65,7 @@ export const InvestmentSummaryCards = ({
         <div className="flex justify-between items-start mb-2">
           <div>
             <p className="text-gray-400 font-medium text-sm mb-1">Cartera total</p>
-            <h2 className="text-4xl font-black text-white tracking-tight">{totalInvertido.toLocaleString('es-ES')} €</h2>
+            <h2 className="text-4xl font-black text-white tracking-tight">{carteraTotal.toLocaleString('es-ES')} €</h2>
             <p className="text-emerald-400 text-sm font-bold mt-2">
               ↑ +0.0% · +0 € <span className="text-emerald-400/70 font-medium">desde el inicio</span>
             </p>
@@ -78,7 +97,7 @@ export const InvestmentSummaryCards = ({
             className="bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl p-3 text-left hover:border-amber-500/50 hover:bg-[#222224] transition-all cursor-pointer group"
           >
             <p className="text-gray-500 font-bold text-xs mb-1 group-hover:text-amber-500 transition-colors">Bolsa</p>
-            <p className="text-amber-500 font-black text-lg truncate">{bolsaInvertido.toLocaleString('es-ES')} €</p>
+            <p className="text-amber-500 font-black text-lg truncate">{valBolsa.toLocaleString('es-ES')} €</p>
           </button>
           
           <button 
@@ -86,7 +105,7 @@ export const InvestmentSummaryCards = ({
             className="bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl p-3 text-left hover:border-teal-400/50 hover:bg-[#222224] transition-all cursor-pointer group"
           >
             <p className="text-gray-500 font-bold text-xs mb-1 group-hover:text-teal-400 transition-colors">Proyectos</p>
-            <p className="text-teal-400 font-black text-lg truncate">{proyectoInvertido.toLocaleString('es-ES')} €</p>
+            <p className="text-teal-400 font-black text-lg truncate">{valProyecto.toLocaleString('es-ES')} €</p>
           </button>
 
           <div className="bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl p-3 text-left">
@@ -101,7 +120,7 @@ export const InvestmentSummaryCards = ({
         <div>
           <p className="text-amber-500 font-bold text-sm mb-1">Saldo disponible para invertir</p>
           <div className="flex items-baseline gap-2">
-            <h3 className="text-3xl font-black text-amber-500">{disponibleGlobal.toLocaleString('es-ES')} €</h3>
+            <h3 className="text-3xl font-black text-amber-500">{valDisponible.toLocaleString('es-ES')} €</h3>
           </div>
           <p className="text-gray-500 text-xs mt-1 font-medium">Enviado desde Día a día · sin asignar</p>
         </div>
@@ -119,35 +138,43 @@ export const InvestmentSummaryCards = ({
         <h3 className="text-white font-bold text-lg mb-6 tracking-tight">Distribución de cartera</h3>
         
         <div className="flex items-center gap-8">
-          {/* Donut Chart (SVG 100% nativo) */}
+          {/* Donut Chart (SVG 100% nativo y escalable) */}
           <div className="relative w-28 h-28 shrink-0">
             <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
-              {/* Fondo (Gris) */}
+              {/* Fondo (Gris base) */}
               <path
-                className="text-[#2d2d2d]"
+                className="text-[#202022]"
                 strokeWidth="6" stroke="currentColor" fill="none"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
-              {/* Proyectos (Teal) */}
+              {/* 1. Efectivo sin asignar (Gris oscuro) */}
               <path
-                className="text-teal-400 drop-shadow-md transition-all duration-1000 ease-out"
-                strokeDasharray={`${pctProyectos} ${100 - pctProyectos}`}
+                className="text-[#3d3d3d] drop-shadow-md transition-all duration-1000 ease-out"
+                strokeDasharray={`${pctDisponible} ${100 - pctDisponible}`}
                 strokeDashoffset="0"
                 strokeWidth="6" stroke="currentColor" fill="none"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
-              {/* Bolsa (Amber) - Se dibuja encima desfasado */}
+              {/* 2. Proyectos (Teal) - Se dibuja detrás del disponible */}
+              <path
+                className="text-teal-400 drop-shadow-md transition-all duration-1000 ease-out"
+                strokeDasharray={`${pctProyectos} ${100 - pctProyectos}`}
+                strokeDashoffset={-pctDisponible}
+                strokeWidth="6" stroke="currentColor" fill="none"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+              {/* 3. Bolsa (Amber) - Se dibuja detrás de los proyectos */}
               <path
                 className="text-amber-500 drop-shadow-md transition-all duration-1000 ease-out"
                 strokeDasharray={`${pctBolsa} ${100 - pctBolsa}`}
-                strokeDashoffset={-pctProyectos}
+                strokeDashoffset={-(pctDisponible + pctProyectos)}
                 strokeWidth="6" stroke="currentColor" fill="none"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">total</span>
-              <span className="text-sm font-black text-white">{(totalInvertido / 1000).toFixed(1)}k</span>
+              <span className="text-sm font-black text-white">{formatK(carteraTotal)}</span>
             </div>
           </div>
 
@@ -158,14 +185,21 @@ export const InvestmentSummaryCards = ({
                 <div className="w-3 h-3 rounded-sm bg-amber-500"></div>
                 <span className="text-sm text-gray-400 font-medium">Bolsa</span>
               </div>
-              <span className="text-sm font-bold text-white">{bolsaInvertido.toLocaleString('es-ES')} €</span>
+              <span className="text-sm font-bold text-white">{valBolsa.toLocaleString('es-ES')} €</span>
             </div>
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-sm bg-teal-400"></div>
                 <span className="text-sm text-gray-400 font-medium">Proyectos</span>
               </div>
-              <span className="text-sm font-bold text-white">{proyectoInvertido.toLocaleString('es-ES')} €</span>
+              <span className="text-sm font-bold text-white">{valProyecto.toLocaleString('es-ES')} €</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm bg-[#3d3d3d]"></div>
+                <span className="text-sm text-gray-400 font-medium">Sin asignar</span>
+              </div>
+              <span className="text-sm font-bold text-white">{valDisponible.toLocaleString('es-ES')} €</span>
             </div>
           </div>
         </div>
@@ -186,7 +220,7 @@ export const InvestmentSummaryCards = ({
             <div className="p-5 space-y-5">
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center">
                 <p className="text-xs text-amber-500/70 font-bold uppercase mb-1">Disponible actual</p>
-                <p className="text-2xl font-black text-amber-500">{disponibleGlobal.toLocaleString('es-ES')} €</p>
+                <p className="text-2xl font-black text-amber-500">{valDisponible.toLocaleString('es-ES')} €</p>
               </div>
 
               <div>

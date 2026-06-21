@@ -224,7 +224,7 @@ export const InvestmentSummaryCards = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5">Cantidad a mover</label>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Cantidad a retirar</label>
                 <input 
                   type="number" 
                   placeholder="Ej: 500" 
@@ -233,20 +233,10 @@ export const InvestmentSummaryCards = ({
                   className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3.5 text-base text-white outline-none focus:border-amber-500 transition-colors" 
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">¿A dónde quieres enviar el dinero?</label>
-                <div className="grid grid-cols-1 gap-2">
-                  <button onClick={() => handleGlobal('bolsa')} className="w-full bg-[#1c1c1e] hover:bg-amber-500/10 text-white hover:text-amber-500 border border-[#2d2d2d] hover:border-amber-500/30 text-sm font-bold py-3.5 rounded-xl transition-colors cursor-pointer text-left px-4 flex justify-between items-center">
-                    <span>A Bolsa</span> <ChevronRight size={16} />
-                  </button>
-                  <button onClick={() => handleGlobal('proyecto')} className="w-full bg-[#1c1c1e] hover:bg-teal-500/10 text-white hover:text-teal-400 border border-[#2d2d2d] hover:border-teal-500/30 text-sm font-bold py-3.5 rounded-xl transition-colors cursor-pointer text-left px-4 flex justify-between items-center">
-                    <span>A Proyectos</span> <ChevronRight size={16} />
-                  </button>
-                  <button onClick={() => handleGlobal('diadia')} className="w-full bg-[#1c1c1e] hover:bg-emerald-500/10 text-white hover:text-emerald-400 border border-[#2d2d2d] hover:border-emerald-500/30 text-sm font-bold py-3.5 rounded-xl transition-colors cursor-pointer text-left px-4 flex justify-between items-center">
-                    <span><ArrowLeft size={14} className="inline mr-1"/> Devolver a Día a Día</span>
-                  </button>
-                </div>
-              </div>
+              
+              <button onClick={() => handleGlobal('diadia')} className="w-full bg-amber-600 hover:bg-amber-500 text-white text-base font-bold py-3.5 rounded-xl transition-colors cursor-pointer flex justify-center items-center">
+                <ArrowLeft size={18} className="mr-2" /> Devolver a Día a Día
+              </button>
             </div>
           </div>
         </div>

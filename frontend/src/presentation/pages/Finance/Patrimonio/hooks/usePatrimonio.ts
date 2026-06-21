@@ -3,11 +3,8 @@ import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../../../../infrastructure/firebase/config';
 
 export const usePatrimonio = () => {
-  // --- ESTADOS DE LA INTERFAZ (Filtros de tu gráfica) ---
-  // CORRECCIÓN 1: Forzamos a que el tipo sea exactamente "Total" o "Año"
+  // --- ESTADOS DE LA INTERFAZ ---
   const [modoFiltro, setModoFiltro] = useState<'Total' | 'Año'>('Año');
-  
-  // CORRECCIÓN 2: Le pasamos el año como un NÚMERO, no como texto
   const [yearSeleccionado, setYearSeleccionado] = useState<number>(new Date().getFullYear());
 
   // --- ESTADOS DE DATOS FINANCIEROS ---
@@ -28,21 +25,45 @@ export const usePatrimonio = () => {
       }
 
       try {
-        // 1. OBTENER INVERSIÓN Y LÍQUIDEZ (DÍA A DÍA) DESDE FIREBASE
+        // 1. OBTENER INVERSIÓN (Suma TODO el módulo de inversión)
         let invTotal = 0;
-        let diaTotal = 0;
         const invRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
         const invSnap = await getDoc(invRef);
 
         if (invSnap.exists()) {
           const data = invSnap.data();
-          // Inversión = Bolsa Invertida + Proyecto Invertido
-          invTotal = (Number(data.bolsaInvertido) || 0) + (Number(data.proyectoInvertido) || 0);
-          // Liquidez = Disponible Global (Día a Día)
-          diaTotal = Number(data.disponibleGlobal) || 0;
+          invTotal = (Number(data.bolsaInvertido) || 0) + 
+                     (Number(data.bolsaDisponible) || 0) + 
+                     (Number(data.bolsaGanancias) || 0) + 
+                     (Number(data.proyectoInvertido) || 0) + 
+                     (Number(data.proyectoDisponible) || 0) + 
+                     (Number(data.proyectoGanado) || 0) + 
+                     (Number(data.disponibleGlobal) || 0); // Aquí están tus 20,78 € reales
         }
 
-        // 2. OBTENER AHORRO DESDE FIREBASE
+        // 2. OBTENER DÍA A DÍA (Líquidez Real de tu cuenta)
+        let diaTotal = 0;
+        const txSnap = await getDocs(collection(db, `users/${user.uid}/transactions`));
+        if (!txSnap.empty) {
+          txSnap.docs.forEach(d => {
+            const t = d.data();
+            const amt = Number(t.amount) || 0;
+            if (t.type === 'income') diaTotal += amt;
+            if (t.type === 'expense') diaTotal -= amt;
+          });
+        } else {
+          // Si la BD en la nube aún no tiene el Día a Día, rescatamos la memoria del PC
+          const localKeys = ['aio_balance', 'aio_balance_v2', 'aio_diadia_balance', 'aio_finance_balance', 'aio_total_diadia'];
+          for (const key of localKeys) {
+            const val = Number(localStorage.getItem(key));
+            if (val) {
+              diaTotal = val;
+              break;
+            }
+          }
+        }
+
+        // 3. OBTENER AHORRO DESDE FIREBASE
         let ahTotal = 0;
         const savTransSnap = await getDocs(collection(db, `users/${user.uid}/savings_transactions`));
         savTransSnap.docs.forEach(d => {
@@ -52,16 +73,16 @@ export const usePatrimonio = () => {
           if (t.type === 'withdrawal') ahTotal -= amt;
         });
 
-        // 3. ASIGNAR VALORES A LAS VARIABLES EXACTAS QUE PIDE TU COMPONENTE
+        // 4. ACTUALIZAR LAS TARJETAS (Cada oveja con su pareja)
         setInversion(invTotal);
         setLiquidez(diaTotal);
         setAhorro(ahTotal);
         
-        // El Patrimonio Total es la suma de los 3 pilares
+        // El Patrimonio Total es la suma exacta de los 3 pilares
         const total = invTotal + diaTotal + ahTotal;
         setPatrimonioTotal(total);
 
-        // 4. HISTORIAL DE LA GRÁFICA
+        // 5. HISTORIAL DE LA GRÁFICA
         const historialLocal = JSON.parse(localStorage.getItem('aio_historial_patrimonio') || '[]');
         setHistorialPatrimonio(historialLocal);
 

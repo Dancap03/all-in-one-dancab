@@ -1,12 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../../../../infrastructure/firebase/config';
 
 export const usePatrimonio = () => {
+  // --- ESTADOS DE LA INTERFAZ (Filtros de tu gráfica) ---
+  const [modoFiltro, setModoFiltro] = useState('anual');
+  const [yearSeleccionado, setYearSeleccionado] = useState(new Date().getFullYear().toString());
+
+  // --- ESTADOS DE DATOS FINANCIEROS ---
   const [patrimonioTotal, setPatrimonioTotal] = useState(0);
-  const [ahorroTotal, setAhorroTotal] = useState(0);
-  const [inversionTotal, setInversionTotal] = useState(0);
-  const [diaADiaTotal, setDiaADiaTotal] = useState(0);
+  const [liquidez, setLiquidez] = useState(0);
+  const [ahorro, setAhorro] = useState(0);
+  const [inversion, setInversion] = useState(0);
+  
   const [historialPatrimonio, setHistorialPatrimonio] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,7 +25,7 @@ export const usePatrimonio = () => {
       }
 
       try {
-        // 1. OBTENER INVERSIÓN Y DÍA A DÍA (Desde la nube de Firebase)
+        // 1. OBTENER INVERSIÓN Y LÍQUIDEZ (DÍA A DÍA) DESDE FIREBASE
         let invTotal = 0;
         let diaTotal = 0;
         const invRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
@@ -27,33 +33,32 @@ export const usePatrimonio = () => {
 
         if (invSnap.exists()) {
           const data = invSnap.data();
-          // Sumamos lo invertido en Bolsa y en Proyectos
+          // Inversión = Bolsa Invertida + Proyecto Invertido
           invTotal = (Number(data.bolsaInvertido) || 0) + (Number(data.proyectoInvertido) || 0);
-          // El "disponibleGlobal" de la nube es tu dinero de Día a Día
+          // Liquidez = Disponible Global (Día a Día)
           diaTotal = Number(data.disponibleGlobal) || 0;
         }
 
-        // 2. OBTENER AHORRO (Desde la nube de Firebase)
+        // 2. OBTENER AHORRO DESDE FIREBASE
         let ahTotal = 0;
         const savTransSnap = await getDocs(collection(db, `users/${user.uid}/savings_transactions`));
         savTransSnap.docs.forEach(d => {
           const t = d.data();
           const amt = Number(t.amount) || 0;
-          // Sumamos ingresos y restamos retiros para calcular el ahorro exacto
           if (t.type === 'deposit') ahTotal += amt;
           if (t.type === 'withdrawal') ahTotal -= amt;
         });
 
-        // 3. ACTUALIZAR TODOS LOS ESTADOS
-        setInversionTotal(invTotal);
-        setDiaADiaTotal(diaTotal);
-        setAhorroTotal(ahTotal);
+        // 3. ASIGNAR VALORES A LAS VARIABLES EXACTAS QUE PIDE TU COMPONENTE
+        setInversion(invTotal);
+        setLiquidez(diaTotal);
+        setAhorro(ahTotal);
         
         // El Patrimonio Total es la suma de los 3 pilares
         const total = invTotal + diaTotal + ahTotal;
         setPatrimonioTotal(total);
 
-        // 4. HISTORIAL DE GRÁFICA (Rescatamos lo local para que no se rompa la gráfica)
+        // 4. HISTORIAL DE LA GRÁFICA
         const historialLocal = JSON.parse(localStorage.getItem('aio_historial_patrimonio') || '[]');
         setHistorialPatrimonio(historialLocal);
 
@@ -67,11 +72,27 @@ export const usePatrimonio = () => {
     cargarDatos();
   }, []);
 
+  // --- VARIABLES DERIVADAS PARA LA GRÁFICA ---
+  // Mapeamos el historial en función de los filtros para que la UI no rompa
+  const datosGrafica = useMemo(() => {
+    // Por ahora le pasamos el historial completo para no romper la visualización.
+    // Aquí puedes añadir tu lógica original de filtrado si la necesitas.
+    return historialPatrimonio;
+  }, [historialPatrimonio, modoFiltro, yearSeleccionado]);
+
+  const totalMovimientos = historialPatrimonio.length;
+
   return {
     patrimonioTotal,
-    ahorroTotal,
-    inversionTotal,
-    diaADiaTotal,
+    liquidez,
+    ahorro,
+    inversion,
+    modoFiltro,
+    setModoFiltro,
+    yearSeleccionado,
+    setYearSeleccionado,
+    datosGrafica,
+    totalMovimientos,
     historialPatrimonio,
     loading
   };

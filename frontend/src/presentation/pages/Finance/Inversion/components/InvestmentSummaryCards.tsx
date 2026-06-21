@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowRightLeft, X } from 'lucide-react';
+import { ArrowLeft, ArrowRightLeft, X, ChevronRight } from 'lucide-react';
 
 interface InvestmentSummaryCardsProps {
   disponibleGlobal: number;
@@ -47,7 +47,6 @@ export const InvestmentSummaryCards = ({
           <div>
             <p className="text-gray-400 font-medium text-sm mb-1">Cartera total</p>
             <h2 className="text-4xl font-black text-white tracking-tight">{totalInvertido.toLocaleString('es-ES')} €</h2>
-            {/* Como aún no tenemos base de datos histórica de rentabilidad, pongo un placeholder estético o se puede dejar calculable a futuro */}
             <p className="text-emerald-400 text-sm font-bold mt-2">
               ↑ +0.0% · +0 € <span className="text-emerald-400/70 font-medium">desde el inicio</span>
             </p>

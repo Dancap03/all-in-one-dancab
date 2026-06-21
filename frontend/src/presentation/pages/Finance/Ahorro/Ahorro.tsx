@@ -106,7 +106,6 @@ export const Ahorro = () => {
 
   const enHuchas = huchas.reduce((acc, h) => acc + (Number(h.currentAmount) || Number(h.current) || 0), 0);
 
-  // NUEVO: Creamos el mapa de saldos que exige el SavingsTransactionModal
   const vaultBalances = huchas.reduce((acc, h) => {
     acc[h.id] = Number(h.currentAmount) || Number(h.current) || 0;
     return acc;
@@ -273,8 +272,8 @@ export const Ahorro = () => {
           onClose={() => { setIsTransactionModalOpen(false); fetchData(); }} 
           type={transactionType} 
           vaults={huchas} 
-          available={disponible}          {/* CORRECCIÓN: Le pasamos el saldo disponible */}
-          vaultBalances={vaultBalances}   {/* CORRECCIÓN: Le pasamos el mapa de saldos de las huchas */}
+          available={disponible}
+          vaultBalances={vaultBalances}
         />
       )}
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Globe, BarChart3, Briefcase, ArrowRightLeft, Plus } from 'lucide-react';
+import { Globe, BarChart3, Briefcase, ArrowRightLeft, Plus, ChevronRight, X } from 'lucide-react';
 
 interface InvestmentSummaryCardsProps {
   disponibleGlobal: number;
@@ -57,147 +57,117 @@ export const InvestmentSummaryCards = ({
     cerrarModal();
   };
 
-  const cerrarModal = () => { setActiveModal(null); setInputAmount1(''); setInputAmount2(''); setSelectType('propio'); };
+  const cerrarModal = () => { 
+    setActiveModal(null); 
+    setInputAmount1(''); 
+    setInputAmount2(''); 
+    setSelectType('propio'); 
+  };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[175px]">
-        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500 to-teal-500"></div>
-        <div>
-          <div onClick={() => onNavigate('global')} className="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-3 cursor-pointer hover:text-white transition-colors">
-            <Globe size={13} /> Balance Global
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+      
+      {/* ======================= TARJETA GLOBAL ======================= */}
+      <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl overflow-hidden flex flex-col shadow-sm group transition-all hover:border-[#3d3d3d]">
+        <button onClick={() => onNavigate('global')} className="p-5 text-left w-full hover:bg-[#1a1a1c] transition-colors cursor-pointer flex-1 outline-none">
+          <div className="flex justify-between items-center mb-5">
+            <div className="flex items-center gap-3 text-emerald-400">
+              <div className="p-2 bg-emerald-500/10 rounded-lg"><Globe size={20} /></div>
+              <h3 className="font-bold text-white tracking-tight text-lg">Balance Global</h3>
+            </div>
+            <ChevronRight size={18} className="text-gray-500 group-hover:text-white transition-colors" />
           </div>
+          
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#1b1b1d] border border-[#262628] p-3 rounded-xl">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Disponible</span>
-              <span className="text-base font-black text-white">{disponibleGlobal.toLocaleString('es-ES')} €</span>
+            <div className="bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl p-3.5">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Disponible</p>
+              <p className="text-xl font-black text-white truncate">{disponibleGlobal.toLocaleString('es-ES')} €</p>
             </div>
-            <div className="bg-[#1b1b1d] border border-[#262628] p-3 rounded-xl">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Total Invertido</span>
-              <span className="text-base font-black text-gray-400">{totalInvertido.toLocaleString('es-ES')} €</span>
+            <div className="bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl p-3.5">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Invertido</p>
+              <p className="text-xl font-black text-gray-400 truncate">{totalInvertido.toLocaleString('es-ES')} €</p>
             </div>
           </div>
-        </div>
-        <button onClick={() => setActiveModal('global')} className="w-full mt-3 flex items-center justify-center gap-2 bg-[#1b1b1d] hover:bg-[#222224] border border-[#2d2d2d] text-xs font-black uppercase py-2.5 rounded-xl transition-all cursor-pointer text-emerald-400">
-          <ArrowRightLeft size={13} /> Enviar Capital
         </button>
+
+        <div className="p-4 border-t border-[#2d2d2d] bg-[#161618]">
+          <button onClick={() => setActiveModal('global')} className="w-full flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 py-3.5 rounded-xl text-sm font-bold transition-colors cursor-pointer outline-none">
+            <ArrowRightLeft size={16} /> Enviar Capital
+          </button>
+        </div>
       </div>
 
-      <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[175px]">
-        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-blue-500 to-indigo-500"></div>
-        <div>
-          <div onClick={() => onNavigate('bolsa')} className="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center justify-between mb-3 cursor-pointer hover:text-white transition-colors">
-            <span className="flex items-center gap-1.5"><BarChart3 size={13} /> Inversión en Bolsa</span>
-            <span className="text-[10px] text-blue-500/80 font-black">+{bolsaGanancias.toLocaleString('es-ES')} € Premios</span>
+      {/* ======================= TARJETA BOLSA ======================= */}
+      <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl overflow-hidden flex flex-col shadow-sm group transition-all hover:border-[#3d3d3d]">
+        <button onClick={() => onNavigate('bolsa')} className="p-5 text-left w-full hover:bg-[#1a1a1c] transition-colors cursor-pointer flex-1 outline-none">
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center gap-3 text-blue-400">
+              <div className="p-2 bg-blue-500/10 rounded-lg"><BarChart3 size={20} /></div>
+              <h3 className="font-bold text-white tracking-tight text-lg">Bolsa</h3>
+            </div>
+            <ChevronRight size={18} className="text-gray-500 group-hover:text-white transition-colors" />
           </div>
+          
+          <div className="mb-4 inline-block bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-md text-[11px] font-black tracking-widest uppercase">
+            +{bolsaGanancias.toLocaleString('es-ES')} € Premios
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#1b1b1d] border border-[#262628] p-3 rounded-xl">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Disponible</span>
-              <span className="text-base font-black text-white">{bolsaDisponible.toLocaleString('es-ES')} €</span>
+            <div className="bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl p-3.5">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Disponible</p>
+              <p className="text-xl font-black text-white truncate">{bolsaDisponible.toLocaleString('es-ES')} €</p>
             </div>
-            <div className="bg-[#1b1b1d] border border-[#262628] p-3 rounded-xl">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Invertido Propio</span>
-              <span className="text-base font-black text-gray-400">{bolsaInvertido.toLocaleString('es-ES')} €</span>
+            <div className="bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl p-3.5">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Propio</p>
+              <p className="text-xl font-black text-gray-400 truncate">{bolsaInvertido.toLocaleString('es-ES')} €</p>
             </div>
           </div>
-        </div>
-        <button onClick={() => setActiveModal('bolsa')} className="w-full mt-3 flex items-center justify-center gap-2 bg-[#1b1b1d] hover:bg-[#222224] border border-[#2d2d2d] text-xs font-black uppercase py-2.5 rounded-xl transition-all cursor-pointer text-blue-400">
-          <Plus size={13} /> Gestionar Bolsa
         </button>
+
+        <div className="p-4 border-t border-[#2d2d2d] bg-[#161618]">
+          <button onClick={() => setActiveModal('bolsa')} className="w-full flex items-center justify-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 py-3.5 rounded-xl text-sm font-bold transition-colors cursor-pointer outline-none">
+            <Plus size={16} /> Gestionar Bolsa
+          </button>
+        </div>
       </div>
 
-      <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[175px]">
-        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-purple-500 to-pink-500"></div>
-        <div>
-          <div onClick={() => onNavigate('proyecto')} className="text-xs font-black text-purple-400 uppercase tracking-widest flex items-center justify-between mb-3 cursor-pointer hover:text-white transition-colors">
-            <span className="flex items-center gap-1.5"><Briefcase size={13} /> Proyectos Propios</span>
-            <span className="text-[10px] text-emerald-400 font-black">+{proyectoGanado.toLocaleString('es-ES')} € Ganado</span>
+      {/* ======================= TARJETA PROYECTOS ======================= */}
+      <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl overflow-hidden flex flex-col shadow-sm group transition-all hover:border-[#3d3d3d]">
+        <button onClick={() => onNavigate('proyecto')} className="p-5 text-left w-full hover:bg-[#1a1a1c] transition-colors cursor-pointer flex-1 outline-none">
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center gap-3 text-purple-400">
+              <div className="p-2 bg-purple-500/10 rounded-lg"><Briefcase size={20} /></div>
+              <h3 className="font-bold text-white tracking-tight text-lg">Proyectos</h3>
+            </div>
+            <ChevronRight size={18} className="text-gray-500 group-hover:text-white transition-colors" />
           </div>
+          
+          <div className="mb-4 inline-block bg-purple-500/10 text-purple-400 px-3 py-1.5 rounded-md text-[11px] font-black tracking-widest uppercase">
+            +{proyectoGanado.toLocaleString('es-ES')} € Ganado
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#1b1b1d] border border-[#262628] p-3 rounded-xl">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Disponible</span>
-              <span className="text-base font-black text-white">{proyectoDisponible.toLocaleString('es-ES')} €</span>
+            <div className="bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl p-3.5">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Disponible</p>
+              <p className="text-xl font-black text-white truncate">{proyectoDisponible.toLocaleString('es-ES')} €</p>
             </div>
-            <div className="bg-[#1b1b1d] border border-[#262628] p-3 rounded-xl">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">Invertido Activo</span>
-              <span className="text-base font-black text-gray-400">{proyectoInvertido.toLocaleString('es-ES')} €</span>
+            <div className="bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl p-3.5">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Activo</p>
+              <p className="text-xl font-black text-gray-400 truncate">{proyectoInvertido.toLocaleString('es-ES')} €</p>
             </div>
           </div>
-        </div>
-        <button onClick={() => setActiveModal('proyecto')} className="w-full mt-3 flex items-center justify-center gap-2 bg-[#1b1b1d] hover:bg-[#222224] border border-[#2d2d2d] text-xs font-black uppercase py-2.5 rounded-xl transition-all cursor-pointer text-purple-400">
-          <Plus size={13} /> Registrar Movimiento
         </button>
+
+        <div className="p-4 border-t border-[#2d2d2d] bg-[#161618]">
+          <button onClick={() => setActiveModal('proyecto')} className="w-full flex items-center justify-center gap-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 py-3.5 rounded-xl text-sm font-bold transition-colors cursor-pointer outline-none">
+            <Plus size={16} /> Registro Comercial
+          </button>
+        </div>
       </div>
 
+      {/* ================================================================
+          MODALES ADAPTADOS A MÓVIL Y ESCRITORIO
+      ================================================================ */}
+      
       {activeModal === 'global' && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl w-full max-w-xs p-5 shadow-2xl relative">
-            <h3 className="text-xs font-black uppercase text-gray-400 mb-4">Distribuir Capital Propio</h3>
-            <div className="space-y-3">
-              <input type="number" placeholder="Cantidad en €" value={inputAmount1} onChange={(e) => setInputAmount1(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white outline-none" />
-              <div className="grid grid-cols-3 gap-1">
-                <button onClick={() => handleGlobal('bolsa')} className="bg-blue-600 hover:bg-blue-700 text-[10px] font-bold py-2 rounded text-white cursor-pointer">A Bolsa</button>
-                <button onClick={() => handleGlobal('proyecto')} className="bg-purple-600 hover:bg-purple-700 text-[10px] font-bold py-2 rounded text-white cursor-pointer">A Proy</button>
-                <button onClick={() => handleGlobal('diadia')} className="bg-emerald-600 hover:bg-emerald-700 text-[10px] font-bold py-2 rounded text-white cursor-pointer">A Día Día</button>
-              </div>
-              <button onClick={cerrarModal} className="w-full text-center text-[11px] text-gray-500 hover:text-white pt-1">Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeModal === 'bolsa' && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl w-full max-w-xs p-5 shadow-2xl relative">
-            <h3 className="text-xs font-black uppercase text-gray-400 mb-4">Gestionar Capital de Bolsa</h3>
-            <div className="space-y-3">
-              <select value={selectType} onChange={(e) => setSelectType(e.target.value as any)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-2 py-2 text-xs text-white outline-none">
-                <option value="propio">Invertir desde mi Disponible</option>
-                <option value="ganancia">Cobrar Dividendos / Premios</option>
-                <option value="diadia">Pasar Disponible a Día a Día</option>
-              </select>
-              <input type="number" placeholder="Importe en €" value={inputAmount1} onChange={(e) => setInputAmount1(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white outline-none" />
-              <button onClick={handleBolsa} className="w-full bg-blue-600 hover:bg-blue-700 text-xs font-bold py-2 text-white cursor-pointer">Ejecutar Orden</button>
-              <button onClick={cerrarModal} className="w-full text-center text-[11px] text-gray-500 hover:text-white pt-1">Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeModal === 'proyecto' && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#151515] border border-[#2d2d2d] rounded-xl w-full max-w-xs p-5 shadow-2xl relative">
-            <h3 className="text-xs font-black uppercase text-gray-400 mb-4">Registro Comercial</h3>
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-1 bg-[#1a1a1a] p-1 rounded-lg border border-[#2d2d2d]">
-                <button onClick={() => setSelectType('propio')} className={`text-[9px] py-1 font-bold rounded ${selectType === 'propio' ? 'bg-[#2d2d2d] text-white' : 'text-gray-500'}`}>Comprar</button>
-                <button onClick={() => setSelectType('ganancia')} className={`text-[9px] py-1 font-bold rounded ${selectType === 'ganancia' ? 'bg-[#2d2d2d] text-[#10b981]' : 'text-gray-500'}`}>Vender</button>
-                <button onClick={() => setSelectType('diadia')} className={`text-[9px] py-1 font-bold rounded ${selectType === 'diadia' ? 'bg-[#2d2d2d] text-purple-400' : 'text-gray-500'}`}>Al Día Día</button>
-              </div>
-              {selectType === 'propio' && (
-                <>
-                  <input type="number" placeholder="Coste de compra (€)" value={inputAmount1} onChange={(e) => setInputAmount1(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-3 py-2 text-sm text-white outline-none" />
-                  <button onClick={() => handleProyecto('comprar')} className="w-full bg-purple-600 hover:bg-purple-700 text-xs font-bold py-2 text-white cursor-pointer">Invertir Capital</button>
-                </>
-              )}
-              {selectType === 'ganancia' && (
-                <>
-                  <input type="number" placeholder="Coste original (€)" value={inputAmount1} onChange={(e) => setInputAmount1(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none" />
-                  <input type="number" placeholder="Precio de venta (€)" value={inputAmount2} onChange={(e) => setInputAmount2(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none" />
-                  <button onClick={() => handleProyecto('vender')} className="w-full bg-emerald-600 hover:bg-emerald-700 text-xs font-bold py-2 text-white cursor-pointer">Completar Operación</button>
-                </>
-              )}
-              {selectType === 'diadia' && (
-                <>
-                  <input type="number" placeholder="Cantidad a retirar (€)" value={inputAmount1} onChange={(e) => setInputAmount1(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#2d2d2d] rounded-lg px-3 py-2 text-xs text-white outline-none" />
-                  <button onClick={() => handleProyecto('diadia')} className="w-full bg-purple-600 hover:bg-purple-700 text-xs font-bold py-2 text-white cursor-pointer">Pasar a Día a Día</button>
-                </>
-              )}
-              <button onClick={cerrarModal} className="w-full text-center text-[11px] text-gray-500 hover:text-white pt-1">Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-

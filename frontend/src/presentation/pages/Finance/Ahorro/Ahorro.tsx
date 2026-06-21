@@ -7,7 +7,10 @@ import {
   MoreVertical, Pencil, Trash2, PiggyBank 
 } from 'lucide-react';
 
-// --- IMPORTAMOS TUS COMPONENTES REALES ---
+// Importamos el mapa de iconos que acabas de crear
+import { iconMap } from './components/IconPicker';
+
+// Componentes Reales
 import { VaultModal } from './components/modals/VaultModal';
 import { SavingsTransactionModal } from './components/modals/SavingsTransactionModal';
 import { ConfirmDeleteModal } from './components/modals/ConfirmDeleteModal';
@@ -16,20 +19,19 @@ import { SavingsHistory } from './components/SavingsHistory';
 export const Ahorro = () => {
   const navigate = useNavigate();
 
-  // --- ESTADOS DE DATOS ---
+  // Estados
   const [disponible, setDisponible] = useState(0);
   const [huchas, setHuchas] = useState<any[]>([]);
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --- ESTADOS DE TUS MODALES ---
+  // Modales
   const [isVaultModalOpen, setIsVaultModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [transactionType, setTransactionType] = useState<'to_vault' | 'from_vault' | 'withdrawal'>('to_vault');
   const [vaultToEdit, setVaultToEdit] = useState<any>(null);
 
-  // --- ESTADO DEL DROPDOWN DE 3 PUNTITOS ---
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -43,38 +45,47 @@ export const Ahorro = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // --- CARGA DE DATOS REAL DE FIREBASE ---
   const fetchData = async () => {
     const user = auth.currentUser;
     if (!user) return;
 
     try {
-      // Saldo disponible
-      const saldoDisp = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
-      setDisponible(saldoDisp);
-
-      // Huchas reales
-      const vaultsSnap = await getDocs(collection(db, `users/${user.uid}/vaults`));
-      const vaultsData = vaultsSnap.docs.map(d => ({
-        id: d.id,
-        ...d.data()
-      }));
-      setHuchas(vaultsData);
-
-      // Historial para pasárselo a tu SavingsHistory
+      // 1. Cargar Historial y Calcular Total Ahorrado
+      let totalAhorro = 0;
       const todosLosMovs: any[] = [];
       const savTransSnap = await getDocs(collection(db, `users/${user.uid}/savings_transactions`));
+      
       savTransSnap.docs.forEach(d => {
         const t = d.data();
+        const amt = Number(t.amount) || 0;
+        
+        // Sumamos y restamos para saber el AHORRO TOTAL REAL
+        if (t.type === 'deposit') totalAhorro += amt;
+        if (t.type === 'withdrawal') totalAhorro -= amt;
+
         todosLosMovs.push({
           id: d.id,
           ...t,
-          amount: Number(t.amount) || 0,
+          amount: amt,
           dateString: t.date?.seconds ? new Date(t.date.seconds * 1000).toISOString() : new Date().toISOString()
         });
       });
       todosLosMovs.sort((a, b) => new Date(b.dateString).getTime() - new Date(a.dateString).getTime());
       setMovimientos(todosLosMovs);
+
+      // 2. Cargar Huchas
+      let enHuchasCalc = 0;
+      const vaultsSnap = await getDocs(collection(db, `users/${user.uid}/vaults`));
+      const vaultsData = vaultsSnap.docs.map(d => {
+        const vData = d.data();
+        enHuchasCalc += Number(vData.currentAmount) || 0;
+        return { id: d.id, ...vData };
+      });
+      setHuchas(vaultsData);
+
+      // 3. CALCULAR DISPONIBLE REAL (Ahorro Total - Lo que está atrapado en huchas)
+      const disp = totalAhorro - enHuchasCalc;
+      setDisponible(disp > 0 ? disp : 0);
 
     } catch (error) {
       console.error("Error cargando ahorro:", error);
@@ -87,7 +98,6 @@ export const Ahorro = () => {
     fetchData();
   }, []);
 
-  // --- FUNCIÓN PARA ELIMINAR HUCHA ---
   const handleDeleteVault = async () => {
     if (!vaultToEdit) return;
     try {
@@ -104,19 +114,19 @@ export const Ahorro = () => {
     }
   };
 
-  const enHuchas = huchas.reduce((acc, h) => acc + (Number(h.currentAmount) || Number(h.current) || 0), 0);
+  const enHuchas = huchas.reduce((acc, h) => acc + (Number(h.currentAmount) || 0), 0);
 
   const vaultBalances = huchas.reduce((acc, h) => {
-    acc[h.id] = Number(h.currentAmount) || Number(h.current) || 0;
+    acc[h.id] = Number(h.currentAmount) || 0;
     return acc;
   }, {} as Record<string, number>);
 
-  // --- DICCIONARIO DE COLORES ---
   const colorStyles: Record<string, { bg: string, text: string, bar: string }> = {
     emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', bar: 'bg-emerald-500' },
     rose: { bg: 'bg-rose-500/10', text: 'text-rose-400', bar: 'bg-rose-400' },
     amber: { bg: 'bg-amber-500/10', text: 'text-amber-400', bar: 'bg-amber-400' },
     blue: { bg: 'bg-blue-500/10', text: 'text-blue-400', bar: 'bg-blue-500' },
+    purple: { bg: 'bg-purple-500/10', text: 'text-purple-400', bar: 'bg-purple-500' },
   };
 
   if (loading) return <div className="min-h-screen bg-[#0c0c0c] flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div></div>;
@@ -147,29 +157,17 @@ export const Ahorro = () => {
       {/* BOTONERA */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-10">
         <div className="flex flex-wrap items-center gap-3">
-          <button 
-            onClick={() => { setTransactionType('to_vault'); setIsTransactionModalOpen(true); }} 
-            className="flex items-center gap-2 px-4 py-2 border border-emerald-500 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/10 transition-colors cursor-pointer"
-          >
+          <button onClick={() => { setTransactionType('to_vault'); setIsTransactionModalOpen(true); }} className="flex items-center gap-2 px-4 py-2 border border-emerald-500 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/10 transition-colors cursor-pointer">
             <ArrowDown size={16} /> Mover a hucha
           </button>
-          <button 
-            onClick={() => { setTransactionType('from_vault'); setIsTransactionModalOpen(true); }} 
-            className="flex items-center gap-2 px-4 py-2 border border-[#3d3d3d] text-gray-300 rounded-lg text-sm font-medium hover:bg-[#1a1a1c] transition-colors cursor-pointer"
-          >
+          <button onClick={() => { setTransactionType('from_vault'); setIsTransactionModalOpen(true); }} className="flex items-center gap-2 px-4 py-2 border border-[#3d3d3d] text-gray-300 rounded-lg text-sm font-medium hover:bg-[#1a1a1c] transition-colors cursor-pointer">
             <ArrowUp size={16} /> Mover de hucha
           </button>
-          <button 
-            onClick={() => { setTransactionType('withdrawal'); setIsTransactionModalOpen(true); }} 
-            className="flex items-center gap-2 px-4 py-2 border border-[#3d3d3d] text-gray-300 rounded-lg text-sm font-medium hover:bg-[#1a1a1c] transition-colors cursor-pointer"
-          >
+          <button onClick={() => { setTransactionType('withdrawal'); setIsTransactionModalOpen(true); }} className="flex items-center gap-2 px-4 py-2 border border-[#3d3d3d] text-gray-300 rounded-lg text-sm font-medium hover:bg-[#1a1a1c] transition-colors cursor-pointer">
             <ArrowRightLeft size={16} /> Pasar a día a día
           </button>
         </div>
-        <button 
-          onClick={() => { setVaultToEdit(null); setIsVaultModalOpen(true); }} 
-          className="flex items-center gap-2 px-4 py-2 border border-[#3d3d3d] text-gray-300 rounded-lg text-sm font-medium hover:bg-[#1a1a1c] transition-colors cursor-pointer"
-        >
+        <button onClick={() => { setVaultToEdit(null); setIsVaultModalOpen(true); }} className="flex items-center gap-2 px-4 py-2 border border-[#3d3d3d] text-gray-300 rounded-lg text-sm font-medium hover:bg-[#1a1a1c] transition-colors cursor-pointer">
           <Plus size={16} /> Nueva hucha
         </button>
       </div>
@@ -177,38 +175,32 @@ export const Ahorro = () => {
       {/* LISTA DE HUCHAS REALES */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-12" ref={dropdownRef}>
         {huchas.map((hucha) => {
-          const current = Number(hucha.currentAmount) || Number(hucha.current) || 0;
-          const target = Number(hucha.targetAmount) || Number(hucha.target) || 0;
-          const title = hucha.title || hucha.name || 'Hucha';
-          const subtitle = hucha.subtitle || hucha.description || 'Fondo de ahorro';
+          const current = Number(hucha.currentAmount) || 0;
+          const target = Number(hucha.targetAmount) || 0;
+          const title = hucha.title || 'Hucha';
+          const subtitle = hucha.subtitle || 'Fondo de ahorro';
           
           const style = colorStyles[hucha.color] || colorStyles.emerald;
           const percentage = target > 0 ? Math.min(Math.round((current / target) * 100), 100) : 0;
           const remaining = target - current;
           const isDropdownOpen = dropdownOpen === hucha.id;
+          
+          // Renderiza el icono correcto según la BBDD, si no existe pone el cerdito por defecto
+          const IconComponent = iconMap[hucha.iconName as keyof typeof iconMap] || <PiggyBank size={20} />;
 
           return (
             <div key={hucha.id} className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 relative group">
               
-              <button 
-                onClick={() => setDropdownOpen(isDropdownOpen ? null : hucha.id)}
-                className="absolute top-4 right-4 p-1 text-gray-500 hover:text-white transition-colors cursor-pointer rounded-md hover:bg-[#2d2d2d]"
-              >
+              <button onClick={() => setDropdownOpen(isDropdownOpen ? null : hucha.id)} className="absolute top-4 right-4 p-1 text-gray-500 hover:text-white transition-colors cursor-pointer rounded-md hover:bg-[#2d2d2d]">
                 <MoreVertical size={18} />
               </button>
 
               {isDropdownOpen && (
                 <div className="absolute top-12 right-4 w-40 bg-[#1c1c1e] border border-[#3d3d3d] rounded-lg shadow-xl z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                  <button 
-                    onClick={() => { alert('Para editar, añade soporte en VaultModalProps'); setDropdownOpen(null); }} 
-                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-[#2d2d2d] transition-colors text-left cursor-pointer"
-                  >
+                  <button onClick={() => { setVaultToEdit(hucha); setIsVaultModalOpen(true); setDropdownOpen(null); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-[#2d2d2d] transition-colors text-left cursor-pointer">
                     <Pencil size={14} /> Editar
                   </button>
-                  <button 
-                    onClick={() => { setVaultToEdit(hucha); setIsDeleteModalOpen(true); setDropdownOpen(null); }} 
-                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left cursor-pointer border-t border-[#3d3d3d]"
-                  >
+                  <button onClick={() => { setVaultToEdit(hucha); setIsDeleteModalOpen(true); setDropdownOpen(null); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left cursor-pointer border-t border-[#3d3d3d]">
                     <Trash2 size={14} /> Eliminar
                   </button>
                 </div>
@@ -216,7 +208,7 @@ export const Ahorro = () => {
 
               <div className="flex items-start gap-4 mb-4">
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${style.bg} ${style.text}`}>
-                  <PiggyBank size={20} />
+                  {IconComponent}
                 </div>
                 <div className="pr-6">
                   <h3 className="text-lg font-bold text-white leading-tight">{title}</h3>
@@ -258,13 +250,12 @@ export const Ahorro = () => {
         onDelete={(tx) => console.log('Eliminar transaccion', tx)}
       />
 
-      {/* RENDERIZADO DE MODALES */}
-      {isVaultModalOpen && (
-        <VaultModal 
-          isOpen={isVaultModalOpen} 
-          onClose={() => { setIsVaultModalOpen(false); setVaultToEdit(null); fetchData(); }} 
-        />
-      )}
+      {/* MODALES */}
+      <VaultModal 
+        isOpen={isVaultModalOpen} 
+        onClose={() => { setIsVaultModalOpen(false); setVaultToEdit(null); fetchData(); }} 
+        vaultToEdit={vaultToEdit}
+      />
 
       {isTransactionModalOpen && (
         <SavingsTransactionModal 
@@ -277,15 +268,13 @@ export const Ahorro = () => {
         />
       )}
 
-      {isDeleteModalOpen && (
-        <ConfirmDeleteModal 
-          isOpen={isDeleteModalOpen} 
-          onClose={() => { setIsDeleteModalOpen(false); setVaultToEdit(null); }} 
-          onConfirm={handleDeleteVault} 
-          title="Eliminar hucha" 
-          message={`¿Seguro que quieres eliminar la hucha "${vaultToEdit?.title || vaultToEdit?.name}"?`} 
-        />
-      )}
+      <ConfirmDeleteModal 
+        isOpen={isDeleteModalOpen} 
+        onClose={() => { setIsDeleteModalOpen(false); setVaultToEdit(null); }} 
+        onConfirm={handleDeleteVault} 
+        title="Eliminar hucha" 
+        message={`¿Seguro que quieres eliminar la hucha "${vaultToEdit?.title || vaultToEdit?.name}"?`} 
+      />
 
     </div>
   );

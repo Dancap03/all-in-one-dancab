@@ -17,7 +17,6 @@ export const Ahorro = () => {
   const navigate = useNavigate();
 
   // Estados
-  const [disponible, setDisponible] = useState(0);
   const [huchas, setHuchas] = useState<any[]>([]);
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +31,7 @@ export const Ahorro = () => {
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Cierra menú de 3 puntos al clicar fuera
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -47,99 +47,30 @@ export const Ahorro = () => {
     if (!user) return;
 
     try {
-      // 1. CARGAR HUCHAS (Firebase + LocalStorage antiguo)
+      // 1. CARGAR HUCHAS DESDE FIREBASE
       const vaultsData: any[] = [];
-      let enHuchasCalc = 0;
-
-      // A) Desde Firebase
       const vaultsSnap = await getDocs(collection(db, `users/${user.uid}/vaults`));
       vaultsSnap.docs.forEach(d => {
-        const vData = d.data();
-        const current = Number(vData.currentAmount) || Number(vData.current) || 0;
-        enHuchasCalc += current;
-        vaultsData.push({ id: d.id, ...vData, currentAmount: current });
+        vaultsData.push({ id: d.id, ...d.data() });
       });
-
-      // B) Desde LocalStorage (Para rescatar tus huchas antiguas)
-      const localVaults = JSON.parse(localStorage.getItem('aio_ahorro_huchas') || '[]');
-      localVaults.forEach((v: any) => {
-        // Solo las añadimos si no existen ya en Firebase
-        if (!vaultsData.find(fbV => fbV.id === v.id || fbV.title === v.name || fbV.title === v.title)) {
-          const current = Number(v.currentAmount) || Number(v.current) || Number(v.amount) || 0;
-          enHuchasCalc += current;
-          vaultsData.push({
-            id: v.id || Math.random().toString(),
-            title: v.name || v.title || 'Hucha',
-            subtitle: v.description || v.subtitle || 'Fondo de ahorro',
-            currentAmount: current,
-            targetAmount: Number(v.targetAmount) || Number(v.target) || 0,
-            color: v.color || 'emerald',
-            iconName: v.iconName || v.icon || 'PiggyBank'
-          });
-        }
-      });
-
       setHuchas(vaultsData);
 
-      // 2. CARGAR MOVIMIENTOS (Firebase + LocalStorage)
-      let ahorroGlobal = 0;
+      // 2. CARGAR MOVIMIENTOS DESDE FIREBASE
       const todosLosMovs: any[] = [];
-
-      // A) Desde Firebase
       const savTransSnap = await getDocs(collection(db, `users/${user.uid}/savings_transactions`));
       savTransSnap.docs.forEach(d => {
         const t = d.data();
-        const amt = Number(t.amount) || 0;
-        if (t.type === 'deposit') ahorroGlobal += amt;
-        if (t.type === 'withdrawal') ahorroGlobal -= amt;
-
         todosLosMovs.push({
           id: d.id,
           ...t,
-          amount: amt,
+          amount: Number(t.amount) || 0,
           dateString: t.date?.seconds ? new Date(t.date.seconds * 1000).toISOString() : new Date().toISOString()
         });
       });
 
-      // B) Desde LocalStorage
-      const localMovs = JSON.parse(localStorage.getItem('aio_ahorro_movimientos') || '[]');
-      localMovs.forEach((m: any) => {
-        if (!todosLosMovs.find(tx => tx.id === m.id)) {
-          const amt = Number(m.amount) || 0;
-          
-          let type = m.type;
-          if (!type) {
-            if (amt > 0) type = 'deposit';
-            else if (amt < 0 && (m.title?.includes('->') || m.label?.includes('->'))) type = 'to_vault';
-            else if (amt < 0) type = 'withdrawal';
-          }
-
-          if (type === 'deposit') ahorroGlobal += Math.abs(amt);
-          if (type === 'withdrawal') ahorroGlobal -= Math.abs(amt);
-
-          todosLosMovs.push({
-            id: m.id || Math.random().toString(),
-            ...m,
-            type: type || m.type,
-            amount: Math.abs(amt),
-            dateString: m.dateString || m.date || new Date().toISOString()
-          });
-        }
-      });
-
+      // Ordenar por fecha
       todosLosMovs.sort((a, b) => new Date(b.dateString).getTime() - new Date(a.dateString).getTime());
       setMovimientos(todosLosMovs);
-
-      // 3. CÁLCULO FINAL DE DISPONIBLE
-      // Red de seguridad: si el cálculo dinámico falla, leemos tu ahorro total local.
-      const localAhorroTotal = Number(localStorage.getItem('aio_ahorro_total')) || 0;
-      if (ahorroGlobal === 0 && localAhorroTotal > 0) {
-        ahorroGlobal = localAhorroTotal;
-      }
-
-      // Disponible = Todo el ahorro global MENOS lo que está metido en huchas
-      const disp = ahorroGlobal - enHuchasCalc;
-      setDisponible(disp > 0 ? disp : 0);
 
     } catch (error) {
       console.error("Error cargando ahorro:", error);
@@ -168,13 +99,38 @@ export const Ahorro = () => {
     }
   };
 
-  const enHuchas = huchas.reduce((acc, h) => acc + (Number(h.currentAmount) || 0), 0);
+  // =========================================================================
+  // 🧮 CÁLCULO DINÁMICO DE SALDOS (La magia que recupera tus 4917,96€)
+  // =========================================================================
+  let calcDisponible = 0;
+  let calcEnHuchas = 0;
+  const vaultBalances: Record<string, number> = {};
 
-  const vaultBalances = huchas.reduce((acc, h) => {
-    acc[h.id] = Number(h.currentAmount) || 0;
-    return acc;
-  }, {} as Record<string, number>);
+  movimientos.forEach(t => {
+    const amt = Number(t.amount) || 0;
+    
+    if (t.type === 'deposit') {
+      calcDisponible += amt;
+    } 
+    else if (t.type === 'withdrawal') {
+      calcDisponible -= amt;
+    } 
+    else if (t.type === 'to_vault') {
+      calcDisponible -= amt;
+      calcEnHuchas += amt;
+      if (t.vaultId) vaultBalances[t.vaultId] = (vaultBalances[t.vaultId] || 0) + amt;
+    } 
+    else if (t.type === 'from_vault') {
+      calcDisponible += amt;
+      calcEnHuchas -= amt;
+      if (t.vaultId) vaultBalances[t.vaultId] = (vaultBalances[t.vaultId] || 0) - amt;
+    }
+  });
 
+  const disponible = Math.max(0, calcDisponible);
+  const enHuchas = calcEnHuchas;
+
+  // DICCIONARIO DE COLORES
   const colorStyles: Record<string, { bg: string, text: string, bar: string }> = {
     emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', bar: 'bg-emerald-500' },
     rose: { bg: 'bg-rose-500/10', text: 'text-rose-400', bar: 'bg-rose-400' },
@@ -198,11 +154,11 @@ export const Ahorro = () => {
 
       {/* TARJETAS SUPERIORES */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5">
+        <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-sm">
           <p className="text-gray-400 text-sm font-medium mb-1">Disponible</p>
           <p className="text-emerald-400 text-3xl font-black">{disponible.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
         </div>
-        <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5">
+        <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 shadow-sm">
           <p className="text-gray-400 text-sm font-medium mb-1">En huchas</p>
           <p className="text-white text-3xl font-black">{enHuchas.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
         </div>
@@ -229,10 +185,11 @@ export const Ahorro = () => {
       {/* LISTA DE HUCHAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-12" ref={dropdownRef}>
         {huchas.map((hucha) => {
-          const current = Number(hucha.currentAmount) || 0;
-          const target = Number(hucha.targetAmount) || 0;
-          const title = hucha.title || 'Hucha';
-          const subtitle = hucha.subtitle || 'Fondo de ahorro';
+          // El saldo de la hucha viene de los cálculos matemáticos (transacciones), no de la BD
+          const current = vaultBalances[hucha.id] || 0;
+          const target = Number(hucha.targetAmount) || Number(hucha.target) || 0;
+          const title = hucha.title || hucha.name || 'Hucha';
+          const subtitle = hucha.subtitle || hucha.description || 'Fondo de ahorro';
           
           const style = colorStyles[hucha.color] || colorStyles.emerald;
           const percentage = target > 0 ? Math.min(Math.round((current / target) * 100), 100) : 0;
@@ -243,12 +200,14 @@ export const Ahorro = () => {
           const IconComponent = iconMap[hucha.iconName as keyof typeof iconMap] || <PiggyBank size={20} />;
 
           return (
-            <div key={hucha.id} className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 relative group">
+            <div key={hucha.id} className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 relative group hover:border-[#3d3d3d] transition-colors">
               
+              {/* Botón 3 puntos */}
               <button onClick={() => setDropdownOpen(isDropdownOpen ? null : hucha.id)} className="absolute top-4 right-4 p-1 text-gray-500 hover:text-white transition-colors cursor-pointer rounded-md hover:bg-[#2d2d2d]">
                 <MoreVertical size={18} />
               </button>
 
+              {/* Menú Desplegable */}
               {isDropdownOpen && (
                 <div className="absolute top-12 right-4 w-40 bg-[#1c1c1e] border border-[#3d3d3d] rounded-lg shadow-xl z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                   <button onClick={() => { setVaultToEdit(hucha); setIsVaultModalOpen(true); setDropdownOpen(null); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-[#2d2d2d] transition-colors text-left cursor-pointer">

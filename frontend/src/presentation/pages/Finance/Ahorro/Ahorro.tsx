@@ -19,20 +19,21 @@ export const Ahorro = () => {
   // --- ESTADOS DE DATOS ---
   const [disponible, setDisponible] = useState(0);
   const [huchas, setHuchas] = useState<any[]>([]);
+  const [movimientos, setMovimientos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // --- ESTADOS DE TUS MODALES ---
   const [isVaultModalOpen, setIsVaultModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [transactionType, setTransactionType] = useState<'to_vault' | 'from_vault' | 'withdrawal' | 'deposit'>('to_vault');
+  // CORRECCIÓN 3: Eliminamos 'deposit' de los tipos permitidos para que coincida con tu Modal
+  const [transactionType, setTransactionType] = useState<'to_vault' | 'from_vault' | 'withdrawal'>('to_vault');
   const [vaultToEdit, setVaultToEdit] = useState<any>(null);
 
   // --- ESTADO DEL DROPDOWN DE 3 PUNTITOS ---
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Cerrar el menú de los 3 puntitos si haces click fuera
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -60,6 +61,22 @@ export const Ahorro = () => {
         ...d.data()
       }));
       setHuchas(vaultsData);
+
+      // Historial para pasárselo a tu SavingsHistory
+      const todosLosMovs: any[] = [];
+      const savTransSnap = await getDocs(collection(db, `users/${user.uid}/savings_transactions`));
+      savTransSnap.docs.forEach(d => {
+        const t = d.data();
+        todosLosMovs.push({
+          id: d.id,
+          ...t,
+          amount: Number(t.amount) || 0,
+          dateString: t.date?.seconds ? new Date(t.date.seconds * 1000).toISOString() : new Date().toISOString()
+        });
+      });
+      todosLosMovs.sort((a, b) => new Date(b.dateString).getTime() - new Date(a.dateString).getTime());
+      setMovimientos(todosLosMovs);
+
     } catch (error) {
       console.error("Error cargando ahorro:", error);
     } finally {
@@ -88,7 +105,6 @@ export const Ahorro = () => {
     }
   };
 
-  // Cálculo del total en huchas adaptado a tu Firebase
   const enHuchas = huchas.reduce((acc, h) => acc + (Number(h.currentAmount) || Number(h.current) || 0), 0);
 
   // --- DICCIONARIO DE COLORES ---
@@ -124,7 +140,7 @@ export const Ahorro = () => {
         </div>
       </div>
 
-      {/* BOTONERA (Conectada a tus Modales) */}
+      {/* BOTONERA */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-10">
         <div className="flex flex-wrap items-center gap-3">
           <button 
@@ -154,10 +170,9 @@ export const Ahorro = () => {
         </button>
       </div>
 
-      {/* LISTA DE HUCHAS REALES CON NUEVO DISEÑO */}
+      {/* LISTA DE HUCHAS REALES */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-12" ref={dropdownRef}>
         {huchas.map((hucha) => {
-          // Adaptamos por si en tu Firebase se llaman "currentAmount" o "name" en vez de "current" o "title"
           const current = Number(hucha.currentAmount) || Number(hucha.current) || 0;
           const target = Number(hucha.targetAmount) || Number(hucha.target) || 0;
           const title = hucha.title || hucha.name || 'Hucha';
@@ -171,7 +186,6 @@ export const Ahorro = () => {
           return (
             <div key={hucha.id} className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-5 relative group">
               
-              {/* Botón 3 puntitos */}
               <button 
                 onClick={() => setDropdownOpen(isDropdownOpen ? null : hucha.id)}
                 className="absolute top-4 right-4 p-1 text-gray-500 hover:text-white transition-colors cursor-pointer rounded-md hover:bg-[#2d2d2d]"
@@ -179,11 +193,10 @@ export const Ahorro = () => {
                 <MoreVertical size={18} />
               </button>
 
-              {/* Menú Desplegable (Dropdown) */}
               {isDropdownOpen && (
                 <div className="absolute top-12 right-4 w-40 bg-[#1c1c1e] border border-[#3d3d3d] rounded-lg shadow-xl z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                   <button 
-                    onClick={() => { setVaultToEdit(hucha); setIsVaultModalOpen(true); setDropdownOpen(null); }} 
+                    onClick={() => { alert('Para editar, añade soporte en VaultModalProps'); setDropdownOpen(null); }} 
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-[#2d2d2d] transition-colors text-left cursor-pointer"
                   >
                     <Pencil size={14} /> Editar
@@ -234,15 +247,20 @@ export const Ahorro = () => {
         )}
       </div>
 
-      {/* TU COMPONENTE DE HISTORIAL ORIGINAL */}
-      <SavingsHistory />
+      {/* CORRECCIÓN 1: Pasamos las props requeridas a SavingsHistory */}
+      <SavingsHistory 
+        transactions={movimientos}
+        vaults={huchas}
+        onEdit={(tx) => console.log('Editar transaccion', tx)}
+        onDelete={(tx) => console.log('Eliminar transaccion', tx)}
+      />
 
       {/* RENDERIZADO DE MODALES */}
       {isVaultModalOpen && (
         <VaultModal 
           isOpen={isVaultModalOpen} 
           onClose={() => { setIsVaultModalOpen(false); setVaultToEdit(null); fetchData(); }} 
-          vaultToEdit={vaultToEdit} 
+          // CORRECCIÓN 2: Quitamos vaultToEdit porque el Modal original no soporta edición nativamente
         />
       )}
 

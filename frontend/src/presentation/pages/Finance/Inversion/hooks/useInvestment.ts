@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db, auth } from '../../../../infrastructure/firebase/config';
+import { db, auth } from '../../../../../infrastructure/firebase/config';
 import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
 
 type ViewState = 'summary' | 'global' | 'bolsa' | 'proyecto';

@@ -49,7 +49,7 @@ export const Inversion = () => {
 
       {currentView === 'bolsa' && (
         <BolsaDetails 
-          disponibleGlobal={disponibleGlobal} // 🚀 Pasamos el disponible unificado
+          disponibleGlobal={disponibleGlobal} // 🚀 SOLUCIONADO: Le pasamos el saldo global
           bolsaInvertido={bolsaInvertido} 
           bolsaGanancias={bolsaGanancias} 
           onEjecutarBolsa={handleEjecutarBolsa} 
@@ -59,7 +59,7 @@ export const Inversion = () => {
 
       {currentView === 'proyecto' && (
         <ProyectoDetails 
-          proyectoDisponible={disponibleGlobal} // 🚀 Pasamos el disponible unificado
+          proyectoDisponible={disponibleGlobal} // 🚀 SOLUCIONADO: Le pasamos el saldo global
           proyectoInvertido={proyectoInvertido} 
           proyectoGanado={proyectoGanado} 
           onEjecutarProyecto={handleEjecutarProyecto} 

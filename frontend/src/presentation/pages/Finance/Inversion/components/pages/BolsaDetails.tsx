@@ -15,7 +15,6 @@ interface Position {
   isUp: boolean;
 }
 
-// 🚀 AQUÍ ESTÁ LA SOLUCIÓN: Hemos vuelto a abrir las "puertas" para todo lo que envía Inversion.tsx
 interface BolsaDetailsProps {
   bolsaDisponible: number; 
   bolsaInvertido: number;
@@ -34,40 +33,38 @@ export const BolsaDetails = ({
   const [timeframe, setTimeframe] = useState('1M');
   const [isUpdating, setIsUpdating] = useState(false);
   
-  // Estados de interfaz
+  // Estados de interfaz para el comparador de índices
   const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [selectedCompare, setSelectedCompare] = useState<string>('S&P500');
   const [searchIndex, setSearchIndex] = useState('');
 
-  // Estados de Modales y Posiciones
+  // Estados de posiciones y modales de activos
   const [posiciones, setPosiciones] = useState<Position[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [assetToAdd, setAssetToAdd] = useState<Asset | null>(null);
   
-  // Formulario de nueva posición
+  // Campos del formulario de compra
   const [addShares, setAddShares] = useState('');
   const [addPrice, setAddPrice] = useState('');
 
   const allIndices = ['S&P500', 'MSCI World', 'IBEX 35', 'Nasdaq 100', 'DAX 40', 'Euro Stoxx 50', 'Dow Jones'];
   const filteredIndices = allIndices.filter(idx => idx.toLowerCase().includes(searchIndex.toLowerCase()));
 
-  // =================================================================
-  // 1. AÑADIR NUEVA POSICIÓN
-  // =================================================================
+  // 1. Seleccionar activo desde el buscador universal
   const handleSelectAsset = (asset: Asset) => {
     setIsSearchOpen(false);
     setAssetToAdd(asset);
-    // Pre-rellenamos el input con el precio de mercado actual para mayor comodidad
     setAddPrice(asset.price.toFixed(2));
   };
 
+  // 2. Guardar el activo comprado en el estado interno
   const handleConfirmAdd = () => {
     if (!assetToAdd) return;
     const shares = Number(addShares);
     const avgPrice = Number(addPrice);
     
     if (shares <= 0 || avgPrice <= 0) {
-      alert('Por favor, introduce acciones y un precio válido.');
+      alert('Por favor, introduce un número de acciones y un precio válidos.');
       return;
     }
 
@@ -94,9 +91,7 @@ export const BolsaDetails = ({
     setAddPrice('');
   };
 
-  // =================================================================
-  // 2. ACTUALIZAR PRECIOS EN VIVO (Yahoo Finance API)
-  // =================================================================
+  // 3. Rueda de actualización: Consulta en tiempo real a Yahoo Finance y convierte divisas
   const handleUpdatePrices = async () => {
     if (posiciones.length === 0) return;
     setIsUpdating(true);
@@ -113,19 +108,19 @@ export const BolsaDetails = ({
       const priceData = JSON.parse(priceDataWrapper.contents);
       const priceResult = priceData.quoteResponse?.result || [];
 
-      // Sacamos el tipo de cambio actual
+      // Extraer el ratio de conversión Euro / Dólar en vivo
       const eurUsdQuote = priceResult.find((q: any) => q.symbol === 'EURUSD=X');
       const eurToUsdRate = eurUsdQuote?.regularMarketPrice || 1.08; 
       const usdToEurRate = 1 / eurToUsdRate;
 
-      // Recalculamos cada posición de la cartera
+      // Recalcular posiciones
       const updatedPosiciones = posiciones.map(pos => {
         const apiItem = priceResult.find((q: any) => q.symbol === pos.ticker);
         if (!apiItem) return pos;
 
         let currentPriceEur = apiItem.regularMarketPrice || pos.currentPrice;
         
-        // Convertimos a Euros si cotiza en otra moneda
+        // Convertimos a Euros si cotiza en moneda extranjera
         if (apiItem.currency === 'USD') currentPriceEur *= usdToEurRate;
         else if (apiItem.currency === 'GBP') currentPriceEur *= 1.17; 
 
@@ -146,16 +141,13 @@ export const BolsaDetails = ({
 
       setPosiciones(updatedPosiciones);
     } catch (error) {
-      console.error("Error actualizando precios:", error);
-      alert("No se pudieron actualizar los precios en este momento.");
+      console.error("Error actualizando precios de mercado:", error);
     } finally {
       setIsUpdating(false);
     }
   };
 
-  // =================================================================
-  // CÁLCULOS GLOBALES DE LA CARTERA
-  // =================================================================
+  // Cálculos consolidados de la cartera de acciones
   const totalInvertidoCartera = posiciones.reduce((sum, pos) => sum + (pos.shares * pos.avgPriceEur), 0);
   const carteraTotal = posiciones.reduce((sum, pos) => sum + pos.value, 0);
   const gananciasTotales = carteraTotal - totalInvertidoCartera;
@@ -202,7 +194,7 @@ export const BolsaDetails = ({
           </div>
         </div>
 
-        {/* DESPLEGABLE: Comparar con... */}
+        {/* COMPONENTES DE COMPARACIÓN */}
         <div className="relative text-right">
           <p className="text-gray-500 text-xs font-medium mb-1.5">Comparar con</p>
           <button
@@ -247,7 +239,7 @@ export const BolsaDetails = ({
         </div>
       </div>
 
-      {/* GRÁFICA (CONDICIONAL) */}
+      {/* GRÁFICA (SÓLO SI EXISTEN POSICIONES) */}
       {posiciones.length > 0 ? (
         <div className="mb-8">
           <div className="w-full h-48 mb-4 relative">
@@ -297,7 +289,7 @@ export const BolsaDetails = ({
         </div>
       )}
 
-      {/* LISTADO DE POSICIONES */}
+      {/* LISTADO DE POSICIONES REALES */}
       <div>
         <h3 className="text-lg font-bold text-white mb-4">Posiciones</h3>
         
@@ -334,18 +326,14 @@ export const BolsaDetails = ({
         )}
       </div>
 
-      {/* =================================================================
-          MODALES
-      ================================================================= */}
-      
-      {/* 1. Modal Buscador Universal */}
+      {/* MODAL 1: BUSCADOR DE YAHOO FINANCE */}
       <AssetSearchModal 
         isOpen={isSearchOpen} 
         onClose={() => setIsSearchOpen(false)} 
         onSelectAsset={handleSelectAsset} 
       />
 
-      {/* 2. Modal de Compra / Añadir Acciones */}
+      {/* MODAL 2: FORMULARIO DE COMPRA */}
       {assetToAdd && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">

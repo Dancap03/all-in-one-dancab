@@ -21,7 +21,6 @@ export const useInvestment = () => {
     if (!user) return;
 
     try {
-      // 1. Cargar el global (Mantengo lectura de localStorage por si Día a Día lo usa, y de Firebase si existe)
       const localGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
 
       const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
@@ -37,7 +36,6 @@ export const useInvestment = () => {
         setProyectoInvertido(data.proyectoInvertido || 0);
         setProyectoGanado(data.proyectoGanado || 0);
       } else {
-        // Migración desde LocalStorage la primera vez
         const bDisp = Number(localStorage.getItem('aio_inv_bolsa_disponible') || 0);
         const bInv = Number(localStorage.getItem('aio_inv_bolsa_invertido') || 0);
         const bGan = Number(localStorage.getItem('aio_inv_bolsa_ganancias') || 0);
@@ -53,7 +51,6 @@ export const useInvestment = () => {
         setProyectoInvertido(pInv);
         setProyectoGanado(pGan);
 
-        // Guardar en Firebase para el futuro
         await setDoc(docRef, {
           disponibleGlobal: localGlobal,
           bolsaDisponible: bDisp,
@@ -82,155 +79,94 @@ export const useInvestment = () => {
       const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
       await setDoc(docRef, nuevosSaldos, { merge: true });
     } catch (error) {
-      console.error("Error guardando saldos en Firebase:", error);
+      console.error("Error guardando saldos:", error);
     }
   };
 
   const registrarMovimientoHistorial = async (monto: number, descripcion: string) => {
     const user = auth.currentUser;
     if (!user) return;
-
-    // Guardar en LocalStorage por compatibilidad y para la vista inmediata
     const currentMovements = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
-    const newMov = {
-      id: `mov-${Date.now()}`,
-      amount: monto,
-      label: descripcion,
-      dateString: new Date().toISOString()
-    };
+    const newMov = { id: `mov-${Date.now()}`, amount: monto, label: descripcion, dateString: new Date().toISOString() };
     localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify([newMov, ...currentMovements]));
-
-    // Guardar en Firebase
     try {
       await addDoc(collection(db, `users/${user.uid}/investment_transactions`), {
-        amount: monto,
-        label: descripcion,
-        dateString: new Date().toISOString(),
-        createdAt: new Date()
+        amount: monto, label: descripcion, dateString: new Date().toISOString(), createdAt: new Date()
       });
-    } catch (error) {
-      console.error("Error guardando movimiento de inversión:", error);
-    }
+    } catch (error) {}
   };
 
-  // Funciones de actualización (se simplifican un poco)
   const handleTransferirGlobal = async (monto: number, destino: 'bolsa' | 'proyecto' | 'diadia') => {
     let nGlob = disponibleGlobal;
-    let nBDisp = bolsaDisponible;
-    let nPDisp = proyectoDisponible;
-
     if (destino === 'diadia') {
       nGlob = Math.max(0, disponibleGlobal - monto);
       registrarMovimientoHistorial(-monto, 'Retirada de capital de Balance a Día a Día');
-    } else {
-      nGlob = Math.max(0, disponibleGlobal - monto);
-      if (destino === 'bolsa') {
-        nBDisp = bolsaDisponible + monto;
-        registrarMovimientoHistorial(monto, 'Asignación de capital a Disponible de Bolsa');
-      } else {
-        nPDisp = proyectoDisponible + monto;
-        registrarMovimientoHistorial(monto, 'Asignación de capital a Disponible de Proyectos');
-      }
     }
-
     setDisponibleGlobal(nGlob);
-    setBolsaDisponible(nBDisp);
-    setProyectoDisponible(nPDisp);
-    localStorage.setItem('aio_total_invertido_diadia_v2', nGlob.toString()); // Mantener para Día a Día
-
-    await guardarEnFirebase({
-      disponibleGlobal: nGlob,
-      bolsaDisponible: nBDisp,
-      proyectoDisponible: nPDisp
-    });
+    localStorage.setItem('aio_total_invertido_diadia_v2', nGlob.toString());
+    await guardarEnFirebase({ disponibleGlobal: nGlob });
   };
 
+  // 🚀 LÓGICA DE BOLSA UNIFICADA CON LA CAJA FUERTE GLOBAL
   const handleEjecutarBolsa = async (monto: number, tipo: 'propio' | 'ganancia' | 'diadia' | 'balance') => {
-    let nBDisp = bolsaDisponible;
     let nBInv = bolsaInvertido;
     let nBGan = bolsaGanancias;
     let nGlob = disponibleGlobal;
 
     if (tipo === 'propio') {
-      nBDisp = Math.max(0, bolsaDisponible - monto);
-      nBInv = bolsaInvertido + monto;
-      registrarMovimientoHistorial(monto, 'Inversión de fondos propios en Bolsa');
+      nGlob = Math.max(0, disponibleGlobal - monto); // Resta del saldo global
+      nBInv = bolsaInvertido + monto; // Suma a acciones activas
+      registrarMovimientoHistorial(monto, 'Compra de activos en Bolsa');
     } else if (tipo === 'ganancia') {
       nBGan = bolsaGanancias + monto;
-      nBDisp = bolsaDisponible + monto;
-      registrarMovimientoHistorial(monto, 'Cobro de Dividendos / Premios reinvertidos');
+      registrarMovimientoHistorial(monto, 'Cobro de Dividendos / Premios');
     } else if (tipo === 'diadia' || tipo === 'balance') {
-      nBDisp = Math.max(0, bolsaDisponible - monto);
-      nGlob = disponibleGlobal + monto;
-      registrarMovimientoHistorial(-monto, 'Retorno de capital de Bolsa a Balance Global');
+      nBInv = Math.max(0, bolsaInvertido - monto);
+      nGlob = disponibleGlobal + monto; // Devuelve el dinero vendido al global
+      registrarMovimientoHistorial(-monto, 'Venta de activos en Bolsa');
     }
 
-    setBolsaDisponible(nBDisp);
     setBolsaInvertido(nBInv);
     setBolsaGanancias(nBGan);
     setDisponibleGlobal(nGlob);
     localStorage.setItem('aio_total_invertido_diadia_v2', nGlob.toString());
-
-    await guardarEnFirebase({
-      bolsaDisponible: nBDisp,
-      bolsaInvertido: nBInv,
-      bolsaGanancias: nBGan,
-      disponibleGlobal: nGlob
-    });
+    await guardarEnFirebase({ bolsaInvertido: nBInv, bolsaGanancias: nBGan, disponibleGlobal: nGlob });
   };
 
+  // 🚀 LÓGICA DE PROYECTOS UNIFICADA CON LA CAJA FUERTE GLOBAL
   const handleEjecutarProyecto = async (modo: 'comprar' | 'vender' | 'diadia' | 'balance', coste: number, venta?: number) => {
-    let nPDisp = proyectoDisponible;
     let nPInv = proyectoInvertido;
     let nPGan = proyectoGanado;
     let nGlob = disponibleGlobal;
 
     if (modo === 'comprar') {
-      nPDisp = Math.max(0, proyectoDisponible - coste);
+      nGlob = Math.max(0, disponibleGlobal - coste); // Resta del saldo global
       nPInv = proyectoInvertido + coste;
-      registrarMovimientoHistorial(coste, 'Compra de stock / Material para proyectos');
+      registrarMovimientoHistorial(coste, 'Inversión en Proyectos');
     } else if (modo === 'vender' && venta !== undefined) {
       const ganancia = venta - coste;
       nPGan = proyectoGanado + ganancia;
-      nPDisp = proyectoDisponible + venta;
       nPInv = Math.max(0, proyectoInvertido - coste);
-      registrarMovimientoHistorial(ganancia, `Venta completada (Coste: ${coste}€ | Venta: ${venta}€)`);
+      nGlob = disponibleGlobal + venta; // El dinero total de la venta vuelve al global
+      registrarMovimientoHistorial(ganancia, `Venta de proyecto completada`);
     } else if (modo === 'diadia' || modo === 'balance') {
-      nPDisp = Math.max(0, proyectoDisponible - coste);
+      nPInv = Math.max(0, proyectoInvertido - coste);
       nGlob = disponibleGlobal + coste;
-      registrarMovimientoHistorial(-coste, 'Retorno de capital de Proyectos a Balance Global');
+      registrarMovimientoHistorial(-coste, 'Retorno de capital de Proyectos');
     }
 
-    setProyectoDisponible(nPDisp);
     setProyectoInvertido(nPInv);
     setProyectoGanado(nPGan);
     setDisponibleGlobal(nGlob);
     localStorage.setItem('aio_total_invertido_diadia_v2', nGlob.toString());
-
-    await guardarEnFirebase({
-      proyectoDisponible: nPDisp,
-      proyectoInvertido: nPInv,
-      proyectoGanado: nPGan,
-      disponibleGlobal: nGlob
-    });
+    await guardarEnFirebase({ proyectoInvertido: nPInv, proyectoGanado: nPGan, disponibleGlobal: nGlob });
   };
 
   const totalInvertidoCalculado = bolsaInvertido + proyectoInvertido;
 
   return {
-    currentView,
-    setCurrentView,
-    disponibleGlobal,
-    totalInvertidoCalculado,
-    bolsaDisponible,
-    bolsaInvertido,
-    bolsaGanancias,
-    proyectoDisponible,
-    proyectoInvertido,
-    proyectoGanado,
-    handleTransferirGlobal,
-    handleEjecutarBolsa,
-    handleEjecutarProyecto,
-    loading
+    currentView, setCurrentView, disponibleGlobal, totalInvertidoCalculado, bolsaDisponible,
+    bolsaInvertido, bolsaGanancias, proyectoDisponible, proyectoInvertido, proyectoGanado,
+    handleTransferirGlobal, handleEjecutarBolsa, handleEjecutarProyecto, loading
   };
 };

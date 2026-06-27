@@ -15,12 +15,22 @@ interface Position {
   isUp: boolean;
 }
 
+// 🚀 AQUÍ ESTÁ LA SOLUCIÓN: Hemos vuelto a abrir las "puertas" para todo lo que envía Inversion.tsx
 interface BolsaDetailsProps {
   bolsaDisponible: number; 
+  bolsaInvertido: number;
+  bolsaGanancias: number;
+  onEjecutarBolsa: (monto: number, tipo: 'propio' | 'ganancia' | 'diadia' | 'balance') => void;
   onBack: () => void;
 }
 
-export const BolsaDetails = ({ bolsaDisponible, onBack }: BolsaDetailsProps) => {
+export const BolsaDetails = ({ 
+  bolsaDisponible,
+  bolsaInvertido,
+  bolsaGanancias,
+  onEjecutarBolsa,
+  onBack 
+}: BolsaDetailsProps) => {
   const [timeframe, setTimeframe] = useState('1M');
   const [isUpdating, setIsUpdating] = useState(false);
   
@@ -146,10 +156,10 @@ export const BolsaDetails = ({ bolsaDisponible, onBack }: BolsaDetailsProps) => 
   // =================================================================
   // CÁLCULOS GLOBALES DE LA CARTERA
   // =================================================================
-  const totalInvertido = posiciones.reduce((sum, pos) => sum + (pos.shares * pos.avgPriceEur), 0);
+  const totalInvertidoCartera = posiciones.reduce((sum, pos) => sum + (pos.shares * pos.avgPriceEur), 0);
   const carteraTotal = posiciones.reduce((sum, pos) => sum + pos.value, 0);
-  const gananciasTotales = carteraTotal - totalInvertido;
-  const rentabilidadPct = totalInvertido > 0 ? (gananciasTotales / totalInvertido) * 100 : 0;
+  const gananciasTotales = carteraTotal - totalInvertidoCartera;
+  const rentabilidadPct = totalInvertidoCartera > 0 ? (gananciasTotales / totalInvertidoCartera) * 100 : 0;
 
   return (
     <div className="w-full max-w-2xl mx-auto pb-12 animate-in fade-in duration-300 relative">

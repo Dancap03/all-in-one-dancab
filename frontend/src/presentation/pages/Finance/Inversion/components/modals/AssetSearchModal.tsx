@@ -17,7 +17,6 @@ interface AssetSearchModalProps {
 
 const CATEGORIES = ['Todos', 'Acciones', 'ETF', 'Cripto', 'Bonos'];
 
-// 🚀 FUNCIÓN A PRUEBA DE BALAS: Intenta múltiples servidores puente
 const fetchWithFallback = async (targetUrl: string) => {
   const proxies = [
     { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, wrapped: true },
@@ -61,7 +60,6 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
       setErrorMsg('');
       
       try {
-        // 1. Buscamos el activo
         const searchUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(searchTerm)}&quotesCount=6`;
         const searchData = await fetchWithFallback(searchUrl);
         const quotes = searchData.quotes || [];
@@ -72,15 +70,14 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
           return;
         }
 
-        // Guardamos los nombres originales para no perderlos
         const quotesMap = new Map();
         quotes.forEach((q: any) => quotesMap.set(q.symbol, q));
 
-        const symbols = quotes.map((q: any) => q.symbol);
+        const symbols: string[] = quotes.map((q: any) => q.symbol);
         symbols.push('EURUSD=X'); 
 
-        // 2. Traemos los precios usando la ruta ABIERTA de gráficos (v8/chart)
-        const chartPromises = symbols.map(async (sym) => {
+        // 🚀 AQUÍ ESTÁ LA CORRECCIÓN: (sym: string)
+        const chartPromises = symbols.map(async (sym: string) => {
            const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
            try {
              const data = await fetchWithFallback(chartUrl);
@@ -93,12 +90,10 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
         const metas = await Promise.all(chartPromises);
         const validMetas = metas.filter(Boolean);
 
-        // 3. Conversión de divisas
         const eurUsdMeta = validMetas.find(m => m.symbol === 'EURUSD=X');
         const eurToUsdRate = eurUsdMeta?.regularMarketPrice || 1.08; 
         const usdToEurRate = 1 / eurToUsdRate;
 
-        // 4. Mapeo final
         const mappedAssets: Asset[] = validMetas
           .filter(m => m.symbol !== 'EURUSD=X') 
           .map(m => {
@@ -144,7 +139,6 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-200">
-      
       <div className="bg-[#141416] w-full sm:max-w-md h-[90vh] sm:h-[650px] rounded-t-3xl sm:rounded-3xl flex flex-col border border-[#2d2d2d] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0">
         
         <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">

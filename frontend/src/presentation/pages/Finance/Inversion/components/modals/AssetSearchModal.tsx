@@ -17,25 +17,21 @@ interface AssetSearchModalProps {
 
 const CATEGORIES = ['Todos', 'Acciones', 'ETF', 'Cripto', 'Bonos'];
 
-// 🚀 FUNCIÓN A PRUEBA DE BALAS: Intenta 3 servidores puente distintos para que nunca falle
+// 🚀 FUNCIÓN A PRUEBA DE BALAS: Intenta múltiples servidores puente
 const fetchWithFallback = async (targetUrl: string) => {
   const proxies = [
     { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, wrapped: true },
-    { url: `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`, wrapped: false },
     { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`, wrapped: false }
   ];
 
   for (const proxy of proxies) {
     try {
       const res = await fetch(proxy.url);
-      if (!res.ok) continue; // Si este proxy falla, pasa al siguiente
+      if (!res.ok) continue;
       
       const data = await res.json();
-      if (proxy.wrapped && data.contents) {
-        return JSON.parse(data.contents);
-      } else if (!proxy.wrapped) {
-        return data;
-      }
+      if (proxy.wrapped && data.contents) return JSON.parse(data.contents);
+      if (!proxy.wrapped) return data;
     } catch (e) {
       console.warn(`Proxy falló: ${proxy.url}`);
     }
@@ -65,7 +61,8 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
       setErrorMsg('');
       
       try {
-        const searchUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(searchTerm)}&quotesCount=8`;
+        // 1. Buscamos el activo
+        const searchUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(searchTerm)}&quotesCount=6`;
         const searchData = await fetchWithFallback(searchUrl);
         const quotes = searchData.quotes || [];
         
@@ -75,33 +72,52 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
           return;
         }
 
-        const symbols = quotes.map((q: any) => q.symbol).join(',');
-        const symbolsWithFX = `${symbols},EURUSD=X`; 
+        // Guardamos los nombres originales para no perderlos
+        const quotesMap = new Map();
+        quotes.forEach((q: any) => quotesMap.set(q.symbol, q));
 
-        const priceUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsWithFX}`;
-        const priceData = await fetchWithFallback(priceUrl);
-        const priceResult = priceData.quoteResponse?.result || [];
+        const symbols = quotes.map((q: any) => q.symbol);
+        symbols.push('EURUSD=X'); 
 
-        const eurUsdQuote = priceResult.find((q: any) => q.symbol === 'EURUSD=X');
-        const eurToUsdRate = eurUsdQuote?.regularMarketPrice || 1.08; 
+        // 2. Traemos los precios usando la ruta ABIERTA de gráficos (v8/chart)
+        const chartPromises = symbols.map(async (sym) => {
+           const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
+           try {
+             const data = await fetchWithFallback(chartUrl);
+             return data?.chart?.result?.[0]?.meta;
+           } catch (e) {
+             return null;
+           }
+        });
+
+        const metas = await Promise.all(chartPromises);
+        const validMetas = metas.filter(Boolean);
+
+        // 3. Conversión de divisas
+        const eurUsdMeta = validMetas.find(m => m.symbol === 'EURUSD=X');
+        const eurToUsdRate = eurUsdMeta?.regularMarketPrice || 1.08; 
         const usdToEurRate = 1 / eurToUsdRate;
 
-        const mappedAssets: Asset[] = priceResult
-          .filter((item: any) => item.symbol !== 'EURUSD=X') 
-          .map((item: any) => {
+        // 4. Mapeo final
+        const mappedAssets: Asset[] = validMetas
+          .filter(m => m.symbol !== 'EURUSD=X') 
+          .map(m => {
+            const original = quotesMap.get(m.symbol) || {};
             let tipo: Asset['type'] = 'Acciones';
-            if (item.quoteType === 'ETF' || item.quoteType === 'MUTUALFUND') tipo = 'ETF';
-            else if (item.quoteType === 'CRYPTOCURRENCY') tipo = 'Cripto';
-            else if (item.quoteType === 'CURRENCY' || item.quoteType === 'GOVERNMENT_BOND') tipo = 'Bonos';
+            const qType = m.instrumentType || m.quoteType || original.quoteType;
+            
+            if (qType === 'ETF' || qType === 'MUTUALFUND') tipo = 'ETF';
+            else if (qType === 'CRYPTOCURRENCY') tipo = 'Cripto';
+            else if (qType === 'CURRENCY' || qType === 'GOVERNMENT_BOND') tipo = 'Bonos';
 
-            let priceInEur = item.regularMarketPrice || 0;
-            if (item.currency === 'USD') priceInEur = priceInEur * usdToEurRate;
-            else if (item.currency === 'GBP') priceInEur = priceInEur * 1.17; 
+            let priceInEur = m.regularMarketPrice || 0;
+            if (m.currency === 'USD') priceInEur = priceInEur * usdToEurRate;
+            else if (m.currency === 'GBP') priceInEur = priceInEur * 1.17; 
 
             return {
-              id: item.symbol,
-              ticker: item.symbol,
-              name: item.longName || item.shortName || item.symbol,
+              id: m.symbol,
+              ticker: m.symbol,
+              name: original.longname || original.shortname || m.shortName || m.symbol,
               type: tipo,
               price: priceInEur
             };
@@ -115,7 +131,7 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
       } finally {
         setIsLoading(false);
       }
-    }, 800); // Subimos ligeramente el delay para evitar saturar las APIs al teclear muy rápido
+    }, 800); 
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm]);

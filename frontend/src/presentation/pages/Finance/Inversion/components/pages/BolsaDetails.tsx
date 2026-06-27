@@ -15,7 +15,6 @@ interface Position {
   isUp: boolean;
 }
 
-// 🚀 AQUÍ ESTABA EL ERROR: Cambiado 'bolsaDisponible' por 'disponibleGlobal'
 interface BolsaDetailsProps {
   disponibleGlobal: number; 
   bolsaInvertido: number;
@@ -24,8 +23,29 @@ interface BolsaDetailsProps {
   onBack: () => void;
 }
 
+const fetchWithFallback = async (targetUrl: string) => {
+  const proxies = [
+    { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, wrapped: true },
+    { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`, wrapped: false }
+  ];
+
+  for (const proxy of proxies) {
+    try {
+      const res = await fetch(proxy.url);
+      if (!res.ok) continue;
+      
+      const data = await res.json();
+      if (proxy.wrapped && data.contents) return JSON.parse(data.contents);
+      if (!proxy.wrapped) return data;
+    } catch (e) {
+      console.warn(`Proxy falló: ${proxy.url}`);
+    }
+  }
+  throw new Error("No se pudo conectar a los servidores del mercado.");
+};
+
 export const BolsaDetails = ({ 
-  disponibleGlobal, // 🚀 Actualizado aquí también
+  disponibleGlobal,
   bolsaInvertido,
   bolsaGanancias,
   onEjecutarBolsa,
@@ -66,7 +86,6 @@ export const BolsaDetails = ({
 
     const invested = shares * avgPrice;
 
-    // Validación usando el disponibleGlobal
     if (invested > disponibleGlobal) {
       alert(`Saldo insuficiente. Intentas invertir ${invested.toLocaleString('es-ES')} € pero solo dispones de ${disponibleGlobal.toLocaleString('es-ES')} €.`);
       return;
@@ -101,29 +120,34 @@ export const BolsaDetails = ({
     setIsUpdating(true);
     
     try {
-      const symbols = posiciones.map(p => p.ticker).join(',');
-      const symbolsWithFX = `${symbols},EURUSD=X`; 
-      
-      const priceUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsWithFX}`;
-      const proxyPriceUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(priceUrl)}`;
+      const symbols: string[] = posiciones.map(p => p.ticker);
+      symbols.push('EURUSD=X');
 
-      const priceRes = await fetch(proxyPriceUrl);
-      const priceDataWrapper = await priceRes.json();
-      const priceData = JSON.parse(priceDataWrapper.contents);
-      const priceResult = priceData.quoteResponse?.result || [];
+      // 🚀 AQUÍ TAMBIÉN LA CORRECCIÓN: (sym: string)
+      const chartPromises = symbols.map(async (sym: string) => {
+         const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
+         try {
+           const data = await fetchWithFallback(chartUrl);
+           return data?.chart?.result?.[0]?.meta;
+         } catch (e) {
+           return null;
+         }
+      });
 
-      const eurUsdQuote = priceResult.find((q: any) => q.symbol === 'EURUSD=X');
-      const eurToUsdRate = eurUsdQuote?.regularMarketPrice || 1.08; 
+      const metas = await Promise.all(chartPromises);
+      const validMetas = metas.filter(Boolean);
+
+      const eurUsdMeta = validMetas.find(m => m.symbol === 'EURUSD=X');
+      const eurToUsdRate = eurUsdMeta?.regularMarketPrice || 1.08; 
       const usdToEurRate = 1 / eurToUsdRate;
 
       const updatedPosiciones = posiciones.map(pos => {
-        const apiItem = priceResult.find((q: any) => q.symbol === pos.ticker);
-        if (!apiItem) return pos;
+        const m = validMetas.find(meta => meta.symbol === pos.ticker);
+        if (!m) return pos;
 
-        let currentPriceEur = apiItem.regularMarketPrice || pos.currentPrice;
-        
-        if (apiItem.currency === 'USD') currentPriceEur *= usdToEurRate;
-        else if (apiItem.currency === 'GBP') currentPriceEur *= 1.17; 
+        let currentPriceEur = m.regularMarketPrice || pos.currentPrice;
+        if (m.currency === 'USD') currentPriceEur *= usdToEurRate;
+        else if (m.currency === 'GBP') currentPriceEur *= 1.17; 
 
         const value = pos.shares * currentPriceEur;
         const invested = pos.shares * pos.avgPriceEur;
@@ -143,6 +167,7 @@ export const BolsaDetails = ({
       setPosiciones(updatedPosiciones);
     } catch (error) {
       console.error("Error actualizando precios de mercado:", error);
+      alert("Hubo un problema de conexión con el mercado. Inténtalo de nuevo.");
     } finally {
       setIsUpdating(false);
     }
@@ -156,7 +181,6 @@ export const BolsaDetails = ({
   return (
     <div className="w-full max-w-2xl mx-auto pb-12 animate-in fade-in duration-300 relative">
       
-      {/* CABECERA SUPERIOR */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={onBack} className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-[#2d2d2d] cursor-pointer">
           <ArrowLeft size={24} />
@@ -181,7 +205,6 @@ export const BolsaDetails = ({
         </div>
       </div>
 
-      {/* BALANCE Y COMPARADOR */}
       <div className="flex justify-between items-start mb-8">
         <div>
           <p className="text-gray-400 font-medium text-sm mb-1">Cartera bolsa total</p>
@@ -246,7 +269,6 @@ export const BolsaDetails = ({
         </div>
       </div>
 
-      {/* GRÁFICA */}
       {posiciones.length > 0 ? (
         <div className="mb-8">
           <div className="w-full h-48 mb-4 relative">
@@ -296,7 +318,6 @@ export const BolsaDetails = ({
         </div>
       )}
 
-      {/* LISTADO DE POSICIONES REALES */}
       <div>
         <h3 className="text-lg font-bold text-white mb-4">Posiciones</h3>
         
@@ -333,14 +354,12 @@ export const BolsaDetails = ({
         )}
       </div>
 
-      {/* MODAL 1: BUSCADOR */}
       <AssetSearchModal 
         isOpen={isSearchOpen} 
         onClose={() => setIsSearchOpen(false)} 
         onSelectAsset={handleSelectAsset} 
       />
 
-      {/* MODAL 2: FORMULARIO DE COMPRA */}
       {assetToAdd && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
@@ -356,7 +375,7 @@ export const BolsaDetails = ({
             
             <div className="p-5 space-y-5">
               <div className="bg-[#1c1c1e] p-4 rounded-xl border border-[#2d2d2d] flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-400">Efectivo global en Inversión:</span>
+                <span className="text-xs font-bold text-gray-400">Efectivo disponible:</span>
                 <span className="text-sm font-black text-emerald-400">{disponibleGlobal.toLocaleString('es-ES')} €</span>
               </div>
 

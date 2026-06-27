@@ -15,8 +15,9 @@ interface Position {
   isUp: boolean;
 }
 
+// 🚀 AQUÍ ESTABA EL ERROR: Cambiado 'bolsaDisponible' por 'disponibleGlobal'
 interface BolsaDetailsProps {
-  bolsaDisponible: number; 
+  disponibleGlobal: number; 
   bolsaInvertido: number;
   bolsaGanancias: number;
   onEjecutarBolsa: (monto: number, tipo: 'propio' | 'ganancia' | 'diadia' | 'balance') => Promise<void> | any;
@@ -24,7 +25,7 @@ interface BolsaDetailsProps {
 }
 
 export const BolsaDetails = ({ 
-  bolsaDisponible,
+  disponibleGlobal, // 🚀 Actualizado aquí también
   bolsaInvertido,
   bolsaGanancias,
   onEjecutarBolsa,
@@ -33,31 +34,26 @@ export const BolsaDetails = ({
   const [timeframe, setTimeframe] = useState('1M');
   const [isUpdating, setIsUpdating] = useState(false);
   
-  // Estados de interfaz para el comparador de índices
   const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [selectedCompare, setSelectedCompare] = useState<string>('S&P500');
   const [searchIndex, setSearchIndex] = useState('');
 
-  // Estados de posiciones y modales de activos
   const [posiciones, setPosiciones] = useState<Position[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [assetToAdd, setAssetToAdd] = useState<Asset | null>(null);
   
-  // Campos del formulario de compra
   const [addShares, setAddShares] = useState('');
   const [addPrice, setAddPrice] = useState('');
 
   const allIndices = ['S&P500', 'MSCI World', 'IBEX 35', 'Nasdaq 100', 'DAX 40', 'Euro Stoxx 50', 'Dow Jones'];
   const filteredIndices = allIndices.filter(idx => idx.toLowerCase().includes(searchIndex.toLowerCase()));
 
-  // 1. Seleccionar activo desde el buscador universal
   const handleSelectAsset = (asset: Asset) => {
     setIsSearchOpen(false);
     setAssetToAdd(asset);
     setAddPrice(asset.price.toFixed(2));
   };
 
-  // 2. Guardar el activo comprado en tu cartera y descontar el dinero del Disponible
   const handleConfirmAdd = () => {
     if (!assetToAdd) return;
     const shares = Number(addShares);
@@ -70,9 +66,9 @@ export const BolsaDetails = ({
 
     const invested = shares * avgPrice;
 
-    // Validación en vivo con tu saldo real de Firebase
-    if (invested > bolsaDisponible) {
-      alert(`Saldo insuficiente en Bolsa. Intentas invertir ${invested.toLocaleString('es-ES')} € pero solo dispones de ${bolsaDisponible.toLocaleString('es-ES')} €.`);
+    // Validación usando el disponibleGlobal
+    if (invested > disponibleGlobal) {
+      alert(`Saldo insuficiente. Intentas invertir ${invested.toLocaleString('es-ES')} € pero solo dispones de ${disponibleGlobal.toLocaleString('es-ES')} €.`);
       return;
     }
 
@@ -92,7 +88,6 @@ export const BolsaDetails = ({
       isUp: changeEur >= 0
     };
 
-    // Descontamos el capital invertido del saldo real de Firebase
     onEjecutarBolsa(invested, 'propio');
 
     setPosiciones([...posiciones, newPos]);
@@ -101,7 +96,6 @@ export const BolsaDetails = ({
     setAddPrice('');
   };
 
-  // 3. Rueda de actualización: Consulta en tiempo real a Yahoo Finance y convierte divisas
   const handleUpdatePrices = async () => {
     if (posiciones.length === 0) return;
     setIsUpdating(true);
@@ -118,12 +112,10 @@ export const BolsaDetails = ({
       const priceData = JSON.parse(priceDataWrapper.contents);
       const priceResult = priceData.quoteResponse?.result || [];
 
-      // Extraer el ratio de conversión Euro / Dólar en vivo
       const eurUsdQuote = priceResult.find((q: any) => q.symbol === 'EURUSD=X');
       const eurToUsdRate = eurUsdQuote?.regularMarketPrice || 1.08; 
       const usdToEurRate = 1 / eurToUsdRate;
 
-      // Recalcular posiciones
       const updatedPosiciones = posiciones.map(pos => {
         const apiItem = priceResult.find((q: any) => q.symbol === pos.ticker);
         if (!apiItem) return pos;
@@ -156,7 +148,6 @@ export const BolsaDetails = ({
     }
   };
 
-  // Cálculos consolidados de la cartera de acciones
   const totalInvertidoCartera = posiciones.reduce((sum, pos) => sum + (pos.shares * pos.avgPriceEur), 0);
   const carteraTotal = posiciones.reduce((sum, pos) => sum + pos.value, 0);
   const gananciasTotales = carteraTotal - totalInvertidoCartera;
@@ -211,7 +202,6 @@ export const BolsaDetails = ({
           </div>
         </div>
 
-        {/* COMPONENTES DE COMPARACIÓN */}
         <div className="relative text-right">
           <p className="text-gray-500 text-xs font-medium mb-1.5">Comparar con</p>
           <button
@@ -256,7 +246,7 @@ export const BolsaDetails = ({
         </div>
       </div>
 
-      {/* GRÁFICA (SÓLO SI EXISTEN POSICIONES) */}
+      {/* GRÁFICA */}
       {posiciones.length > 0 ? (
         <div className="mb-8">
           <div className="w-full h-48 mb-4 relative">
@@ -343,7 +333,7 @@ export const BolsaDetails = ({
         )}
       </div>
 
-      {/* MODAL 1: BUSCADOR DE YAHOO FINANCE */}
+      {/* MODAL 1: BUSCADOR */}
       <AssetSearchModal 
         isOpen={isSearchOpen} 
         onClose={() => setIsSearchOpen(false)} 
@@ -365,19 +355,18 @@ export const BolsaDetails = ({
             </div>
             
             <div className="p-5 space-y-5">
-              {/* ✅ USO DE BOLSA DISPONIBLE PARA LA COMPRA */}
               <div className="bg-[#1c1c1e] p-4 rounded-xl border border-[#2d2d2d] flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-400">Efectivo disponible:</span>
-                <span className="text-sm font-black text-emerald-400">{bolsaDisponible.toLocaleString('es-ES')} €</span>
+                <span className="text-xs font-bold text-gray-400">Efectivo global en Inversión:</span>
+                <span className="text-sm font-black text-emerald-400">{disponibleGlobal.toLocaleString('es-ES')} €</span>
               </div>
 
               <div className="bg-[#1c1c1e] p-4 rounded-xl border border-[#2d2d2d] flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-400">Precio de mercado actual:</span>
+                <span className="text-xs font-bold text-gray-400">Precio actual (aprox):</span>
                 <span className="text-sm font-black text-amber-500">{assetToAdd.price.toLocaleString('es-ES')} €</span>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Nº de acciones / monedas compradas</label>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Nº de acciones / monedas</label>
                 <input 
                   type="number" 
                   placeholder="Ej: 10" 
@@ -388,7 +377,7 @@ export const BolsaDetails = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Precio medio de compra (€)</label>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Precio de compra (€)</label>
                 <input 
                   type="number" 
                   step="0.01"
@@ -403,13 +392,12 @@ export const BolsaDetails = ({
                 onClick={handleConfirmAdd} 
                 className="w-full bg-amber-500 hover:bg-amber-400 text-black text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-2"
               >
-                Registrar Inversión
+                Comprar / Registrar
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 };

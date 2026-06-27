@@ -19,7 +19,7 @@ interface BolsaDetailsProps {
   bolsaDisponible: number; 
   bolsaInvertido: number;
   bolsaGanancias: number;
-  onEjecutarBolsa: (monto: number, tipo: 'propio' | 'ganancia' | 'diadia' | 'balance') => void;
+  onEjecutarBolsa: (monto: number, tipo: 'propio' | 'ganancia' | 'diadia' | 'balance') => Promise<void> | any;
   onBack: () => void;
 }
 
@@ -57,7 +57,7 @@ export const BolsaDetails = ({
     setAddPrice(asset.price.toFixed(2));
   };
 
-  // 2. Guardar el activo comprado en el estado interno
+  // 2. Guardar el activo comprado en tu cartera y descontar el dinero del Disponible
   const handleConfirmAdd = () => {
     if (!assetToAdd) return;
     const shares = Number(addShares);
@@ -69,6 +69,13 @@ export const BolsaDetails = ({
     }
 
     const invested = shares * avgPrice;
+
+    // Validación en vivo con tu saldo real de Firebase
+    if (invested > bolsaDisponible) {
+      alert(`Saldo insuficiente en Bolsa. Intentas invertir ${invested.toLocaleString('es-ES')} € pero solo dispones de ${bolsaDisponible.toLocaleString('es-ES')} €.`);
+      return;
+    }
+
     const currentValue = shares * assetToAdd.price;
     const changeEur = currentValue - invested;
 
@@ -84,6 +91,9 @@ export const BolsaDetails = ({
       changeEur,
       isUp: changeEur >= 0
     };
+
+    // Descontamos el capital invertido del saldo real de Firebase
+    onEjecutarBolsa(invested, 'propio');
 
     setPosiciones([...posiciones, newPos]);
     setAssetToAdd(null);
@@ -120,7 +130,6 @@ export const BolsaDetails = ({
 
         let currentPriceEur = apiItem.regularMarketPrice || pos.currentPrice;
         
-        // Convertimos a Euros si cotiza en moneda extranjera
         if (apiItem.currency === 'USD') currentPriceEur *= usdToEurRate;
         else if (apiItem.currency === 'GBP') currentPriceEur *= 1.17; 
 
@@ -186,11 +195,19 @@ export const BolsaDetails = ({
         <div>
           <p className="text-gray-400 font-medium text-sm mb-1">Cartera bolsa total</p>
           <h2 className="text-4xl font-black text-white tracking-tight mb-1.5">
-            {carteraTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+            {posiciones.length > 0 
+              ? `${carteraTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+              : `${(bolsaInvertido + bolsaGanancias).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`
+            }
           </h2>
           <div className={`flex items-center gap-1.5 font-bold text-sm ${gananciasTotales >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
             <TrendingUp size={16} strokeWidth={2.5} className={gananciasTotales < 0 ? 'transform rotate-180' : ''} />
-            <span>{gananciasTotales >= 0 ? '+' : ''}{rentabilidadPct.toFixed(1)}% · {gananciasTotales >= 0 ? '+' : ''}{gananciasTotales.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
+            <span>
+              {posiciones.length > 0 
+                ? `${gananciasTotales >= 0 ? '+' : ''}${rentabilidadPct.toFixed(1)}% · ${gananciasTotales >= 0 ? '+' : ''}${gananciasTotales.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`
+                : `+0.0% · 0,00 €`
+              }
+            </span>
           </div>
         </div>
 
@@ -348,13 +365,19 @@ export const BolsaDetails = ({
             </div>
             
             <div className="p-5 space-y-5">
+              {/* ✅ USO DE BOLSA DISPONIBLE PARA LA COMPRA */}
               <div className="bg-[#1c1c1e] p-4 rounded-xl border border-[#2d2d2d] flex justify-between items-center">
-                <span className="text-sm font-bold text-gray-400">Precio de mercado:</span>
+                <span className="text-xs font-bold text-gray-400">Efectivo disponible:</span>
+                <span className="text-sm font-black text-emerald-400">{bolsaDisponible.toLocaleString('es-ES')} €</span>
+              </div>
+
+              <div className="bg-[#1c1c1e] p-4 rounded-xl border border-[#2d2d2d] flex justify-between items-center">
+                <span className="text-xs font-bold text-gray-400">Precio de mercado actual:</span>
                 <span className="text-sm font-black text-amber-500">{assetToAdd.price.toLocaleString('es-ES')} €</span>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5">Nº de acciones / monedas compradas</label>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Nº de acciones / monedas compradas</label>
                 <input 
                   type="number" 
                   placeholder="Ej: 10" 
@@ -365,7 +388,7 @@ export const BolsaDetails = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5">Precio medio de compra (€)</label>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Precio medio de compra (€)</label>
                 <input 
                   type="number" 
                   step="0.01"

@@ -23,25 +23,36 @@ interface BolsaDetailsProps {
   onBack: () => void;
 }
 
-const fetchWithFallback = async (targetUrl: string) => {
+// 🚀 OBTENEDOR DE PRECIOS A PRUEBA DE FALLOS
+const fetchPriceWithFallback = async (ticker: string) => {
+  let formattedTicker = ticker;
+  if (ticker.endsWith('USD') && ticker.length > 3 && !ticker.includes('-')) {
+    formattedTicker = ticker.replace('USD', '-USD');
+  }
+
+  const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${formattedTicker}?interval=1d&range=1d`;
   const proxies = [
-    { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, wrapped: true },
-    { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`, wrapped: false }
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+    `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`
   ];
 
-  for (const proxy of proxies) {
+  for (const proxyUrl of proxies) {
     try {
-      const res = await fetch(proxy.url);
+      const res = await fetch(proxyUrl);
       if (!res.ok) continue;
+      const text = await res.text();
+      if (text.includes('<!DOCTYPE html>') || text.includes('<html')) continue;
       
-      const data = await res.json();
-      if (proxy.wrapped && data.contents) return JSON.parse(data.contents);
-      if (!proxy.wrapped) return data;
+      const data = JSON.parse(text);
+      if (data?.chart?.result?.[0]?.meta) {
+        return data.chart.result[0].meta;
+      }
     } catch (e) {
-      console.warn(`Proxy falló: ${proxy.url}`);
+      continue;
     }
   }
-  throw new Error("No se pudo conectar a los servidores del mercado.");
+  throw new Error("No se pudo obtener el precio");
 };
 
 export const BolsaDetails = ({ 
@@ -71,7 +82,7 @@ export const BolsaDetails = ({
   const handleSelectAsset = (asset: Asset) => {
     setIsSearchOpen(false);
     setAssetToAdd(asset);
-    setAddPrice(asset.price.toFixed(2));
+    setAddPrice(asset.price > 0 ? asset.price.toFixed(2) : ''); // Si viene vacío, lo dejas en blanco
   };
 
   const handleConfirmAdd = () => {
@@ -91,7 +102,9 @@ export const BolsaDetails = ({
       return;
     }
 
-    const currentValue = shares * assetToAdd.price;
+    // Si el precio viene a 0 de la API por fallo temporal, cogemos el precio de compra introducido como referencia actual
+    const currentMarketPrice = assetToAdd.price > 0 ? assetToAdd.price : avgPrice; 
+    const currentValue = shares * currentMarketPrice;
     const changeEur = currentValue - invested;
 
     const newPos: Position = {
@@ -100,7 +113,7 @@ export const BolsaDetails = ({
       name: assetToAdd.name,
       shares,
       avgPriceEur: avgPrice,
-      currentPrice: assetToAdd.price,
+      currentPrice: currentMarketPrice,
       value: currentValue,
       changePct: invested > 0 ? (changeEur / invested) * 100 : 0,
       changeEur,
@@ -120,54 +133,46 @@ export const BolsaDetails = ({
     setIsUpdating(true);
     
     try {
-      const symbols: string[] = posiciones.map(p => p.ticker);
-      symbols.push('EURUSD=X');
+      let usdToEurRate = 0.92;
+      try {
+        const fxRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR');
+        if (fxRes.ok) {
+          const fxData = await fxRes.json();
+          usdToEurRate = fxData.rates.EUR;
+        }
+      } catch(e) {}
 
-      // 🚀 AQUÍ TAMBIÉN LA CORRECCIÓN: (sym: string)
-      const chartPromises = symbols.map(async (sym: string) => {
-         const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
-         try {
-           const data = await fetchWithFallback(chartUrl);
-           return data?.chart?.result?.[0]?.meta;
-         } catch (e) {
-           return null;
-         }
-      });
+      const updatedPosiciones = await Promise.all(posiciones.map(async (pos) => {
+        try {
+          const meta = await fetchPriceWithFallback(pos.ticker);
+          const rawPrice = meta.regularMarketPrice || pos.currentPrice;
+          const currency = meta.currency || 'USD';
+          
+          let currentPriceEur = rawPrice;
+          if (currency === 'USD') currentPriceEur = rawPrice * usdToEurRate;
+          else if (currency === 'GBP') currentPriceEur = rawPrice * 1.17;
 
-      const metas = await Promise.all(chartPromises);
-      const validMetas = metas.filter(Boolean);
+          const value = pos.shares * currentPriceEur;
+          const invested = pos.shares * pos.avgPriceEur;
+          const changeEur = value - invested;
+          const changePct = invested > 0 ? (changeEur / invested) * 100 : 0;
 
-      const eurUsdMeta = validMetas.find(m => m.symbol === 'EURUSD=X');
-      const eurToUsdRate = eurUsdMeta?.regularMarketPrice || 1.08; 
-      const usdToEurRate = 1 / eurToUsdRate;
-
-      const updatedPosiciones = posiciones.map(pos => {
-        const m = validMetas.find(meta => meta.symbol === pos.ticker);
-        if (!m) return pos;
-
-        let currentPriceEur = m.regularMarketPrice || pos.currentPrice;
-        if (m.currency === 'USD') currentPriceEur *= usdToEurRate;
-        else if (m.currency === 'GBP') currentPriceEur *= 1.17; 
-
-        const value = pos.shares * currentPriceEur;
-        const invested = pos.shares * pos.avgPriceEur;
-        const changeEur = value - invested;
-        const changePct = invested > 0 ? (changeEur / invested) * 100 : 0;
-
-        return {
-          ...pos,
-          currentPrice: currentPriceEur,
-          value,
-          changeEur,
-          changePct,
-          isUp: changeEur >= 0
-        };
-      });
+          return {
+            ...pos,
+            currentPrice: currentPriceEur,
+            value,
+            changeEur,
+            changePct,
+            isUp: changeEur >= 0
+          };
+        } catch (e) {
+          return pos; // Mantenemos los datos viejos si la API falla temporalmente
+        }
+      }));
 
       setPosiciones(updatedPosiciones);
     } catch (error) {
-      console.error("Error actualizando precios de mercado:", error);
-      alert("Hubo un problema de conexión con el mercado. Inténtalo de nuevo.");
+      console.error("Error global actualizando precios:", error);
     } finally {
       setIsUpdating(false);
     }
@@ -181,6 +186,7 @@ export const BolsaDetails = ({
   return (
     <div className="w-full max-w-2xl mx-auto pb-12 animate-in fade-in duration-300 relative">
       
+      {/* CABECERA SUPERIOR */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={onBack} className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-[#2d2d2d] cursor-pointer">
           <ArrowLeft size={24} />
@@ -205,6 +211,7 @@ export const BolsaDetails = ({
         </div>
       </div>
 
+      {/* BALANCE Y COMPARADOR */}
       <div className="flex justify-between items-start mb-8">
         <div>
           <p className="text-gray-400 font-medium text-sm mb-1">Cartera bolsa total</p>
@@ -269,6 +276,7 @@ export const BolsaDetails = ({
         </div>
       </div>
 
+      {/* GRÁFICA */}
       {posiciones.length > 0 ? (
         <div className="mb-8">
           <div className="w-full h-48 mb-4 relative">
@@ -318,6 +326,7 @@ export const BolsaDetails = ({
         </div>
       )}
 
+      {/* LISTADO DE POSICIONES REALES */}
       <div>
         <h3 className="text-lg font-bold text-white mb-4">Posiciones</h3>
         
@@ -354,6 +363,7 @@ export const BolsaDetails = ({
         )}
       </div>
 
+      {/* MODALES */}
       <AssetSearchModal 
         isOpen={isSearchOpen} 
         onClose={() => setIsSearchOpen(false)} 
@@ -381,7 +391,7 @@ export const BolsaDetails = ({
 
               <div className="bg-[#1c1c1e] p-4 rounded-xl border border-[#2d2d2d] flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-400">Precio actual (aprox):</span>
-                <span className="text-sm font-black text-amber-500">{assetToAdd.price.toLocaleString('es-ES')} €</span>
+                <span className="text-sm font-black text-amber-500">{assetToAdd.price > 0 ? assetToAdd.price.toLocaleString('es-ES') : 'N/D'} €</span>
               </div>
 
               <div>

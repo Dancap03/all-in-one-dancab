@@ -17,27 +17,44 @@ interface AssetSearchModalProps {
 
 const CATEGORIES = ['Todos', 'Acciones', 'ETF', 'Cripto', 'Bonos'];
 
-// 🚀 MOTOR A PRUEBA DE BALAS: Intenta conexión directa y luego salta a 2 proxies de emergencia
-const fetchSafe = async (url: string) => {
-  // 1. Intento Directo (Funciona el 99% de las veces con la ruta oculta de Yahoo)
-  try {
-    const res = await fetch(url);
-    if (res.ok) return await res.json();
-  } catch (e) { /* Falló, pasamos al proxy */ }
+// 🚀 NUEVO OBTENEDOR DE PRECIOS BLINDADO: Usamos envoltorios JSON para saltar bloqueos
+const fetchPriceWithFallback = async (ticker: string) => {
+  let formattedTicker = ticker;
+  if (ticker.endsWith('USD') && ticker.length > 3 && !ticker.includes('-')) {
+    formattedTicker = ticker.replace('USD', '-USD');
+  }
 
-  // 2. Proxy 1 de emergencia
-  try {
-    const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
-    if (res.ok) return await res.json();
-  } catch (e) { /* Falló, pasamos al proxy 2 */ }
+  const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${formattedTicker}?interval=1d&range=1d`;
+  
+  const proxies = [
+    { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, isJsonWrapped: true },
+    { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`, isJsonWrapped: false },
+    { url: `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`, isJsonWrapped: false }
+  ];
 
-  // 3. Proxy 2 de emergencia extrema
-  try {
-    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
-    if (res.ok) return await res.json();
-  } catch (e) { /* Falló todo */ }
-
-  throw new Error("Fallo de red general");
+  for (const proxy of proxies) {
+    try {
+      const res = await fetch(proxy.url);
+      if (!res.ok) continue;
+      
+      let data;
+      if (proxy.isJsonWrapped) {
+        const wrapper = await res.json();
+        data = JSON.parse(wrapper.contents);
+      } else {
+        const text = await res.text();
+        if (text.includes('<!DOCTYPE html>') || text.includes('<html')) continue;
+        data = JSON.parse(text);
+      }
+      
+      if (data?.chart?.result?.[0]?.meta) {
+        return data.chart.result[0].meta;
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+  throw new Error("No se pudo obtener el precio en vivo");
 };
 
 export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearchModalProps) => {
@@ -62,75 +79,59 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
       setErrorMsg('');
       
       try {
-        // 1. BÚSQUEDA DEL ACTIVO (Muy resistente a bloqueos)
-        const searchUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(searchTerm)}&quotesCount=6`;
-        const searchData = await fetchSafe(searchUrl);
-        const quotes = searchData.quotes || [];
+        const searchUrl = `https://symbol-search.tradingview.com/symbol_search/v3/?text=${encodeURIComponent(searchTerm)}&hl=1&exchange=&lang=en&search_type=undefined&domain=production`;
+        const searchRes = await fetch(searchUrl);
+        const searchData = await searchRes.json();
         
-        if (quotes.length === 0) {
+        const validTypes = ['stock', 'crypto', 'fund', 'dr'];
+        const assets = searchData.filter((a: any) => validTypes.includes(a.type)).slice(0, 6);
+
+        if (assets.length === 0) {
           setResults([]);
           setIsLoading(false);
           return;
         }
 
-        const symbols = quotes.map((q: any) => q.symbol);
-        symbols.push('EURUSD=X'); 
-
-        // 2. OBTENCIÓN DE PRECIOS (Si esto falla, NO bloqueamos la app, seguimos adelante)
-        let priceMap = new Map();
-        let usdToEurRate = 0.92; // Valor de emergencia
-
+        let usdToEurRate = 0.92;
         try {
-          // Usamos la ruta "spark" que no pide cookies especiales
-          const priceUrl = `https://query2.finance.yahoo.com/v8/finance/spark?symbols=${symbols.join(',')}`;
-          const priceData = await fetchSafe(priceUrl);
-          
-          if (priceData?.spark?.result) {
-            priceData.spark.result.forEach((res: any) => {
-              const meta = res.response?.[0]?.meta;
-              if (meta) {
-                priceMap.set(res.symbol, meta);
-                if (res.symbol === 'EURUSD=X') {
-                  usdToEurRate = 1 / (meta.regularMarketPrice || 1.08);
-                }
-              }
-            });
+          const fxRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR');
+          if (fxRes.ok) {
+            const fxData = await fxRes.json();
+            usdToEurRate = fxData.rates.EUR;
           }
-        } catch (e) {
-          console.warn("Los precios en vivo fallaron, pero mostraremos los activos encontrados.");
-        }
+        } catch(e) { }
 
-        // 3. MAPEO DE DATOS FINAL
-        const mappedAssets: Asset[] = quotes.map((q: any) => {
+        const mappedAssets = await Promise.all(assets.map(async (a: any) => {
           let tipo: Asset['type'] = 'Acciones';
-          if (q.quoteType === 'ETF' || q.quoteType === 'MUTUALFUND') tipo = 'ETF';
-          else if (q.quoteType === 'CRYPTOCURRENCY') tipo = 'Cripto';
-          else if (q.quoteType === 'CURRENCY') tipo = 'Bonos';
+          if (a.type === 'crypto') tipo = 'Cripto';
+          else if (a.type === 'fund') tipo = 'ETF';
 
-          const meta = priceMap.get(q.symbol);
-          let priceInEur = 0; // Si el precio falló arriba, mostramos 0, pero permitimos comprar
-
-          if (meta) {
+          let priceInEur = 0;
+          try {
+            const meta = await fetchPriceWithFallback(a.symbol);
             const rawPrice = meta.regularMarketPrice || 0;
             const currency = meta.currency || 'USD';
+            
             if (currency === 'USD') priceInEur = rawPrice * usdToEurRate;
             else if (currency === 'GBP') priceInEur = rawPrice * 1.17; 
-            else priceInEur = rawPrice;
+            else priceInEur = rawPrice; 
+          } catch (e) {
+            priceInEur = 0; 
           }
 
           return {
-            id: q.symbol,
-            ticker: q.symbol,
-            name: q.longname || q.shortname || q.symbol,
+            id: a.symbol,
+            ticker: a.symbol,
+            name: a.description || a.symbol,
             type: tipo,
             price: priceInEur
           };
-        });
+        }));
 
         setResults(mappedAssets);
       } catch (error: any) {
         console.error(error);
-        setErrorMsg("Error de conexión. Revisa tu internet o intenta de nuevo.");
+        setErrorMsg("Los servidores del mercado no responden en este momento.");
         setResults([]);
       } finally {
         setIsLoading(false);
@@ -164,7 +165,7 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
             <Search size={18} className="absolute left-4 text-gray-500" />
             <input 
               type="text" 
-              placeholder="Ej: Tesla, Bitcoin, S&P 500..." 
+              placeholder="Buscar acción, cripto o ETF..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-[#1c1c1e] border border-[#2d2d2d] focus:border-amber-500 rounded-2xl pl-11 pr-10 py-3.5 text-sm text-white outline-none transition-colors placeholder-gray-500 font-medium"
@@ -198,14 +199,14 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
           {errorMsg ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-500 space-y-3 px-6 text-center">
               <AlertCircle size={32} className="opacity-50 text-amber-500 mb-2" />
-              <p className="text-sm font-bold text-gray-300">Problemas de conexión</p>
+              <p className="text-sm font-bold text-gray-300">Aviso del sistema</p>
               <p className="text-xs">{errorMsg}</p>
             </div>
           ) : !hasSearched && results.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-500 space-y-3 px-6 text-center opacity-60">
               <Search size={32} className="mb-2" />
               <p className="text-sm font-bold text-gray-400">Encuentra cualquier activo</p>
-              <p className="text-xs">Usa el buscador para localizar acciones de todo el mundo.</p>
+              <p className="text-xs">Usa el buscador para localizar acciones de todo el mundo. Los precios se convertirán a Euros (€).</p>
             </div>
           ) : filteredAssets.length > 0 ? (
             <div className="divide-y divide-[#2d2d2d]/50 pb-6">
@@ -227,11 +228,9 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
                   
                   <div className="flex items-center gap-4 shrink-0">
                     <div className="text-right">
-                      {asset.price > 0 ? (
-                        <p className="text-white font-bold text-sm">{asset.price.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</p>
-                      ) : (
-                        <p className="text-gray-500 font-bold text-sm">N/D</p>
-                      )}
+                      <p className="text-white font-bold text-sm">
+                        {asset.price > 0 ? `${asset.price.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : 'N/D'}
+                      </p>
                       <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{asset.type}</p>
                     </div>
                     <button className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center group-hover:bg-amber-500 group-hover:text-black transition-colors">
@@ -245,7 +244,7 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
             <div className="flex flex-col items-center justify-center h-full text-gray-500 space-y-3 px-6 text-center">
               <X size={32} className="opacity-30 mb-2 text-rose-500" />
               <p className="text-sm font-bold text-gray-400">No hemos encontrado "{searchTerm}"</p>
-              <p className="text-xs">Prueba con otro nombre o asegúrate de no tener faltas de ortografía.</p>
+              <p className="text-xs">Comprueba la ortografía del ticker o de la empresa.</p>
             </div>
           ) : null}
         </div>

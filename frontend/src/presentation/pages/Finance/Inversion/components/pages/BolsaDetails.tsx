@@ -26,26 +26,6 @@ interface BolsaDetailsProps {
   onBack: () => void;
 }
 
-const fetchDirectly = async (url: string) => {
-  try {
-    const res = await fetch(url);
-    if (res.ok) return await res.json();
-  } catch (e) {}
-
-  const proxies = [
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
-  ];
-
-  for (const p of proxies) {
-    try {
-      const res = await fetch(p);
-      if (res.ok) return await res.json();
-    } catch (e) {}
-  }
-  throw new Error("Network error");
-};
-
 export const BolsaDetails = ({ 
   disponibleGlobal,
   bolsaInvertido,
@@ -212,7 +192,7 @@ export const BolsaDetails = ({
     }
   };
 
-  // 🚀 ACTUALIZADOR DE PRECIOS MEJORADO
+  // 🚀 OBTENEDOR DE PRECIOS PROFUNDO (Ignora Caché y Bloqueos)
   const handleUpdatePrices = async () => {
     if (posiciones.length === 0) return;
     setIsUpdating(true);
@@ -227,18 +207,45 @@ export const BolsaDetails = ({
         }
       } catch(e) {}
 
+      let actualizados = 0;
+
       const updatedPosiciones = await Promise.all(posiciones.map(async (pos) => {
         try {
-          const timestamp = Date.now(); // Destructor de caché estricto
+          const timestamp = Date.now();
           let formattedTicker = pos.ticker;
           if (formattedTicker.endsWith('USD') && formattedTicker.length > 3 && !formattedTicker.includes('-')) {
             formattedTicker = formattedTicker.replace('USD', '-USD');
           }
 
-          const url = `https://query2.finance.yahoo.com/v8/finance/chart/${formattedTicker}?interval=1d&range=1d&_ts=${timestamp}`;
-          const data = await fetchDirectly(url);
+          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${formattedTicker}?interval=1d&range=1d&_ts=${timestamp}`;
           
-          const meta = data?.chart?.result?.[0]?.meta;
+          const proxies = [
+            { url: `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, isWrapped: true },
+            { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, isWrapped: false },
+            { url: `https://corsproxy.io/?url=${encodeURIComponent(url)}`, isWrapped: false }
+          ];
+
+          let meta = null;
+          for (const proxy of proxies) {
+            try {
+              const res = await fetch(proxy.url);
+              if (!res.ok) continue;
+              
+              let data;
+              if (proxy.isWrapped) {
+                const wrapper = await res.json();
+                data = JSON.parse(wrapper.contents);
+              } else {
+                data = await res.json();
+              }
+
+              if (data?.chart?.result?.[0]?.meta) {
+                meta = data.chart.result[0].meta;
+                break; // Lo encontramos
+              }
+            } catch (e) {}
+          }
+
           if (meta && meta.regularMarketPrice) {
             let currentPriceEur = meta.regularMarketPrice;
             if (meta.currency === 'USD') currentPriceEur *= usdToEurRate;
@@ -248,6 +255,8 @@ export const BolsaDetails = ({
             const invested = pos.shares * pos.avgPriceEur;
             const changeEur = value - invested;
             const changePct = invested > 0 ? (changeEur / invested) * 100 : 0;
+
+            actualizados++;
 
             return {
               ...pos,
@@ -259,12 +268,17 @@ export const BolsaDetails = ({
             };
           }
         } catch (e) {}
-        return pos;
+        return pos; 
       }));
 
       savePositions(updatedPosiciones);
+      
+      if (actualizados === 0) {
+        alert("Los servidores del mercado han rechazado la conexión. Vuelve a intentarlo.");
+      }
+
     } catch (error) {
-      console.warn("Fallo actualizando precios.");
+      alert("Fallo general de red al intentar actualizar los precios.");
     } finally {
       setIsUpdating(false);
     }
@@ -275,26 +289,24 @@ export const BolsaDetails = ({
   const gananciasTotales = carteraTotal - totalInvertidoCartera;
   const rentabilidadPct = totalInvertidoCartera > 0 ? (gananciasTotales / totalInvertidoCartera) * 100 : 0;
 
-  // 🚀 LÓGICA DE GRÁFICO CORREGIDA
   let curveType = 'flat';
   if (rentabilidadPct > 0.1) curveType = 'up';
   else if (rentabilidadPct < -0.1) curveType = 'down';
 
-  let dynamicSvgPath = "M 0 80 Q 100 70, 200 80 T 400 80"; // Línea plana y gris por defecto
-  let strokeColor = "#9ca3af"; // Gris
+  let dynamicSvgPath = "M 0 80 Q 100 70, 200 80 T 400 80"; 
+  let strokeColor = "#9ca3af"; 
 
   if (curveType === 'up') {
     dynamicSvgPath = "M0 130 Q 100 140, 200 100 T 400 30";
-    strokeColor = "#10b981"; // Verde esmeralda
+    strokeColor = "#10b981"; 
   } else if (curveType === 'down') {
     dynamicSvgPath = "M0 30 Q 100 20, 200 80 T 400 140";
-    strokeColor = "#ef4444"; // Rojo
+    strokeColor = "#ef4444"; 
   }
 
   return (
     <div className="w-full max-w-2xl mx-auto pb-12 animate-in fade-in duration-300 relative">
       
-      {/* CABECERA */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={onBack} className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-[#2d2d2d] cursor-pointer">
           <ArrowLeft size={24} />
@@ -318,7 +330,6 @@ export const BolsaDetails = ({
         </div>
       </div>
 
-      {/* BALANCE Y COMPARADOR */}
       <div className="flex justify-between items-start mb-8">
         <div>
           <p className="text-gray-400 font-medium text-sm mb-1">Cartera bolsa total</p>
@@ -372,7 +383,6 @@ export const BolsaDetails = ({
         </div>
       </div>
 
-      {/* GRÁFICO DINÁMICO */}
       {posiciones.length > 0 ? (
         <div className="mb-8">
           <div className="w-full h-48 mb-4 relative">
@@ -422,7 +432,6 @@ export const BolsaDetails = ({
         </div>
       )}
 
-      {/* LISTADO DE POSICIONES */}
       <div>
         <h3 className="text-lg font-bold text-white mb-4">Posiciones</h3>
         

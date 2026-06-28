@@ -23,41 +23,24 @@ interface BolsaDetailsProps {
   onBack: () => void;
 }
 
-const fetchPriceWithFallback = async (ticker: string) => {
-  let formattedTicker = ticker;
-  if (ticker.endsWith('USD') && ticker.length > 3 && !ticker.includes('-')) {
-    formattedTicker = ticker.replace('USD', '-USD');
-  }
+const fetchDirectly = async (url: string) => {
+  try {
+    const res = await fetch(url);
+    if (res.ok) return await res.json();
+  } catch (e) {}
 
-  const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${formattedTicker}?interval=1d&range=1d`;
-  
   const proxies = [
-    { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, isJsonWrapped: true },
-    { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`, isJsonWrapped: false },
-    { url: `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`, isJsonWrapped: false }
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+    `https://corsproxy.io/?url=${encodeURIComponent(url)}`
   ];
 
-  for (const proxy of proxies) {
+  for (const p of proxies) {
     try {
-      const res = await fetch(proxy.url);
-      if (!res.ok) continue;
-      
-      let data;
-      if (proxy.isJsonWrapped) {
-        const wrapper = await res.json();
-        data = JSON.parse(wrapper.contents);
-      } else {
-        const text = await res.text();
-        if (text.includes('<!DOCTYPE html>') || text.includes('<html')) continue;
-        data = JSON.parse(text);
-      }
-      
-      if (data?.chart?.result?.[0]?.meta) {
-        return data.chart.result[0].meta;
-      }
-    } catch (e) { continue; }
+      const res = await fetch(p);
+      if (res.ok) return await res.json();
+    } catch (e) {}
   }
-  throw new Error("No se pudo obtener el precio");
+  throw new Error("Network error");
 };
 
 export const BolsaDetails = ({ 
@@ -78,10 +61,9 @@ export const BolsaDetails = ({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [assetToAdd, setAssetToAdd] = useState<Asset | null>(null);
   
-  // 🚀 NUEVOS ESTADOS DE LA CALCULADORA DE ACCIONES FRACCIONADAS
+  // 🚀 SOLO QUEDAN 2 CAMPOS
   const [addPrice, setAddPrice] = useState('');
   const [addInvested, setAddInvested] = useState('');
-  const [addShares, setAddShares] = useState('');
 
   const allIndices = ['S&P500', 'MSCI World', 'IBEX 35', 'Nasdaq 100', 'DAX 40', 'Euro Stoxx 50', 'Dow Jones'];
   const filteredIndices = allIndices.filter(idx => idx.toLowerCase().includes(searchIndex.toLowerCase()));
@@ -91,53 +73,25 @@ export const BolsaDetails = ({
     setAssetToAdd(asset);
     setAddPrice(asset.price > 0 ? asset.price.toFixed(2) : ''); 
     setAddInvested('');
-    setAddShares('');
-  };
-
-  // 🧮 LÓGICA DE CÁLCULO EN TIEMPO REAL
-  const handleInvestedChange = (val: string) => {
-    setAddInvested(val);
-    const p = Number(addPrice);
-    if (p > 0 && Number(val) > 0) {
-      setAddShares((Number(val) / p).toString());
-    } else {
-      setAddShares('');
-    }
-  };
-
-  const handleSharesChange = (val: string) => {
-    setAddShares(val);
-    const p = Number(addPrice);
-    if (p > 0 && Number(val) > 0) {
-      setAddInvested((Number(val) * p).toString());
-    } else {
-      setAddInvested('');
-    }
-  };
-
-  const handlePriceChange = (val: string) => {
-    setAddPrice(val);
-    const inv = Number(addInvested);
-    if (Number(val) > 0 && inv > 0) {
-      setAddShares((inv / Number(val)).toString());
-    }
   };
 
   const handleConfirmAdd = () => {
     if (!assetToAdd) return;
     const invested = Number(addInvested);
-    const shares = Number(addShares);
     const avgPrice = Number(addPrice);
     
-    if (invested <= 0 || shares <= 0 || avgPrice <= 0) {
-      alert('Por favor, asegúrate de que el precio, las acciones y la cantidad a invertir son mayores que 0.');
+    if (invested <= 0 || avgPrice <= 0) {
+      alert('Por favor, asegúrate de que el precio y el total a invertir son mayores que 0.');
       return;
     }
 
     if (invested > disponibleGlobal) {
-      alert(`Saldo insuficiente. Intentas invertir ${invested.toLocaleString('es-ES')} € pero solo dispones de ${disponibleGlobal.toLocaleString('es-ES')} €.`);
+      alert(`Saldo insuficiente. Intentas invertir ${invested.toLocaleString('es-ES')} € pero dispones de ${disponibleGlobal.toLocaleString('es-ES')} €.`);
       return;
     }
+
+    // 🚀 EL SISTEMA CALCULA LAS ACCIONES AUTOMÁTICAMENTE
+    const shares = invested / avgPrice;
 
     const currentMarketPrice = assetToAdd.price > 0 ? assetToAdd.price : avgPrice; 
     const currentValue = shares * currentMarketPrice;
@@ -160,7 +114,6 @@ export const BolsaDetails = ({
 
     setPosiciones([...posiciones, newPos]);
     setAssetToAdd(null);
-    setAddShares('');
     setAddPrice('');
     setAddInvested('');
   };
@@ -170,46 +123,51 @@ export const BolsaDetails = ({
     setIsUpdating(true);
     
     try {
+      const symbols = posiciones.map(p => p.ticker);
+      symbols.push('EURUSD=X');
+
+      const priceUrl = `https://query2.finance.yahoo.com/v8/finance/spark?symbols=${symbols.join(',')}`;
+      const priceData = await fetchDirectly(priceUrl);
+
+      let priceMap = new Map();
       let usdToEurRate = 0.92;
-      try {
-        const fxRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR');
-        if (fxRes.ok) {
-          const fxData = await fxRes.json();
-          usdToEurRate = fxData.rates.EUR;
-        }
-      } catch(e) {}
 
-      const updatedPosiciones = await Promise.all(posiciones.map(async (pos) => {
-        try {
-          const meta = await fetchPriceWithFallback(pos.ticker);
-          const rawPrice = meta.regularMarketPrice || pos.currentPrice;
-          const currency = meta.currency || 'USD';
-          
-          let currentPriceEur = rawPrice;
-          if (currency === 'USD') currentPriceEur = rawPrice * usdToEurRate;
-          else if (currency === 'GBP') currentPriceEur = rawPrice * 1.17;
+      if (priceData?.spark?.result) {
+        priceData.spark.result.forEach((res: any) => {
+          const meta = res.response?.[0]?.meta;
+          if (meta) {
+            priceMap.set(res.symbol, meta);
+            if (res.symbol === 'EURUSD=X') usdToEurRate = 1 / (meta.regularMarketPrice || 1.08);
+          }
+        });
+      }
 
-          const value = pos.shares * currentPriceEur;
-          const invested = pos.shares * pos.avgPriceEur;
-          const changeEur = value - invested;
-          const changePct = invested > 0 ? (changeEur / invested) * 100 : 0;
+      const updatedPosiciones = posiciones.map(pos => {
+        const meta = priceMap.get(pos.ticker);
+        if (!meta) return pos;
 
-          return {
-            ...pos,
-            currentPrice: currentPriceEur,
-            value,
-            changeEur,
-            changePct,
-            isUp: changeEur >= 0
-          };
-        } catch (e) {
-          return pos; 
-        }
-      }));
+        let currentPriceEur = meta.regularMarketPrice || pos.currentPrice;
+        if (meta.currency === 'USD') currentPriceEur *= usdToEurRate;
+        else if (meta.currency === 'GBP') currentPriceEur *= 1.17; 
+
+        const value = pos.shares * currentPriceEur;
+        const invested = pos.shares * pos.avgPriceEur;
+        const changeEur = value - invested;
+        const changePct = invested > 0 ? (changeEur / invested) * 100 : 0;
+
+        return {
+          ...pos,
+          currentPrice: currentPriceEur,
+          value,
+          changeEur,
+          changePct,
+          isUp: changeEur >= 0
+        };
+      });
 
       setPosiciones(updatedPosiciones);
     } catch (error) {
-      console.error("Error global actualizando precios:", error);
+      console.warn("Fallo de red actualizando. Mantenemos los precios anteriores.");
     } finally {
       setIsUpdating(false);
     }
@@ -223,6 +181,7 @@ export const BolsaDetails = ({
   return (
     <div className="w-full max-w-2xl mx-auto pb-12 animate-in fade-in duration-300 relative">
       
+      {/* CABECERA SUPERIOR */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={onBack} className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-[#2d2d2d] cursor-pointer">
           <ArrowLeft size={24} />
@@ -247,6 +206,7 @@ export const BolsaDetails = ({
         </div>
       </div>
 
+      {/* BALANCE Y COMPARADOR */}
       <div className="flex justify-between items-start mb-8">
         <div>
           <p className="text-gray-400 font-medium text-sm mb-1">Cartera bolsa total</p>
@@ -311,6 +271,7 @@ export const BolsaDetails = ({
         </div>
       </div>
 
+      {/* GRÁFICA */}
       {posiciones.length > 0 ? (
         <div className="mb-8">
           <div className="w-full h-48 mb-4 relative">
@@ -360,6 +321,7 @@ export const BolsaDetails = ({
         </div>
       )}
 
+      {/* LISTADO DE POSICIONES */}
       <div>
         <h3 className="text-lg font-bold text-white mb-4">Posiciones</h3>
         
@@ -374,8 +336,7 @@ export const BolsaDetails = ({
                   <div>
                     <p className="text-white font-bold text-sm">{pos.ticker}</p>
                     <p className="text-xs text-gray-500">{pos.name}</p>
-                    {/* MOSTRAMOS DECIMALES ADAPTADOS AL USUARIO */}
-                    <p className="text-[10px] text-gray-600 mt-0.5 font-medium">{pos.shares.toLocaleString('es-ES', { maximumFractionDigits: 4 })} acciones</p>
+                    <p className="text-[10px] text-gray-600 mt-0.5 font-medium">{pos.shares.toLocaleString('es-ES', { maximumFractionDigits: 5 })} acciones</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -403,6 +364,7 @@ export const BolsaDetails = ({
         onSelectAsset={handleSelectAsset} 
       />
 
+      {/* MODAL 2: FORMULARIO DE COMPRA */}
       {assetToAdd && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
@@ -429,34 +391,28 @@ export const BolsaDetails = ({
                   step="any"
                   placeholder="Ej: 150.25" 
                   value={addPrice} 
-                  onChange={(e) => handlePriceChange(e.target.value)} 
+                  onChange={(e) => setAddPrice(e.target.value)} 
                   className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-amber-500 transition-colors" 
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Total a Invertir (€)</label>
-                  <input 
-                    type="number" 
-                    step="any"
-                    placeholder="Ej: 10" 
-                    value={addInvested} 
-                    onChange={(e) => handleInvestedChange(e.target.value)} 
-                    className="w-full bg-[#1c1c1e] border border-amber-500/50 rounded-xl px-4 py-3 text-base text-white outline-none focus:border-amber-500 transition-colors shadow-[0_0_10px_rgba(245,158,11,0.1)]" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Nº Acciones</label>
-                  <input 
-                    type="number" 
-                    step="any"
-                    placeholder="Ej: 0.25" 
-                    value={addShares} 
-                    onChange={(e) => handleSharesChange(e.target.value)} 
-                    className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-gray-300 outline-none focus:border-amber-500 transition-colors" 
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Total a Invertir (€)</label>
+                <input 
+                  type="number" 
+                  step="any"
+                  placeholder="Ej: 10" 
+                  value={addInvested} 
+                  onChange={(e) => setAddInvested(e.target.value)} 
+                  className="w-full bg-[#1c1c1e] border border-amber-500/50 rounded-xl px-4 py-3 text-base text-white outline-none focus:border-amber-500 transition-colors shadow-[0_0_10px_rgba(245,158,11,0.1)]" 
+                />
+                
+                {/* 🚀 FRACCIÓN CALCULADA EN TEXTO INFORMATIVO */}
+                {addInvested && addPrice && Number(addPrice) > 0 && (
+                  <p className="text-[11px] text-gray-500 mt-2 ml-1">
+                    Equivale a <span className="font-bold text-gray-300">{(Number(addInvested) / Number(addPrice)).toFixed(5)} acciones</span>
+                  </p>
+                )}
               </div>
 
               <button 

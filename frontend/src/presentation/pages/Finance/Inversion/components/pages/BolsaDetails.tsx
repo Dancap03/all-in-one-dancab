@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, RefreshCw, Plus, TrendingUp, Search, ChevronDown, Check, X, Calculator, Trash2, Edit2, Calendar, Banknote, ChevronRight } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Plus, TrendingUp, Search, ChevronDown, Check, X, Calculator, Trash2, Edit2, Calendar, Banknote, ChevronRight, Wallet } from 'lucide-react';
 import { AssetSearchModal, Asset } from '../modals/AssetSearchModal';
 import { db, auth } from '../../../../../../infrastructure/firebase/config';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -42,7 +42,7 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
   const [editPrice, setEditPrice] = useState('');
   const [editInvested, setEditInvested] = useState('');
   const [editDate, setEditDate] = useState('');
-  const [editFundSource, setEditFundSource] = useState('propio'); // 🚀 NUEVO: Editar el origen del lote
+  const [editFundSource, setEditFundSource] = useState('propio'); 
 
   const [sellingGroup, setSellingGroup] = useState<GroupedPosition | null>(null);
   const [sellShares, setSellShares] = useState('');
@@ -50,6 +50,9 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
 
   const [manualPriceGroup, setManualPriceGroup] = useState<GroupedPosition | null>(null);
   const [manualPriceInput, setManualPriceInput] = useState('');
+
+  // 🚀 ESTADO DEL MODO DE RENTABILIDAD
+  const [roiMode, setRoiMode] = useState<'propio' | 'total'>('propio');
 
   const allIndices = ['S&P500', 'MSCI World', 'IBEX 35', 'Nasdaq 100', 'DAX 40', 'Euro Stoxx 50', 'Dow Jones'];
   const filteredIndices = allIndices.filter(idx => idx.toLowerCase().includes(searchIndex.toLowerCase()));
@@ -191,13 +194,12 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
     }
   };
 
-  // 🚀 AÑADIDA LECTURA DEL ORIGEN EN LA EDICIÓN
   const handleOpenEdit = (lot: Position) => {
     setEditingPos(lot); 
     setEditPrice(lot.avgPriceEur.toString()); 
     setEditInvested((lot.shares * lot.avgPriceEur).toString()); 
     setEditDate(lot.date || new Date().toISOString().split('T')[0]);
-    setEditFundSource(lot.fundSource || 'propio'); // Carga el origen actual (o 'propio' si es viejo)
+    setEditFundSource(lot.fundSource || 'propio'); 
   };
 
   const handleConfirmEdit = () => {
@@ -208,7 +210,6 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
 
     const difference = newInvested - oldInvested;
 
-    // Ajuste de saldos si aumenta o disminuye la cantidad (ignoramos si solo cambia el origen)
     if (difference > 0) {
       if (editFundSource === 'propio' && difference > disponibleGlobal) return;
       if (editFundSource === 'ganancia' && difference > bolsaGanancias) return;
@@ -224,7 +225,7 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
     const updatedPosiciones = posiciones.map(p => p.id === editingPos.id ? {
       ...p, shares: newShares, avgPriceEur: newAvgPrice, value: currentValue, changeEur,
       changePct: newInvested > 0 ? (changeEur / newInvested) * 100 : 0, isUp: changeEur >= 0, date: editDate,
-      fundSource: editFundSource // 🚀 Guarda la nueva etiqueta
+      fundSource: editFundSource
     } : p);
 
     savePositions(updatedPosiciones); setEditingPos(null);
@@ -297,10 +298,24 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
     savePositions(updatedPosiciones); setManualPriceGroup(null);
   };
 
-  const totalInvertidoCartera = groupedPositions.reduce((sum, g) => sum + g.totalInvested, 0);
-  const carteraTotal = groupedPositions.reduce((sum, g) => sum + g.totalValue, 0);
-  const gananciasTotales = carteraTotal - totalInvertidoCartera;
-  const rentabilidadPct = totalInvertidoCartera > 0 ? (gananciasTotales / totalInvertidoCartera) * 100 : 0;
+  // 🚀 CÁLCULO INTELIGENTE DEL TOP HEADER SEGÚN EL MODO ELEGIDO
+  const totalInvertidoCartera = posiciones.reduce((sum, pos) => sum + (pos.shares * pos.avgPriceEur), 0);
+  
+  const totalInvertidoPropio = posiciones.reduce((sum, pos) => {
+    if (!pos.fundSource || pos.fundSource === 'propio') {
+      return sum + (pos.shares * pos.avgPriceEur);
+    }
+    return sum;
+  }, 0);
+
+  const carteraTotal = posiciones.reduce((sum, pos) => sum + pos.value, 0);
+
+  // Determina el coste que se usará para calcular la rentabilidad general
+  const activeCost = roiMode === 'propio' ? (totalInvertidoPropio > 0 ? totalInvertidoPropio : totalInvertidoCartera) : totalInvertidoCartera;
+  
+  const gananciasTotales = carteraTotal - activeCost;
+  const rentabilidadPct = activeCost > 0 ? (gananciasTotales / activeCost) * 100 : 0;
+  
   let curveType = 'flat'; if (rentabilidadPct > 0.1) curveType = 'up'; else if (rentabilidadPct < -0.1) curveType = 'down';
   let dynamicSvgPath = "M 0 80 Q 100 70, 200 80 T 400 80"; let strokeColor = "#9ca3af"; 
   if (curveType === 'up') { dynamicSvgPath = "M0 130 Q 100 140, 200 100 T 400 30"; strokeColor = "#10b981"; } else if (curveType === 'down') { dynamicSvgPath = "M0 30 Q 100 20, 200 80 T 400 140"; strokeColor = "#ef4444"; }
@@ -317,7 +332,23 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
 
       <div className="flex justify-between items-start mb-8">
         <div>
-          <p className="text-gray-400 font-medium text-sm mb-1">Cartera bolsa total</p>
+          {/* 🚀 EL NUEVO BOTÓN PARA CAMBIAR EL MODO DE RENTABILIDAD */}
+          <div className="flex items-center gap-3 mb-1.5">
+            <p className="text-gray-400 font-medium text-sm">Cartera bolsa total</p>
+            {posiciones.length > 0 && (
+              <button 
+                onClick={() => setRoiMode(prev => prev === 'total' ? 'propio' : 'total')}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer bg-[#1c1c1e] hover:bg-[#2d2d2d] border-[#3d3d3d] text-gray-300 hover:text-white shadow-sm"
+              >
+                {roiMode === 'propio' ? (
+                  <><Wallet size={12} className="text-amber-500" /> ROI: Mi Bolsillo</>
+                ) : (
+                  <><TrendingUp size={12} className="text-blue-500" /> ROI: Mercado Total</>
+                )}
+              </button>
+            )}
+          </div>
+          
           <h2 className="text-4xl font-black text-white tracking-tight mb-1.5">{posiciones.length > 0 ? `${carteraTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : `${(bolsaInvertido + bolsaGanancias).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`}</h2>
           <div className={`flex items-center gap-1.5 font-bold text-sm ${curveType === 'up' ? 'text-emerald-400' : curveType === 'down' ? 'text-rose-400' : 'text-gray-400'}`}>
             <TrendingUp size={16} strokeWidth={2.5} className={curveType === 'down' ? 'transform rotate-180' : ''} />
@@ -411,7 +442,6 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
 
       <AssetSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelectAsset={handleSelectAsset} />
 
-      {/* MODAL PARA FORZAR PRECIO */}
       {manualPriceGroup && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
@@ -431,7 +461,6 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
         </div>
       )}
 
-      {/* 🟢 MODAL: EDITAR LOTE (AHORA CON SELECTOR DE ORIGEN) */}
       {editingPos && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
@@ -440,7 +469,6 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
               <button onClick={() => setEditingPos(null)} className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer"><X size={20} /></button>
             </div>
             <div className="p-5 space-y-4">
-              {/* 🚀 NUEVO: SELECTOR DE ORIGEN PARA EDITAR */}
               <div>
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Origen del dinero</label>
                 <select value={editFundSource} onChange={(e) => setEditFundSource(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-blue-500 cursor-pointer">
@@ -461,7 +489,6 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
         </div>
       )}
       
-      {/* (EL MODAL DE AÑADIR NUEVO SE MANTIENE IGUAL POR ESPACIO) */}
       {assetToAdd && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">

@@ -21,26 +21,52 @@ export const useInvestment = () => {
     if (!user) return;
 
     try {
+      // 1. CARGAMOS EL HISTORIAL REAL DE TRANSACCIONES DE FIREBASE
+      const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
+      const firebaseTxs: any[] = transSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // Ordenamos por fecha decreciente para la vista
+      firebaseTxs.sort((a, b) => new Date(b.dateString).getTime() - new Date(a.dateString).getTime());
+      setMovimientos(firebaseTxs);
+
+      // 2. CARGAMOS LOS VALORES INVERTIDOS ACTIVOS DE BOLSA Y PROYECTOS
       const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
       const docSnap = await getDoc(docRef);
       const data = docSnap.exists() ? docSnap.data() : {};
 
-      const localGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
+      // 3. 🎯 MATEMÁTICAS REALES: El saldo global se calcula EXCLUSIVAMENTE sumando el historial real
+      let saldoCalculadoDesdeHistorial = 0;
+      
+      firebaseTxs.forEach(tx => {
+        const lowerLabel = (tx.label || '').toLowerCase();
+        // Si es una compra en bolsa o inversión en proyecto, restamos del disponible global
+        if (lowerLabel.includes('compra de activos') || lowerLabel.includes('inversión en proyectos')) {
+          // No restamos aquí si ya se procesa de forma directa, pero como las transacciones guardan 
+          // el monto neto de aportación/salida, sumamos el valor real firmado del historial.
+          saldoCalculadoDesdeHistorial += Number(tx.amount);
+        } else {
+          // Aportaciones, retiradas directas, ventas, etc.
+          saldoCalculadoDesdeHistorial += Number(tx.amount);
+        }
+      });
 
-      const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
-      const firebaseTxs: any[] = transSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Forzamos a que si el historial da 0, el saldo sea 0 limpio
+      if (firebaseTxs.length === 0) {
+        saldoCalculadoDesdeHistorial = 0;
+      }
 
-      firebaseTxs.sort((a, b) => new Date(b.dateString).getTime() - new Date(a.dateString).getTime());
-      setMovimientos(firebaseTxs);
-
-      setDisponibleGlobal(data.disponibleGlobal !== undefined ? data.disponibleGlobal : localGlobal);
+      setDisponibleGlobal(saldoCalculadoDesdeHistorial);
       setBolsaInvertido(data.bolsaInvertido || 0);
       setBolsaGanancias(data.bolsaGanancias || 0);
       setProyectoInvertido(data.proyectoInvertido || 0);
       setProyectoGanado(data.proyectoGanado || 0);
 
+      // Sincronizamos la base de datos y almacenamiento local con el valor del historial matemático
+      await setDoc(docRef, { disponibleGlobal: saldoCalculadoDesdeHistorial }, { merge: true });
+      localStorage.setItem('aio_total_invertido_diadia_v2', saldoCalculadoDesdeHistorial.toString());
+
     } catch (error) {
-      console.error("Error cargando datos:", error);
+      console.error("Error cargando y cuadrando datos de inversión:", error);
     } finally {
       setLoading(false);
     }
@@ -48,7 +74,7 @@ export const useInvestment = () => {
 
   useEffect(() => {
     cargarSaldos();
-  }, []);
+  }, [currentView]); // Se actualiza dinámicamente si cambias de pantalla o cierras un modal
 
   const guardarEnFirebase = async (nuevosSaldos: any) => {
     const user = auth.currentUser;
@@ -87,7 +113,6 @@ export const useInvestment = () => {
     const filtered = currentMovements.filter((m: any) => m.id !== id);
     localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify(filtered));
 
-    let nGlob = disponibleGlobal;
     let nBInv = bolsaInvertido;
     let nPInv = proyectoInvertido;
     let nBGan = bolsaGanancias;
@@ -97,78 +122,67 @@ export const useInvestment = () => {
     
     if (lower.includes('bolsa')) {
       if (lower.includes('dividendo')) { nBGan -= amount; } 
-      else { nGlob += amount; nBInv -= amount; } 
+      else { nBInv -= amount; } 
     } 
     else if (lower.includes('proyecto')) {
-      if (lower.includes('venta')) { nGlob -= amount; nPGan -= amount; } 
-      else { nGlob += amount; nPInv -= amount; }
-    } 
-    else {
-      nGlob -= amount;
+      if (lower.includes('venta')) { nPGan -= amount; } 
+      else { nPInv -= amount; }
     }
 
-    nGlob = Math.max(0, nGlob);
     nBInv = Math.max(0, nBInv);
     nPInv = Math.max(0, nPInv);
 
-    setDisponibleGlobal(nGlob);
     setBolsaInvertido(nBInv);
     setProyectoInvertido(nPInv);
     setBolsaGanancias(nBGan);
     setProyectoGanado(nPGan);
+    
+    // Al filtrar el movimiento local, el useEffect volverá a calcular el saldo real exacto
     setMovimientos(prev => prev.filter(m => m.id !== id));
-
-    localStorage.setItem('aio_total_invertido_diadia_v2', nGlob.toString());
     await guardarEnFirebase({
-      disponibleGlobal: nGlob, bolsaInvertido: nBInv, proyectoInvertido: nPInv, bolsaGanancias: nBGan, proyectoGanado: nPGan
+      bolsaInvertido: nBInv, proyectoInvertido: nPInv, bolsaGanancias: nBGan, proyectoGanado: nPGan
     });
+    
+    // Forzamos recarga limpia
+    cargarSaldos();
   };
 
   const handleTransferirGlobal = async (monto: number, destino: string, concepto?: string) => {
     const esRetirada = destino === 'diadia' || destino === 'retirar';
     const labelFinal = concepto || (esRetirada ? 'Retirada de capital' : 'Aportación de capital');
-
-    setDisponibleGlobal(saldoAnterior => {
-      const nuevoSaldo = esRetirada ? Math.max(0, saldoAnterior - monto) : saldoAnterior + monto;
-      localStorage.setItem('aio_total_invertido_diadia_v2', nuevoSaldo.toString());
-      guardarEnFirebase({ disponibleGlobal: nuevoSaldo });
-      return nuevoSaldo;
-    });
-
-    registrarMovimientoHistorial(esRetirada ? -monto : monto, labelFinal);
+    
+    // Registramos la transacción firmada. El cálculo automático del useEffect se encargará de setear el disponible
+    await registrarMovimientoHistorial(esRetirada ? -monto : monto, labelFinal);
+    cargarSaldos();
   };
 
   const handleEjecutarBolsa = async (monto: number, tipo: 'propio' | 'ganancia' | 'diadia' | 'balance') => {
     if (tipo === 'propio') {
-      registrarMovimientoHistorial(monto, 'Compra de activos en Bolsa');
-      setDisponibleGlobal(prev => { const n = Math.max(0, prev - monto); guardarEnFirebase({ disponibleGlobal: n }); return n; });
+      await registrarMovimientoHistorial(-monto, 'Compra de activos en Bolsa');
       setBolsaInvertido(prev => { const n = prev + monto; guardarEnFirebase({ bolsaInvertido: n }); return n; });
     } else if (tipo === 'ganancia') {
-      registrarMovimientoHistorial(monto, 'Cobro de Dividendos / Premios');
+      await registrarMovimientoHistorial(monto, 'Cobro de Dividendos en Bolsa');
       setBolsaGanancias(prev => { const n = prev + monto; guardarEnFirebase({ bolsaGanancias: n }); return n; });
     } else {
-      registrarMovimientoHistorial(-monto, 'Venta de activos en Bolsa');
+      await registrarMovimientoHistorial(monto, 'Venta de activos en Bolsa');
       setBolsaInvertido(prev => { const n = Math.max(0, prev - monto); guardarEnFirebase({ bolsaInvertido: n }); return n; });
-      setDisponibleGlobal(prev => { const n = prev + monto; guardarEnFirebase({ disponibleGlobal: n }); return n; });
     }
+    cargarSaldos();
   };
 
   const handleEjecutarProyecto = async (modo: 'comprar' | 'vender' | 'diadia' | 'balance', coste: number, venta?: number) => {
     if (modo === 'comprar') {
-      registrarMovimientoHistorial(coste, 'Inversión en Proyectos');
-      setDisponibleGlobal(prev => { const n = Math.max(0, prev - coste); guardarEnFirebase({ disponibleGlobal: n }); return n; });
+      await registrarMovimientoHistorial(-coste, 'Inversión en Proyectos');
       setProyectoInvertido(prev => { const n = prev + coste; guardarEnFirebase({ proyectoInvertido: n }); return n; });
     } else if (modo === 'vender' && venta !== undefined) {
-      const ganancia = venta - coste;
-      registrarMovimientoHistorial(ganancia, 'Venta de proyecto completada');
-      setProyectoGanado(prev => { const n = prev + ganancia; guardarEnFirebase({ proyectoGanado: n }); return n; });
+      await registrarMovimientoHistorial(venta, 'Venta de proyecto completada');
+      setProyectoGanado(prev => { const n = prev + (venta - coste); guardarEnFirebase({ proyectoGanado: n }); return n; });
       setProyectoInvertido(prev => { const n = Math.max(0, prev - coste); guardarEnFirebase({ proyectoInvertido: n }); return n; });
-      setDisponibleGlobal(prev => { const n = prev + venta; guardarEnFirebase({ disponibleGlobal: n }); return n; });
     } else {
-      registrarMovimientoHistorial(-coste, 'Retorno de capital de Proyectos');
+      await registrarMovimientoHistorial(coste, 'Retorno de capital de Proyectos');
       setProyectoInvertido(prev => { const n = Math.max(0, prev - coste); guardarEnFirebase({ proyectoInvertido: n }); return n; });
-      setDisponibleGlobal(prev => { const n = prev + coste; guardarEnFirebase({ disponibleGlobal: n }); return n; });
     }
+    cargarSaldos();
   };
 
   const totalInvertidoCalculado = bolsaInvertido + proyectoInvertido;

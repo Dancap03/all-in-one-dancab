@@ -27,7 +27,8 @@ export const InvestmentSummaryCards = ({
 }: InvestmentSummaryCardsProps) => {
 
   const [bolsaLiveValue, setBolsaLiveValue] = useState(0);
-  const [netDeposits, setNetDeposits] = useState(0); // 🚀 NUEVO: Dinero real de tu bolsillo
+  const [netDeposits, setNetDeposits] = useState(0); 
+  const [hasHistory, setHasHistory] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -35,7 +36,7 @@ export const InvestmentSummaryCards = ({
       if (!user) return;
       
       try {
-        // 1. OBTENEMOS EL VALOR REAL DE LA BOLSA EN VIVO
+        // 1. VALOR EN VIVO DE LA CARTERA
         let liveVal = 0;
         const snap = await getDoc(doc(db, `users/${user.uid}/investment_balances`, 'bolsa_posiciones'));
         if (snap.exists()) {
@@ -44,33 +45,44 @@ export const InvestmentSummaryCards = ({
         }
         setBolsaLiveValue(liveVal);
 
-        // 2. 🚀 CALCULAMOS EL "DINERO DE TU BOLSILLO" ESCANEANDO EL HISTORIAL
+        // 2. 🚀 CÁLCULO DE CAPITAL BASE (SIN METER BENEFICIOS COMO EL DINERO EXTERNO)
         let deposits = 0;
         const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
         
-        transSnap.docs.forEach(d => {
-            const data = d.data();
-            const label = (data.label || '').toLowerCase();
-            const amount = Number(data.amount || 0);
-            
-            // Solo contamos lo que entra y sale desde tu cuenta bancaria (Día a Día)
-            if (label.includes('aportación')) {
-                deposits += amount;
-            } else if (label.includes('retirada') || label.includes('borrado de saldo')) {
-                deposits += amount; // El amount ya viene en negativo
-            }
-        });
-        
-        setNetDeposits(deposits);
+        if (!transSnap.empty) {
+          setHasHistory(true);
+          transSnap.docs.forEach(d => {
+              const data = d.data();
+              const label = (data.label || '').toLowerCase();
+              const amount = Number(data.amount || 0);
+              
+              // Entradas de capital desde tu banco
+              if (label.includes('aportación')) {
+                  deposits += amount;
+              } 
+              // Salidas de capital a tu banco
+              else if (label.includes('retirada') || label.includes('borrado de saldo')) {
+                  deposits += amount; // Aquí el amount ya está en negativo
+              } 
+              // 🚀 SOLUCIÓN: El Dinero Externo SÍ es capital base invertido, NO es beneficio.
+              else if (label.includes('dinero externo') && !label.includes('deshacer')) {
+                  deposits += Math.abs(amount);
+              } 
+              // 🚀 SOLUCIÓN: Restar si borramos un lote comprado con Dinero Externo
+              else if (label.includes('deshacer') && label.includes('externo')) {
+                  deposits -= Math.abs(amount);
+              }
+          });
+          setNetDeposits(deposits);
+        }
 
       } catch (e) {
-        console.error("Error calculando rentabilidad neta:", e);
+        console.error("Error calculando rentabilidad:", e);
       }
     };
     fetchData();
   }, [bolsaInvertido, disponibleGlobal]);
 
-  // --- LÓGICA DE BORRADO DE SALDO FANTASMA ---
   const handleBorrarFantasma = () => {
     if (disponibleGlobal > 0) {
       if (confirm(`¿Estás seguro de borrar los ${disponibleGlobal.toLocaleString('es-ES')} € de saldo fantasma?\n\nTu saldo disponible volverá a ser 0 €.`)) {
@@ -79,27 +91,26 @@ export const InvestmentSummaryCards = ({
     }
   };
 
-  // --- 🧮 MATEMÁTICA PURA DE BENEFICIOS ---
+  // --- 🧮 MATEMÁTICA PURA ---
   const valorBolsa = bolsaLiveValue > 0 ? bolsaLiveValue : bolsaInvertido;
   const valorProyectos = proyectoInvertido; 
   
-  // 1. ¿Cuánto dinero físico hay en la plataforma?
+  // 1. Dinero físico actual
   const carteraTotal = disponibleGlobal + valorBolsa + valorProyectos;
 
-  // 2. ¿Cuánto dinero pusiste TÚ de tu bolsillo realmente?
-  // (Si el historial falla por ser antiguo, usa el invertido como salvavidas)
-  const dineroDeBolsillo = netDeposits > 0 ? netDeposits : (bolsaInvertido + proyectoInvertido);
+  // 2. Coste Base (Dinero de tu bolsillo + Dinero Externo)
+  const dineroDeBolsillo = hasHistory ? netDeposits : (bolsaInvertido + proyectoInvertido);
   
-  // 3. Beneficio Real = Todo lo que exceda el dinero de tu bolsillo
+  // 3. Beneficio Real = Todo lo que exceda el Coste Base
   const gananciaNetaTotal = carteraTotal - dineroDeBolsillo;
   
-  // 4. Rentabilidad sobre TU dinero
+  // 4. Rentabilidad %
   const baseForRoi = dineroDeBolsillo > 0 ? dineroDeBolsillo : 1;
   const rentabilidadPct = (gananciaNetaTotal / baseForRoi) * 100;
   
   const isUp = gananciaNetaTotal >= 0;
 
-  // --- MATEMÁTICAS DEL GRÁFICO DONUT ---
+  // --- GRÁFICOS ---
   const totalCircle = carteraTotal > 0 ? carteraTotal : 1;
   const pctBolsa = (valorBolsa / totalCircle) * 100;
   const pctProyectos = (valorProyectos / totalCircle) * 100;
@@ -108,7 +119,6 @@ export const InvestmentSummaryCards = ({
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 animate-in fade-in duration-300">
       
-      {/* 🚀 TARJETA PRINCIPAL (CARTERA TOTAL Y BENEFICIO NETO) */}
       <div className="bg-[#141416] border border-[#2d2d2d] rounded-3xl p-6">
         <div className="flex justify-between items-start mb-6">
           <div>
@@ -125,7 +135,6 @@ export const InvestmentSummaryCards = ({
           </div>
         </div>
 
-        {/* GRÁFICO ESTÉTICO */}
         <div className="w-full h-20 mb-6">
           <svg viewBox="0 0 400 100" className="w-full h-full preserve-3d" preserveAspectRatio="none">
             <defs>
@@ -139,7 +148,6 @@ export const InvestmentSummaryCards = ({
           </svg>
         </div>
 
-        {/* SUB-BLOQUES DE VALORACIÓN */}
         <div className="grid grid-cols-3 gap-4">
           <button onClick={() => onNavigate('bolsa')} className="bg-[#1c1c1e] hover:bg-[#252528] transition-colors border border-[#2d2d2d] rounded-2xl p-4 text-left cursor-pointer">
             <p className="text-xs font-bold text-gray-500 mb-1">Bolsa</p>
@@ -158,7 +166,6 @@ export const InvestmentSummaryCards = ({
         </div>
       </div>
 
-      {/* 🚀 SALDO DISPONIBLE Y BOTÓN FANTASMA */}
       <div className="bg-[#141416] border border-amber-500/20 rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_0_15px_rgba(245,158,11,0.05)]">
         <div>
           <p className="text-amber-500 font-black text-sm mb-1">Saldo disponible para invertir</p>
@@ -177,7 +184,6 @@ export const InvestmentSummaryCards = ({
         </div>
       </div>
 
-      {/* 🚀 DISTRIBUCIÓN DE CARTERA (DONUT) */}
       <div className="bg-[#141416] border border-[#2d2d2d] rounded-3xl p-6">
         <h3 className="text-lg font-black text-white mb-6">Distribución de cartera</h3>
         <div className="flex flex-col sm:flex-row items-center gap-8">

@@ -27,46 +27,17 @@ export const useInvestment = () => {
 
       const localGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
 
-      // 1. CARGAMOS EL HISTORIAL DE FIREBASE
       const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
-      
-      // 🚀 CORRECCIÓN: Le decimos explícitamente a TypeScript que esto es un array de cualquier tipo (any[])
       const firebaseTxs: any[] = transSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const localTxs = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
-
-      let pendingGlobalDiff = 0;
-
-      // 2. SINCRONIZACIÓN Y RECUPERACIÓN DE SALDOS PERDIDOS
-      for (const m of localTxs) {
-        const exists = firebaseTxs.some(tx => tx.id === m.id || (tx.label === m.label && tx.amount === m.amount && tx.dateString === m.dateString));
-        if (!exists) {
-          pendingGlobalDiff += Number(m.amount);
-          
-          const newDocRef = doc(collection(db, `users/${user.uid}/investment_transactions`));
-          await setDoc(newDocRef, {
-            amount: m.amount, label: m.label || 'Aportación', dateString: m.dateString || new Date().toISOString(), createdAt: new Date()
-          });
-          firebaseTxs.push({ id: newDocRef.id, amount: m.amount, label: m.label, dateString: m.dateString });
-        }
-      }
 
       firebaseTxs.sort((a, b) => new Date(b.dateString).getTime() - new Date(a.dateString).getTime());
       setMovimientos(firebaseTxs);
 
-      // 3. ACTUALIZAMOS SALDOS CORRIGIENDO DESFASES
-      let finalGlobal = data.disponibleGlobal !== undefined ? data.disponibleGlobal : localGlobal;
-      finalGlobal += pendingGlobalDiff; 
-
-      setDisponibleGlobal(finalGlobal);
+      setDisponibleGlobal(data.disponibleGlobal !== undefined ? data.disponibleGlobal : localGlobal);
       setBolsaInvertido(data.bolsaInvertido || 0);
       setBolsaGanancias(data.bolsaGanancias || 0);
       setProyectoInvertido(data.proyectoInvertido || 0);
       setProyectoGanado(data.proyectoGanado || 0);
-
-      if (pendingGlobalDiff !== 0 || !docSnap.exists()) {
-        await setDoc(docRef, { disponibleGlobal: finalGlobal }, { merge: true });
-        localStorage.setItem('aio_total_invertido_diadia_v2', finalGlobal.toString());
-      }
 
     } catch (error) {
       console.error("Error cargando datos:", error);
@@ -110,7 +81,7 @@ export const useInvestment = () => {
 
     try {
       await deleteDoc(doc(db, `users/${user.uid}/investment_transactions`, id));
-    } catch (e) { console.error(e); }
+    } catch (e) {}
 
     const currentMovements = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
     const filtered = currentMovements.filter((m: any) => m.id !== id);

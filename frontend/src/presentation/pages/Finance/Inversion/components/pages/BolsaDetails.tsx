@@ -23,24 +23,41 @@ interface BolsaDetailsProps {
   onBack: () => void;
 }
 
-// 🚀 EL MISMO MOTOR SEGURO
-const fetchSafe = async (url: string) => {
-  try {
-    const res = await fetch(url);
-    if (res.ok) return await res.json();
-  } catch (e) {}
+const fetchPriceWithFallback = async (ticker: string) => {
+  let formattedTicker = ticker;
+  if (ticker.endsWith('USD') && ticker.length > 3 && !ticker.includes('-')) {
+    formattedTicker = ticker.replace('USD', '-USD');
+  }
 
-  try {
-    const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
-    if (res.ok) return await res.json();
-  } catch (e) {}
+  const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${formattedTicker}?interval=1d&range=1d`;
+  
+  const proxies = [
+    { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, isJsonWrapped: true },
+    { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`, isJsonWrapped: false },
+    { url: `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`, isJsonWrapped: false }
+  ];
 
-  try {
-    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
-    if (res.ok) return await res.json();
-  } catch (e) {}
-
-  throw new Error("Network error");
+  for (const proxy of proxies) {
+    try {
+      const res = await fetch(proxy.url);
+      if (!res.ok) continue;
+      
+      let data;
+      if (proxy.isJsonWrapped) {
+        const wrapper = await res.json();
+        data = JSON.parse(wrapper.contents);
+      } else {
+        const text = await res.text();
+        if (text.includes('<!DOCTYPE html>') || text.includes('<html')) continue;
+        data = JSON.parse(text);
+      }
+      
+      if (data?.chart?.result?.[0]?.meta) {
+        return data.chart.result[0].meta;
+      }
+    } catch (e) { continue; }
+  }
+  throw new Error("No se pudo obtener el precio");
 };
 
 export const BolsaDetails = ({ 
@@ -61,8 +78,10 @@ export const BolsaDetails = ({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [assetToAdd, setAssetToAdd] = useState<Asset | null>(null);
   
-  const [addShares, setAddShares] = useState('');
+  // 🚀 NUEVOS ESTADOS DE LA CALCULADORA DE ACCIONES FRACCIONADAS
   const [addPrice, setAddPrice] = useState('');
+  const [addInvested, setAddInvested] = useState('');
+  const [addShares, setAddShares] = useState('');
 
   const allIndices = ['S&P500', 'MSCI World', 'IBEX 35', 'Nasdaq 100', 'DAX 40', 'Euro Stoxx 50', 'Dow Jones'];
   const filteredIndices = allIndices.filter(idx => idx.toLowerCase().includes(searchIndex.toLowerCase()));
@@ -70,20 +89,50 @@ export const BolsaDetails = ({
   const handleSelectAsset = (asset: Asset) => {
     setIsSearchOpen(false);
     setAssetToAdd(asset);
-    setAddPrice(asset.price > 0 ? asset.price.toFixed(2) : ''); // Vacío si el precio original falló
+    setAddPrice(asset.price > 0 ? asset.price.toFixed(2) : ''); 
+    setAddInvested('');
+    setAddShares('');
+  };
+
+  // 🧮 LÓGICA DE CÁLCULO EN TIEMPO REAL
+  const handleInvestedChange = (val: string) => {
+    setAddInvested(val);
+    const p = Number(addPrice);
+    if (p > 0 && Number(val) > 0) {
+      setAddShares((Number(val) / p).toString());
+    } else {
+      setAddShares('');
+    }
+  };
+
+  const handleSharesChange = (val: string) => {
+    setAddShares(val);
+    const p = Number(addPrice);
+    if (p > 0 && Number(val) > 0) {
+      setAddInvested((Number(val) * p).toString());
+    } else {
+      setAddInvested('');
+    }
+  };
+
+  const handlePriceChange = (val: string) => {
+    setAddPrice(val);
+    const inv = Number(addInvested);
+    if (Number(val) > 0 && inv > 0) {
+      setAddShares((inv / Number(val)).toString());
+    }
   };
 
   const handleConfirmAdd = () => {
     if (!assetToAdd) return;
+    const invested = Number(addInvested);
     const shares = Number(addShares);
     const avgPrice = Number(addPrice);
     
-    if (shares <= 0 || avgPrice <= 0) {
-      alert('Por favor, introduce un número de acciones y un precio válidos.');
+    if (invested <= 0 || shares <= 0 || avgPrice <= 0) {
+      alert('Por favor, asegúrate de que el precio, las acciones y la cantidad a invertir son mayores que 0.');
       return;
     }
-
-    const invested = shares * avgPrice;
 
     if (invested > disponibleGlobal) {
       alert(`Saldo insuficiente. Intentas invertir ${invested.toLocaleString('es-ES')} € pero solo dispones de ${disponibleGlobal.toLocaleString('es-ES')} €.`);
@@ -113,6 +162,7 @@ export const BolsaDetails = ({
     setAssetToAdd(null);
     setAddShares('');
     setAddPrice('');
+    setAddInvested('');
   };
 
   const handleUpdatePrices = async () => {
@@ -120,51 +170,46 @@ export const BolsaDetails = ({
     setIsUpdating(true);
     
     try {
-      const symbols = posiciones.map(p => p.ticker);
-      symbols.push('EURUSD=X');
-
-      const priceUrl = `https://query2.finance.yahoo.com/v8/finance/spark?symbols=${symbols.join(',')}`;
-      const priceData = await fetchSafe(priceUrl);
-
-      let priceMap = new Map();
       let usdToEurRate = 0.92;
+      try {
+        const fxRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR');
+        if (fxRes.ok) {
+          const fxData = await fxRes.json();
+          usdToEurRate = fxData.rates.EUR;
+        }
+      } catch(e) {}
 
-      if (priceData?.spark?.result) {
-        priceData.spark.result.forEach((res: any) => {
-          const meta = res.response?.[0]?.meta;
-          if (meta) {
-            priceMap.set(res.symbol, meta);
-            if (res.symbol === 'EURUSD=X') usdToEurRate = 1 / (meta.regularMarketPrice || 1.08);
-          }
-        });
-      }
+      const updatedPosiciones = await Promise.all(posiciones.map(async (pos) => {
+        try {
+          const meta = await fetchPriceWithFallback(pos.ticker);
+          const rawPrice = meta.regularMarketPrice || pos.currentPrice;
+          const currency = meta.currency || 'USD';
+          
+          let currentPriceEur = rawPrice;
+          if (currency === 'USD') currentPriceEur = rawPrice * usdToEurRate;
+          else if (currency === 'GBP') currentPriceEur = rawPrice * 1.17;
 
-      const updatedPosiciones = posiciones.map(pos => {
-        const meta = priceMap.get(pos.ticker);
-        if (!meta) return pos;
+          const value = pos.shares * currentPriceEur;
+          const invested = pos.shares * pos.avgPriceEur;
+          const changeEur = value - invested;
+          const changePct = invested > 0 ? (changeEur / invested) * 100 : 0;
 
-        let currentPriceEur = meta.regularMarketPrice || pos.currentPrice;
-        if (meta.currency === 'USD') currentPriceEur *= usdToEurRate;
-        else if (meta.currency === 'GBP') currentPriceEur *= 1.17; 
-
-        const value = pos.shares * currentPriceEur;
-        const invested = pos.shares * pos.avgPriceEur;
-        const changeEur = value - invested;
-        const changePct = invested > 0 ? (changeEur / invested) * 100 : 0;
-
-        return {
-          ...pos,
-          currentPrice: currentPriceEur,
-          value,
-          changeEur,
-          changePct,
-          isUp: changeEur >= 0
-        };
-      });
+          return {
+            ...pos,
+            currentPrice: currentPriceEur,
+            value,
+            changeEur,
+            changePct,
+            isUp: changeEur >= 0
+          };
+        } catch (e) {
+          return pos; 
+        }
+      }));
 
       setPosiciones(updatedPosiciones);
     } catch (error) {
-      console.warn("Fallo de red actualizando. Mantenemos los precios anteriores.");
+      console.error("Error global actualizando precios:", error);
     } finally {
       setIsUpdating(false);
     }
@@ -178,7 +223,6 @@ export const BolsaDetails = ({
   return (
     <div className="w-full max-w-2xl mx-auto pb-12 animate-in fade-in duration-300 relative">
       
-      {/* CABECERA SUPERIOR */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={onBack} className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-[#2d2d2d] cursor-pointer">
           <ArrowLeft size={24} />
@@ -203,7 +247,6 @@ export const BolsaDetails = ({
         </div>
       </div>
 
-      {/* BALANCE Y COMPARADOR */}
       <div className="flex justify-between items-start mb-8">
         <div>
           <p className="text-gray-400 font-medium text-sm mb-1">Cartera bolsa total</p>
@@ -268,7 +311,6 @@ export const BolsaDetails = ({
         </div>
       </div>
 
-      {/* GRÁFICA */}
       {posiciones.length > 0 ? (
         <div className="mb-8">
           <div className="w-full h-48 mb-4 relative">
@@ -318,7 +360,6 @@ export const BolsaDetails = ({
         </div>
       )}
 
-      {/* LISTADO DE POSICIONES REALES */}
       <div>
         <h3 className="text-lg font-bold text-white mb-4">Posiciones</h3>
         
@@ -333,7 +374,8 @@ export const BolsaDetails = ({
                   <div>
                     <p className="text-white font-bold text-sm">{pos.ticker}</p>
                     <p className="text-xs text-gray-500">{pos.name}</p>
-                    <p className="text-[10px] text-gray-600 mt-0.5 font-medium">{pos.shares} acciones</p>
+                    {/* MOSTRAMOS DECIMALES ADAPTADOS AL USUARIO */}
+                    <p className="text-[10px] text-gray-600 mt-0.5 font-medium">{pos.shares.toLocaleString('es-ES', { maximumFractionDigits: 4 })} acciones</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -374,43 +416,52 @@ export const BolsaDetails = ({
               </button>
             </div>
             
-            <div className="p-5 space-y-5">
+            <div className="p-5 space-y-4">
               <div className="bg-[#1c1c1e] p-4 rounded-xl border border-[#2d2d2d] flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-400">Efectivo disponible:</span>
                 <span className="text-sm font-black text-emerald-400">{disponibleGlobal.toLocaleString('es-ES')} €</span>
               </div>
 
-              <div className="bg-[#1c1c1e] p-4 rounded-xl border border-[#2d2d2d] flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-400">Precio actual (aprox):</span>
-                <span className="text-sm font-black text-amber-500">{assetToAdd.price > 0 ? assetToAdd.price.toLocaleString('es-ES') : 'N/D'} €</span>
-              </div>
-
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Nº de acciones / monedas</label>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Precio de compra (€ por acción)</label>
                 <input 
                   type="number" 
-                  placeholder="Ej: 10" 
-                  value={addShares} 
-                  onChange={(e) => setAddShares(e.target.value)} 
-                  className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3.5 text-base text-white outline-none focus:border-amber-500 transition-colors" 
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Precio de compra (€)</label>
-                <input 
-                  type="number" 
-                  step="0.01"
+                  step="any"
                   placeholder="Ej: 150.25" 
                   value={addPrice} 
-                  onChange={(e) => setAddPrice(e.target.value)} 
-                  className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3.5 text-base text-white outline-none focus:border-amber-500 transition-colors" 
+                  onChange={(e) => handlePriceChange(e.target.value)} 
+                  className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-amber-500 transition-colors" 
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Total a Invertir (€)</label>
+                  <input 
+                    type="number" 
+                    step="any"
+                    placeholder="Ej: 10" 
+                    value={addInvested} 
+                    onChange={(e) => handleInvestedChange(e.target.value)} 
+                    className="w-full bg-[#1c1c1e] border border-amber-500/50 rounded-xl px-4 py-3 text-base text-white outline-none focus:border-amber-500 transition-colors shadow-[0_0_10px_rgba(245,158,11,0.1)]" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Nº Acciones</label>
+                  <input 
+                    type="number" 
+                    step="any"
+                    placeholder="Ej: 0.25" 
+                    value={addShares} 
+                    onChange={(e) => handleSharesChange(e.target.value)} 
+                    className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-gray-300 outline-none focus:border-amber-500 transition-colors" 
+                  />
+                </div>
               </div>
 
               <button 
                 onClick={handleConfirmAdd} 
-                className="w-full bg-amber-500 hover:bg-amber-400 text-black text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-2"
+                className="w-full bg-amber-500 hover:bg-amber-400 text-black text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-4"
               >
                 Comprar / Registrar
               </button>

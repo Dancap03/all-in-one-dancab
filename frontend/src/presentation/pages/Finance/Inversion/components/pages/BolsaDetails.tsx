@@ -23,36 +23,24 @@ interface BolsaDetailsProps {
   onBack: () => void;
 }
 
-// 🚀 OBTENEDOR DE PRECIOS A PRUEBA DE FALLOS
-const fetchPriceWithFallback = async (ticker: string) => {
-  let formattedTicker = ticker;
-  if (ticker.endsWith('USD') && ticker.length > 3 && !ticker.includes('-')) {
-    formattedTicker = ticker.replace('USD', '-USD');
-  }
+// 🚀 EL MISMO MOTOR SEGURO
+const fetchSafe = async (url: string) => {
+  try {
+    const res = await fetch(url);
+    if (res.ok) return await res.json();
+  } catch (e) {}
 
-  const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${formattedTicker}?interval=1d&range=1d`;
-  const proxies = [
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-    `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`
-  ];
+  try {
+    const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+    if (res.ok) return await res.json();
+  } catch (e) {}
 
-  for (const proxyUrl of proxies) {
-    try {
-      const res = await fetch(proxyUrl);
-      if (!res.ok) continue;
-      const text = await res.text();
-      if (text.includes('<!DOCTYPE html>') || text.includes('<html')) continue;
-      
-      const data = JSON.parse(text);
-      if (data?.chart?.result?.[0]?.meta) {
-        return data.chart.result[0].meta;
-      }
-    } catch (e) {
-      continue;
-    }
-  }
-  throw new Error("No se pudo obtener el precio");
+  try {
+    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
+    if (res.ok) return await res.json();
+  } catch (e) {}
+
+  throw new Error("Network error");
 };
 
 export const BolsaDetails = ({ 
@@ -82,7 +70,7 @@ export const BolsaDetails = ({
   const handleSelectAsset = (asset: Asset) => {
     setIsSearchOpen(false);
     setAssetToAdd(asset);
-    setAddPrice(asset.price > 0 ? asset.price.toFixed(2) : ''); // Si viene vacío, lo dejas en blanco
+    setAddPrice(asset.price > 0 ? asset.price.toFixed(2) : ''); // Vacío si el precio original falló
   };
 
   const handleConfirmAdd = () => {
@@ -102,7 +90,6 @@ export const BolsaDetails = ({
       return;
     }
 
-    // Si el precio viene a 0 de la API por fallo temporal, cogemos el precio de compra introducido como referencia actual
     const currentMarketPrice = assetToAdd.price > 0 ? assetToAdd.price : avgPrice; 
     const currentValue = shares * currentMarketPrice;
     const changeEur = currentValue - invested;
@@ -133,46 +120,51 @@ export const BolsaDetails = ({
     setIsUpdating(true);
     
     try {
+      const symbols = posiciones.map(p => p.ticker);
+      symbols.push('EURUSD=X');
+
+      const priceUrl = `https://query2.finance.yahoo.com/v8/finance/spark?symbols=${symbols.join(',')}`;
+      const priceData = await fetchSafe(priceUrl);
+
+      let priceMap = new Map();
       let usdToEurRate = 0.92;
-      try {
-        const fxRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR');
-        if (fxRes.ok) {
-          const fxData = await fxRes.json();
-          usdToEurRate = fxData.rates.EUR;
-        }
-      } catch(e) {}
 
-      const updatedPosiciones = await Promise.all(posiciones.map(async (pos) => {
-        try {
-          const meta = await fetchPriceWithFallback(pos.ticker);
-          const rawPrice = meta.regularMarketPrice || pos.currentPrice;
-          const currency = meta.currency || 'USD';
-          
-          let currentPriceEur = rawPrice;
-          if (currency === 'USD') currentPriceEur = rawPrice * usdToEurRate;
-          else if (currency === 'GBP') currentPriceEur = rawPrice * 1.17;
+      if (priceData?.spark?.result) {
+        priceData.spark.result.forEach((res: any) => {
+          const meta = res.response?.[0]?.meta;
+          if (meta) {
+            priceMap.set(res.symbol, meta);
+            if (res.symbol === 'EURUSD=X') usdToEurRate = 1 / (meta.regularMarketPrice || 1.08);
+          }
+        });
+      }
 
-          const value = pos.shares * currentPriceEur;
-          const invested = pos.shares * pos.avgPriceEur;
-          const changeEur = value - invested;
-          const changePct = invested > 0 ? (changeEur / invested) * 100 : 0;
+      const updatedPosiciones = posiciones.map(pos => {
+        const meta = priceMap.get(pos.ticker);
+        if (!meta) return pos;
 
-          return {
-            ...pos,
-            currentPrice: currentPriceEur,
-            value,
-            changeEur,
-            changePct,
-            isUp: changeEur >= 0
-          };
-        } catch (e) {
-          return pos; // Mantenemos los datos viejos si la API falla temporalmente
-        }
-      }));
+        let currentPriceEur = meta.regularMarketPrice || pos.currentPrice;
+        if (meta.currency === 'USD') currentPriceEur *= usdToEurRate;
+        else if (meta.currency === 'GBP') currentPriceEur *= 1.17; 
+
+        const value = pos.shares * currentPriceEur;
+        const invested = pos.shares * pos.avgPriceEur;
+        const changeEur = value - invested;
+        const changePct = invested > 0 ? (changeEur / invested) * 100 : 0;
+
+        return {
+          ...pos,
+          currentPrice: currentPriceEur,
+          value,
+          changeEur,
+          changePct,
+          isUp: changeEur >= 0
+        };
+      });
 
       setPosiciones(updatedPosiciones);
     } catch (error) {
-      console.error("Error global actualizando precios:", error);
+      console.warn("Fallo de red actualizando. Mantenemos los precios anteriores.");
     } finally {
       setIsUpdating(false);
     }
@@ -363,7 +355,6 @@ export const BolsaDetails = ({
         )}
       </div>
 
-      {/* MODALES */}
       <AssetSearchModal 
         isOpen={isSearchOpen} 
         onClose={() => setIsSearchOpen(false)} 

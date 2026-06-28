@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, ArrowRightLeft, Trash2 } from 'lucide-react';
 import { db, auth } from '../../../../../infrastructure/firebase/config';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface InvestmentSummaryCardsProps {
   disponibleGlobal: number;
@@ -21,66 +21,55 @@ interface InvestmentSummaryCardsProps {
 export const InvestmentSummaryCards = ({
   disponibleGlobal,
   bolsaInvertido,
+  bolsaGanancias,
   proyectoInvertido,
+  proyectoGanado,
   onTransferirGlobal,
   onNavigate
 }: InvestmentSummaryCardsProps) => {
 
   const [bolsaLiveValue, setBolsaLiveValue] = useState(0);
-  const [netDeposits, setNetDeposits] = useState(0); 
-  const [hasHistory, setHasHistory] = useState(false);
+  const [bolsaCostePropio, setBolsaCostePropio] = useState(0);
 
   useEffect(() => {
-    const fetchData = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-      
+    const fetchBolsaLive = async () => {
+      let posiciones = [];
       try {
-        // 1. VALOR EN VIVO DE LA CARTERA
-        let liveVal = 0;
-        const snap = await getDoc(doc(db, `users/${user.uid}/investment_balances`, 'bolsa_posiciones'));
-        if (snap.exists()) {
-          const posiciones = snap.data().posiciones || [];
-          liveVal = posiciones.reduce((sum: number, p: any) => sum + (p.value || 0), 0);
+        const local = JSON.parse(localStorage.getItem('aio_bolsa_posiciones_v2') || '[]');
+        if (local.length > 0) {
+          posiciones = local;
+        } else {
+          const user = auth.currentUser;
+          if (user) {
+            const snap = await getDoc(doc(db, `users/${user.uid}/investment_balances`, 'bolsa_posiciones'));
+            if (snap.exists()) posiciones = snap.data().posiciones || [];
+          }
         }
-        setBolsaLiveValue(liveVal);
-
-        // 2. 🚀 CÁLCULO DE CAPITAL BASE (SIN METER BENEFICIOS COMO EL DINERO EXTERNO)
-        let deposits = 0;
-        const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
         
-        if (!transSnap.empty) {
-          setHasHistory(true);
-          transSnap.docs.forEach(d => {
-              const data = d.data();
-              const label = (data.label || '').toLowerCase();
-              const amount = Number(data.amount || 0);
-              
-              // Entradas de capital desde tu banco
-              if (label.includes('aportación')) {
-                  deposits += amount;
-              } 
-              // Salidas de capital a tu banco
-              else if (label.includes('retirada') || label.includes('borrado de saldo')) {
-                  deposits += amount; // Aquí el amount ya está en negativo
-              } 
-              // 🚀 SOLUCIÓN: El Dinero Externo SÍ es capital base invertido, NO es beneficio.
-              else if (label.includes('dinero externo') && !label.includes('deshacer')) {
-                  deposits += Math.abs(amount);
-              } 
-              // 🚀 SOLUCIÓN: Restar si borramos un lote comprado con Dinero Externo
-              else if (label.includes('deshacer') && label.includes('externo')) {
-                  deposits -= Math.abs(amount);
-              }
-          });
-          setNetDeposits(deposits);
-        }
+        if (posiciones.length > 0) {
+          let liveVal = 0;
+          let costePropio = 0;
 
+          posiciones.forEach((p: any) => {
+            liveVal += (p.value || 0);
+            // 🚀 EL CORAZÓN DEL CÁLCULO: Solo cuenta como coste lo que salió de tu bolsillo
+            // Si compraste con dividendos o dinero externo, el coste es 0 (potenciando tu beneficio)
+            if (!p.fundSource || p.fundSource === 'propio') {
+              costePropio += (p.shares * p.avgPriceEur);
+            }
+          });
+
+          setBolsaLiveValue(liveVal);
+          setBolsaCostePropio(costePropio);
+        } else {
+          setBolsaLiveValue(0);
+          setBolsaCostePropio(0);
+        }
       } catch (e) {
-        console.error("Error calculando rentabilidad:", e);
+        console.error("Error al calcular bolsa:", e);
       }
     };
-    fetchData();
+    fetchBolsaLive();
   }, [bolsaInvertido, disponibleGlobal]);
 
   const handleBorrarFantasma = () => {
@@ -91,21 +80,23 @@ export const InvestmentSummaryCards = ({
     }
   };
 
-  // --- 🧮 MATEMÁTICA PURA ---
+  // --- 🧮 MATEMÁTICA PURA (A PRUEBA DE HISTORIALES ROTOS) ---
   const valorBolsa = bolsaLiveValue > 0 ? bolsaLiveValue : bolsaInvertido;
   const valorProyectos = proyectoInvertido; 
   
-  // 1. Dinero físico actual
+  // 1. Dinero físico actual en toda la sección de Inversión
   const carteraTotal = disponibleGlobal + valorBolsa + valorProyectos;
 
-  // 2. Coste Base (Dinero de tu bolsillo + Dinero Externo)
-  const dineroDeBolsillo = hasHistory ? netDeposits : (bolsaInvertido + proyectoInvertido);
+  // 2. Coste Base Real (Solo tu dinero de bolsillo)
+  const costeBaseBolsa = bolsaCostePropio > 0 ? bolsaCostePropio : bolsaInvertido;
+  const costeBaseTotal = costeBaseBolsa + proyectoInvertido;
   
-  // 3. Beneficio Real = Todo lo que exceda el Coste Base
-  const gananciaNetaTotal = carteraTotal - dineroDeBolsillo;
+  // 3. Beneficio Flotante y Realizado
+  const beneficioFlotanteBolsa = valorBolsa - costeBaseBolsa;
+  const gananciaNetaTotal = beneficioFlotanteBolsa + bolsaGanancias + proyectoGanado;
   
   // 4. Rentabilidad %
-  const baseForRoi = dineroDeBolsillo > 0 ? dineroDeBolsillo : 1;
+  const baseForRoi = costeBaseTotal > 0 ? costeBaseTotal : 1;
   const rentabilidadPct = (gananciaNetaTotal / baseForRoi) * 100;
   
   const isUp = gananciaNetaTotal >= 0;
@@ -119,6 +110,7 @@ export const InvestmentSummaryCards = ({
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 animate-in fade-in duration-300">
       
+      {/* 🚀 TARJETA PRINCIPAL (CARTERA TOTAL Y BENEFICIO NETO) */}
       <div className="bg-[#141416] border border-[#2d2d2d] rounded-3xl p-6">
         <div className="flex justify-between items-start mb-6">
           <div>
@@ -129,12 +121,13 @@ export const InvestmentSummaryCards = ({
             <div className={`flex items-center gap-1.5 font-bold text-sm ${isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
               <TrendingUp size={16} strokeWidth={2.5} className={!isUp ? 'transform rotate-180' : ''} />
               <span>
-                {isUp ? '+' : ''}{rentabilidadPct.toFixed(1)}% · {isUp ? '+' : ''}{gananciaNetaTotal.toLocaleString('es-ES', { minimumFractionDigits: 2 })} € desde el inicio
+                {isUp ? '+' : ''}{rentabilidadPct.toFixed(2)}% · {isUp ? '+' : ''}{gananciaNetaTotal.toLocaleString('es-ES', { minimumFractionDigits: 2 })} € desde el inicio
               </span>
             </div>
           </div>
         </div>
 
+        {/* GRÁFICO ESTÉTICO */}
         <div className="w-full h-20 mb-6">
           <svg viewBox="0 0 400 100" className="w-full h-full preserve-3d" preserveAspectRatio="none">
             <defs>
@@ -148,6 +141,7 @@ export const InvestmentSummaryCards = ({
           </svg>
         </div>
 
+        {/* SUB-BLOQUES DE VALORACIÓN */}
         <div className="grid grid-cols-3 gap-4">
           <button onClick={() => onNavigate('bolsa')} className="bg-[#1c1c1e] hover:bg-[#252528] transition-colors border border-[#2d2d2d] rounded-2xl p-4 text-left cursor-pointer">
             <p className="text-xs font-bold text-gray-500 mb-1">Bolsa</p>
@@ -160,12 +154,13 @@ export const InvestmentSummaryCards = ({
           <div className="bg-[#1c1c1e] border border-[#2d2d2d] rounded-2xl p-4">
             <p className="text-xs font-bold text-gray-500 mb-1">Rentab. total</p>
             <p className={`text-lg font-black ${isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {isUp ? '+' : ''}{rentabilidadPct.toFixed(1)}%
+              {isUp ? '+' : ''}{rentabilidadPct.toFixed(2)}%
             </p>
           </div>
         </div>
       </div>
 
+      {/* 🚀 SALDO DISPONIBLE Y BOTÓN FANTASMA */}
       <div className="bg-[#141416] border border-amber-500/20 rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_0_15px_rgba(245,158,11,0.05)]">
         <div>
           <p className="text-amber-500 font-black text-sm mb-1">Saldo disponible para invertir</p>
@@ -184,6 +179,7 @@ export const InvestmentSummaryCards = ({
         </div>
       </div>
 
+      {/* 🚀 DISTRIBUCIÓN DE CARTERA (DONUT) */}
       <div className="bg-[#141416] border border-[#2d2d2d] rounded-3xl p-6">
         <h3 className="text-lg font-black text-white mb-6">Distribución de cartera</h3>
         <div className="flex flex-col sm:flex-row items-center gap-8">

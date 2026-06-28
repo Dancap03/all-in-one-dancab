@@ -24,7 +24,9 @@ export const Inversion = () => {
     proyectoGanado,
     handleTransferirGlobal,
     handleEjecutarBolsa,
-    handleEjecutarProyecto
+    handleEjecutarProyecto,
+    movimientos,
+    eliminarMovimiento // 🚀 RECIBIMOS LA FUNCIÓN DE BORRADO
   } = useInvestment();
 
   return (
@@ -49,7 +51,7 @@ export const Inversion = () => {
 
       {currentView === 'bolsa' && (
         <BolsaDetails 
-          disponibleGlobal={disponibleGlobal} // 🚀 SOLUCIONADO: Le pasamos el saldo global
+          disponibleGlobal={disponibleGlobal} 
           bolsaInvertido={bolsaInvertido} 
           bolsaGanancias={bolsaGanancias} 
           onEjecutarBolsa={handleEjecutarBolsa} 
@@ -59,7 +61,7 @@ export const Inversion = () => {
 
       {currentView === 'proyecto' && (
         <ProyectoDetails 
-          proyectoDisponible={disponibleGlobal} // 🚀 SOLUCIONADO: Le pasamos el saldo global
+          proyectoDisponible={disponibleGlobal} 
           proyectoInvertido={proyectoInvertido} 
           proyectoGanado={proyectoGanado} 
           onEjecutarProyecto={handleEjecutarProyecto} 
@@ -91,7 +93,11 @@ export const Inversion = () => {
             </div>
           </div>
           
-          <InvestmentHistory />
+          {/* PASAMOS LAS PROPIEDADES */}
+          <InvestmentHistory 
+            movimientos={movimientos} 
+            onDelete={eliminarMovimiento} 
+          />
         </>
       )}
     </div>

@@ -5,18 +5,9 @@ import { db, auth } from '../../../../../../infrastructure/firebase/config';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface Position {
-  id: string;
-  ticker: string;
-  name: string;
-  shares: number;
-  avgPriceEur: number;
-  currentPrice: number;
-  value: number;
-  changePct: number;
-  changeEur: number;
-  isUp: boolean;
-  date?: string; 
-  fundSource?: string; 
+  id: string; ticker: string; name: string; shares: number; avgPriceEur: number;
+  currentPrice: number; value: number; changePct: number; changeEur: number;
+  isUp: boolean; date?: string; fundSource?: string; 
 }
 
 interface GroupedPosition {
@@ -55,6 +46,10 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
   const [sellingGroup, setSellingGroup] = useState<GroupedPosition | null>(null);
   const [sellShares, setSellShares] = useState('');
   const [sellPrice, setSellPrice] = useState('');
+
+  // 🚀 ESTADO PARA FORZAR PRECIO MANUAL
+  const [manualPriceGroup, setManualPriceGroup] = useState<GroupedPosition | null>(null);
+  const [manualPriceInput, setManualPriceInput] = useState('');
 
   const allIndices = ['S&P500', 'MSCI World', 'IBEX 35', 'Nasdaq 100', 'DAX 40', 'Euro Stoxx 50', 'Dow Jones'];
   const filteredIndices = allIndices.filter(idx => idx.toLowerCase().includes(searchIndex.toLowerCase()));
@@ -108,7 +103,6 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
 
   const toggleExpand = (ticker: string) => setExpandedTickers(prev => ({ ...prev, [ticker]: !prev[ticker] }));
 
-  // --- COMPRAR ---
   const handleSelectAsset = (asset: Asset) => {
     setIsSearchOpen(false); setAssetToAdd(asset); setAddPrice(asset.price > 0 ? asset.price.toFixed(2) : ''); 
     setAddInvested(''); setAddDate(new Date().toISOString().split('T')[0]); setFundSource('propio');
@@ -122,7 +116,7 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
   const handleConfirmAdd = () => {
     if (!assetToAdd) return;
     const invested = Number(addInvested); const avgPrice = Number(addPrice);
-    if (invested <= 0 || avgPrice <= 0) { alert('Valores no válidos.'); return; }
+    if (invested <= 0 || avgPrice <= 0) return;
     if (fundSource === 'propio' && invested > disponibleGlobal) { alert('Saldo Disponible insuficiente.'); return; }
     if (fundSource === 'ganancia' && invested > bolsaGanancias) { alert('Ganancias insuficientes.'); return; }
 
@@ -139,11 +133,9 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
 
     const actionType = fundSource === 'propio' ? 'propio' : fundSource === 'ganancia' ? 'ganancia_compra' : 'otro_compra';
     onEjecutarBolsa(invested, actionType);
-    savePositions([...posiciones, newPos]); 
-    setAssetToAdd(null);
+    savePositions([...posiciones, newPos]); setAssetToAdd(null);
   };
 
-  // --- VENDER ---
   const handleOpenSell = (group: GroupedPosition) => {
     setSellingGroup(group); setSellShares(group.totalShares.toString()); setSellPrice(group.currentPrice.toString()); 
   };
@@ -162,7 +154,7 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
   const handleConfirmSell = () => {
     if (!sellingGroup) return;
     const sharesToSell = Number(sellShares); const priceToSell = Number(sellPrice);
-    if (sharesToSell <= 0 || sharesToSell > sellingGroup.totalShares || priceToSell <= 0) { alert('Datos no válidos.'); return; }
+    if (sharesToSell <= 0 || sharesToSell > sellingGroup.totalShares || priceToSell <= 0) return;
 
     let remainingToSell = sharesToSell; let totalCostOriginal = 0; let updatedPosiciones = [...posiciones];
     const lots = updatedPosiciones.filter(p => p.ticker === sellingGroup.ticker).sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
@@ -170,8 +162,7 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
     for (const lot of lots) {
       if (remainingToSell <= 0) break;
       if (lot.shares <= remainingToSell) {
-        totalCostOriginal += lot.shares * lot.avgPriceEur;
-        remainingToSell -= lot.shares;
+        totalCostOriginal += lot.shares * lot.avgPriceEur; remainingToSell -= lot.shares;
         updatedPosiciones = updatedPosiciones.filter(p => p.id !== lot.id);
       } else {
         totalCostOriginal += remainingToSell * lot.avgPriceEur;
@@ -192,24 +183,14 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
     savePositions(updatedPosiciones); setSellingGroup(null);
   };
 
-  // --- BORRAR LOTE ---
   const handleDeleteLot = (lot: Position) => {
-    const source = lot.fundSource || 'propio'; 
-    const cost = lot.shares * lot.avgPriceEur;
-
-    let msg = `¿Deshacer operación de ${lot.shares.toFixed(4)} acciones en ${lot.ticker}?\n\n`;
-    if (source === 'propio') msg += `Se devolverá la inversión de ${cost.toFixed(2)}€ a tu Saldo Disponible.`;
-    else if (source === 'ganancia') msg += `Se devolverá la inversión de ${cost.toFixed(2)}€ a tus Ganancias/Dividendos.`;
-    else msg += `Se eliminará la inversión de ${cost.toFixed(2)}€ (Dinero Externo). No afectará a tu Saldo Disponible.`;
-
-    if (confirm(msg)) {
+    const source = lot.fundSource || 'propio'; const cost = lot.shares * lot.avgPriceEur;
+    if (confirm(`¿Deshacer lote de ${lot.ticker} por ${cost.toFixed(2)}€?`)) {
       const nuevasPosiciones = posiciones.filter(p => p.id !== lot.id);
-      savePositions(nuevasPosiciones); 
-      onEjecutarBolsa(cost, `deshacer_${source}`); 
+      savePositions(nuevasPosiciones); onEjecutarBolsa(cost, `deshacer_${source}`); 
     }
   };
 
-  // --- EDITAR LOTE ---
   const handleOpenEdit = (lot: Position) => {
     setEditingPos(lot); setEditPrice(lot.avgPriceEur.toString()); setEditInvested((lot.shares * lot.avgPriceEur).toString()); setEditDate(lot.date || new Date().toISOString().split('T')[0]);
   };
@@ -224,10 +205,9 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
     const source = editingPos.fundSource || 'propio';
 
     if (difference > 0) {
-      if (source === 'propio' && difference > disponibleGlobal) { alert('Saldo insuficiente.'); return; }
-      if (source === 'ganancia' && difference > bolsaGanancias) { alert('Ganancias insuficientes.'); return; }
-      const actionType = source === 'propio' ? 'propio' : source === 'ganancia' ? 'ganancia_compra' : 'otro_compra';
-      onEjecutarBolsa(difference, actionType);
+      if (source === 'propio' && difference > disponibleGlobal) return;
+      if (source === 'ganancia' && difference > bolsaGanancias) return;
+      onEjecutarBolsa(difference, source === 'propio' ? 'propio' : source === 'ganancia' ? 'ganancia_compra' : 'otro_compra');
     } else if (difference < 0) {
       onEjecutarBolsa(Math.abs(difference), `deshacer_${source}`); 
     }
@@ -244,7 +224,7 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
     savePositions(updatedPosiciones); setEditingPos(null);
   };
 
-  // 🚀 OBTENER PRECIOS EN VIVO (MODO BATCH - ANTI BLOQUEOS)
+  // 🚀 ACTUALIZACIÓN AUTOMÁTICA EN BATCH
   const handleUpdatePrices = async () => {
     if (posiciones.length === 0) return;
     setIsUpdating(true);
@@ -252,7 +232,6 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
       let usdToEurRate = 0.92;
       try { const fxRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR'); if (fxRes.ok) usdToEurRate = (await fxRes.json()).rates.EUR; } catch(e) {}
 
-      // Extraemos todos los tickers únicos
       const uniqueTickers = Array.from(new Set(posiciones.map(p => {
         let t = p.ticker;
         if (t.endsWith('USD') && t.length > 3 && !t.includes('-')) t = t.replace('USD', '-USD');
@@ -260,13 +239,8 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
       }))).join(',');
 
       const timestamp = Date.now();
-      // Usamos el endpoint Spark de Yahoo que permite múltiples tickers separados por comas
       const url = `https://query2.finance.yahoo.com/v8/finance/spark?symbols=${uniqueTickers}&_ts=${timestamp}`;
-      
-      const proxies = [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, 
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
-      ];
+      const proxies = [`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`];
 
       let priceMap = new Map();
       for (const proxy of proxies) {
@@ -275,50 +249,49 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
           if (!res.ok) continue;
           const data = await res.json();
           if (data?.spark?.result) {
-            // Mapeamos los precios obtenidos
-            data.spark.result.forEach((r: any) => {
-              if (r.response?.[0]?.meta) {
-                priceMap.set(r.symbol, r.response[0].meta);
-              }
-            });
-            break; // Si funciona el primer proxy, salimos del bucle
+            data.spark.result.forEach((r: any) => { if (r.response?.[0]?.meta) { priceMap.set(r.symbol, r.response[0].meta); } });
+            break;
           }
         } catch (e) {}
       }
 
-      // Actualizamos nuestras posiciones con los precios mapeados
       const updatedPosiciones = posiciones.map(pos => {
         let t = pos.ticker;
         if (t.endsWith('USD') && t.length > 3 && !t.includes('-')) t = t.replace('USD', '-USD');
-        
         const meta = priceMap.get(t);
         if (meta && meta.regularMarketPrice) {
           let currentPriceEur = meta.regularMarketPrice;
-          if (meta.currency === 'USD') currentPriceEur *= usdToEurRate; 
-          else if (meta.currency === 'GBP') currentPriceEur *= 1.17; 
-          
-          const value = pos.shares * currentPriceEur; 
-          const invested = pos.shares * pos.avgPriceEur; 
-          const changeEur = value - invested;
-          
-          return { 
-            ...pos, 
-            currentPrice: currentPriceEur, 
-            value, 
-            changeEur, 
-            changePct: invested > 0 ? (changeEur / invested) * 100 : 0, 
-            isUp: changeEur >= 0 
-          };
+          if (meta.currency === 'USD') currentPriceEur *= usdToEurRate; else if (meta.currency === 'GBP') currentPriceEur *= 1.17; 
+          const value = pos.shares * currentPriceEur; const invested = pos.shares * pos.avgPriceEur; const changeEur = value - invested;
+          return { ...pos, currentPrice: currentPriceEur, value, changeEur, changePct: invested > 0 ? (changeEur / invested) * 100 : 0, isUp: changeEur >= 0 };
         }
         return pos; 
       });
 
       savePositions(updatedPosiciones);
-    } catch (error) {
-      alert("Hubo un error de conexión al actualizar los precios.");
-    } finally { 
-      setIsUpdating(false); 
-    }
+    } catch (error) {} finally { setIsUpdating(false); }
+  };
+
+  // 🚀 FORZAR PRECIO MANUAL
+  const handleConfirmManualPrice = () => {
+    if (!manualPriceGroup) return;
+    const newPrice = Number(manualPriceInput);
+    if (newPrice <= 0) return;
+
+    const updatedPosiciones = posiciones.map(p => {
+      if (p.ticker === manualPriceGroup.ticker) {
+        const value = p.shares * newPrice;
+        const changeEur = value - (p.shares * p.avgPriceEur);
+        return {
+          ...p, currentPrice: newPrice, value, changeEur,
+          changePct: (changeEur / (p.shares * p.avgPriceEur)) * 100, isUp: changeEur >= 0
+        };
+      }
+      return p;
+    });
+
+    savePositions(updatedPosiciones);
+    setManualPriceGroup(null);
   };
 
   const totalInvertidoCartera = groupedPositions.reduce((sum, g) => sum + g.totalInvested, 0);
@@ -393,10 +366,19 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
 
                   {isExpanded && (
                     <div className="bg-[#101012] border-t border-[#2d2d2d]">
+                      {/* 🚀 BOTONERA SUPERIOR (Incluye Forzar Precio) */}
                       <div className="flex items-center justify-end gap-2 p-3 border-b border-[#2d2d2d]/50 bg-[#161618]">
-                        <button onClick={(e) => { e.stopPropagation(); handleOpenSell(group); }} className="px-3 py-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"><Banknote size={14} /> Vender</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleBuyMore(group); }} className="px-3 py-1.5 bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-black rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"><Plus size={14} strokeWidth={3} /> Comprar más</button>
+                        <button onClick={(e) => { e.stopPropagation(); setManualPriceGroup(group); setManualPriceInput(group.currentPrice.toString()); }} className="px-3 py-1.5 bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer">
+                          <Edit2 size={14} /> Forzar Precio
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); handleOpenSell(group); }} className="px-3 py-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer">
+                          <Banknote size={14} /> Vender
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); handleBuyMore(group); }} className="px-3 py-1.5 bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-black rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer">
+                          <Plus size={14} strokeWidth={3} /> Comprar más
+                        </button>
                       </div>
+
                       <div className="divide-y divide-[#2d2d2d]/30">
                         {group.lots.map((lot, idx) => (
                           <div key={lot.id} className="p-3 pl-14 flex items-center justify-between hover:bg-[#1a1a1c] transition-colors group/lot">
@@ -427,6 +409,29 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
 
       <AssetSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelectAsset={handleSelectAsset} />
 
+      {/* 🚀 MODAL: FORZAR PRECIO MANUAL */}
+      {manualPriceGroup && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">
+              <div><h3 className="text-base font-bold text-blue-400 tracking-tight">Forzar Precio</h3><p className="text-xs text-gray-500 mt-0.5">{manualPriceGroup.name} ({manualPriceGroup.ticker})</p></div>
+              <button onClick={() => setManualPriceGroup(null)} className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer"><X size={20} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-[#1c1c1e] p-4 rounded-xl border border-[#2d2d2d] flex justify-between items-center"><span className="text-xs font-bold text-gray-400">Precio actual en app:</span><span className="text-sm font-black text-white">{manualPriceGroup.currentPrice.toFixed(4)} €</span></div>
+              
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Nuevo precio de mercado (€)</label>
+                <input type="number" step="any" placeholder="Precio real actual" value={manualPriceInput} onChange={(e) => setManualPriceInput(e.target.value)} className="w-full bg-[#1c1c1e] border border-blue-500/50 rounded-xl px-4 py-3 text-base text-white outline-none focus:border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.1)]" autoFocus />
+              </div>
+
+              <button onClick={handleConfirmManualPrice} className="w-full bg-blue-500 hover:bg-blue-400 text-white text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-4">Actualizar Precio</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODALES CLÁSICOS */}
       {assetToAdd && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">

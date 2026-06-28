@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { ArrowLeft, RefreshCw, Plus, TrendingUp, Search, ChevronDown, Check, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, RefreshCw, Plus, TrendingUp, Search, ChevronDown, Check, X, Calculator, Trash2 } from 'lucide-react';
 import { AssetSearchModal, Asset } from '../modals/AssetSearchModal';
+import { db, auth } from '../../../../../../../infrastructure/firebase/config';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface Position {
   id: string;
@@ -61,12 +63,42 @@ export const BolsaDetails = ({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [assetToAdd, setAssetToAdd] = useState<Asset | null>(null);
   
-  // 🚀 SOLO QUEDAN 2 CAMPOS
   const [addPrice, setAddPrice] = useState('');
   const [addInvested, setAddInvested] = useState('');
 
   const allIndices = ['S&P500', 'MSCI World', 'IBEX 35', 'Nasdaq 100', 'DAX 40', 'Euro Stoxx 50', 'Dow Jones'];
   const filteredIndices = allIndices.filter(idx => idx.toLowerCase().includes(searchIndex.toLowerCase()));
+
+  // 🚀 CARGAMOS LAS POSICIONES DESDE FIREBASE PARA QUE NUNCA DESAPAREZCAN
+  useEffect(() => {
+    const loadPositions = async () => {
+      const local = JSON.parse(localStorage.getItem('aio_bolsa_posiciones_v2') || '[]');
+      setPosiciones(local);
+
+      const user = auth.currentUser;
+      if (!user) return;
+      try {
+        const docSnap = await getDoc(doc(db, `users/${user.uid}/investment_balances`, 'bolsa_posiciones'));
+        if (docSnap.exists()) {
+          const data = docSnap.data().posiciones || [];
+          setPosiciones(data);
+          localStorage.setItem('aio_bolsa_posiciones_v2', JSON.stringify(data));
+        }
+      } catch (e) {}
+    };
+    loadPositions();
+  }, []);
+
+  // 🚀 FUNCIÓN PARA GUARDARLAS SIEMPRE QUE HAYA CAMBIOS
+  const savePositions = async (newPos: Position[]) => {
+    setPosiciones(newPos);
+    localStorage.setItem('aio_bolsa_posiciones_v2', JSON.stringify(newPos));
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      await setDoc(doc(db, `users/${user.uid}/investment_balances`, 'bolsa_posiciones'), { posiciones: newPos });
+    } catch(e) {}
+  };
 
   const handleSelectAsset = (asset: Asset) => {
     setIsSearchOpen(false);
@@ -90,9 +122,7 @@ export const BolsaDetails = ({
       return;
     }
 
-    // 🚀 EL SISTEMA CALCULA LAS ACCIONES AUTOMÁTICAMENTE
     const shares = invested / avgPrice;
-
     const currentMarketPrice = assetToAdd.price > 0 ? assetToAdd.price : avgPrice; 
     const currentValue = shares * currentMarketPrice;
     const changeEur = currentValue - invested;
@@ -111,11 +141,22 @@ export const BolsaDetails = ({
     };
 
     onEjecutarBolsa(invested, 'propio');
-
-    setPosiciones([...posiciones, newPos]);
+    savePositions([...posiciones, newPos]); // 💾 GUARDADO PERMANENTE
+    
     setAssetToAdd(null);
     setAddPrice('');
     setAddInvested('');
+  };
+
+  // 🚀 NUEVA FUNCIÓN PARA BORRAR / VENDER ACCIONES DIRECTAMENTE
+  const handleDeletePosition = (pos: Position) => {
+    if (confirm(`¿Vender / Eliminar posición en ${pos.ticker}?\n\nSe devolverán ${pos.value.toFixed(2)} € a tu Saldo Global y se borrará de tu cartera.`)) {
+      const nuevasPosiciones = posiciones.filter(p => p.id !== pos.id);
+      savePositions(nuevasPosiciones); // 💾 GUARDADO PERMANENTE
+      
+      // Devolvemos el dinero de la venta al saldo global
+      onEjecutarBolsa(pos.value, 'balance');
+    }
   };
 
   const handleUpdatePrices = async () => {
@@ -165,7 +206,7 @@ export const BolsaDetails = ({
         };
       });
 
-      setPosiciones(updatedPosiciones);
+      savePositions(updatedPosiciones); // 💾 GUARDADO PERMANENTE
     } catch (error) {
       console.warn("Fallo de red actualizando. Mantenemos los precios anteriores.");
     } finally {
@@ -181,7 +222,6 @@ export const BolsaDetails = ({
   return (
     <div className="w-full max-w-2xl mx-auto pb-12 animate-in fade-in duration-300 relative">
       
-      {/* CABECERA SUPERIOR */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={onBack} className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-[#2d2d2d] cursor-pointer">
           <ArrowLeft size={24} />
@@ -206,7 +246,6 @@ export const BolsaDetails = ({
         </div>
       </div>
 
-      {/* BALANCE Y COMPARADOR */}
       <div className="flex justify-between items-start mb-8">
         <div>
           <p className="text-gray-400 font-medium text-sm mb-1">Cartera bolsa total</p>
@@ -271,7 +310,6 @@ export const BolsaDetails = ({
         </div>
       </div>
 
-      {/* GRÁFICA */}
       {posiciones.length > 0 ? (
         <div className="mb-8">
           <div className="w-full h-48 mb-4 relative">
@@ -321,14 +359,14 @@ export const BolsaDetails = ({
         </div>
       )}
 
-      {/* LISTADO DE POSICIONES */}
+      {/* LISTADO DE POSICIONES REALES CON BOTÓN BORRAR/VENDER */}
       <div>
         <h3 className="text-lg font-bold text-white mb-4">Posiciones</h3>
         
         {posiciones.length > 0 ? (
           <div className="space-y-3">
             {posiciones.map((pos) => (
-              <div key={pos.id} className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-4 flex items-center justify-between hover:bg-[#1c1c1e] transition-all cursor-pointer">
+              <div key={pos.id} className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-4 flex items-center justify-between hover:bg-[#1c1c1e] transition-all group">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-[#2d2d2d] flex items-center justify-center font-bold text-white text-[10px] border border-[#3d3d3d]">
                     {pos.ticker.substring(0,2)}
@@ -339,11 +377,23 @@ export const BolsaDetails = ({
                     <p className="text-[10px] text-gray-600 mt-0.5 font-medium">{pos.shares.toLocaleString('es-ES', { maximumFractionDigits: 5 })} acciones</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-white font-bold text-sm">{pos.value.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
-                  <p className={`text-[11px] font-bold mt-0.5 ${pos.isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {pos.isUp ? '+' : ''}{pos.changeEur.toLocaleString('es-ES', { minimumFractionDigits: 2 })} € ({pos.isUp ? '+' : ''}{pos.changePct.toFixed(2)}%)
-                  </p>
+                
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-white font-bold text-sm">{pos.value.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
+                    <p className={`text-[11px] font-bold mt-0.5 ${pos.isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {pos.isUp ? '+' : ''}{pos.changeEur.toLocaleString('es-ES', { minimumFractionDigits: 2 })} € ({pos.isUp ? '+' : ''}{pos.changePct.toFixed(2)}%)
+                    </p>
+                  </div>
+                  
+                  {/* 🚀 BOTÓN DE BORRAR / VENDER */}
+                  <button 
+                    onClick={() => handleDeletePosition(pos)}
+                    className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-colors cursor-pointer sm:opacity-0 sm:group-hover:opacity-100"
+                    title="Vender o borrar posición"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -364,7 +414,6 @@ export const BolsaDetails = ({
         onSelectAsset={handleSelectAsset} 
       />
 
-      {/* MODAL 2: FORMULARIO DE COMPRA */}
       {assetToAdd && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
@@ -406,14 +455,16 @@ export const BolsaDetails = ({
                   onChange={(e) => setAddInvested(e.target.value)} 
                   className="w-full bg-[#1c1c1e] border border-amber-500/50 rounded-xl px-4 py-3 text-base text-white outline-none focus:border-amber-500 transition-colors shadow-[0_0_10px_rgba(245,158,11,0.1)]" 
                 />
-                
-                {/* 🚀 FRACCIÓN CALCULADA EN TEXTO INFORMATIVO */}
-                {addInvested && addPrice && Number(addPrice) > 0 && (
-                  <p className="text-[11px] text-gray-500 mt-2 ml-1">
-                    Equivale a <span className="font-bold text-gray-300">{(Number(addInvested) / Number(addPrice)).toFixed(5)} acciones</span>
-                  </p>
-                )}
               </div>
+
+              {addInvested && addPrice && Number(addPrice) > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl mt-2 flex items-center gap-2">
+                  <Calculator size={16} className="text-amber-500" />
+                  <p className="text-sm text-amber-500">
+                    Estás comprando <span className="font-black">{(Number(addInvested) / Number(addPrice)).toFixed(5)}</span> acciones
+                  </p>
+                </div>
+              )}
 
               <button 
                 onClick={handleConfirmAdd} 

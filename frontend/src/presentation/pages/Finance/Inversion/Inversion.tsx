@@ -5,7 +5,7 @@ import { InvestmentHistory } from './components/InvestmentHistory';
 import { GlobalDetails } from './components/pages/GlobalDetails';
 import { BolsaDetails } from './components/pages/BolsaDetails';
 import { ProyectoDetails } from './components/pages/ProyectoDetails';
-
+ 
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, ArrowRightLeft, Trash2 } from 'lucide-react';
-import { db, auth } from '../../../../../../infrastructure/firebase/config';
+// 🚀 RUTA CORREGIDA: 5 niveles hacia arriba en vez de 6
+import { db, auth } from '../../../../../infrastructure/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 
 interface InvestmentSummaryCardsProps {
@@ -60,7 +61,6 @@ export const InvestmentSummaryCards = ({
     fetchBolsaLive();
   }, [bolsaInvertido]);
 
-  // 🚀 FUNCIÓN PARA ANIQUILAR EL SALDO FANTASMA
   const handleBorrarFantasma = () => {
     if (disponibleGlobal > 0) {
       if (confirm(`¿Estás seguro de borrar los ${disponibleGlobal.toLocaleString('es-ES')} € de saldo fantasma?\n\nTu saldo disponible volverá a ser 0 €.`)) {
@@ -119,7 +119,6 @@ export const InvestmentSummaryCards = ({
         </div>
       </div>
 
-      {/* 🚀 SALDO DISPONIBLE CON BOTÓN DE BORRAR FANTASMA */}
       <div className="bg-[#141416] border border-amber-500/20 rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_0_15px_rgba(245,158,11,0.05)]">
         <div>
           <p className="text-amber-500 font-black text-sm mb-1">Saldo disponible para invertir</p>

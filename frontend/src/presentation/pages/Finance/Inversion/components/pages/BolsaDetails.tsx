@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, RefreshCw, Plus, TrendingUp, Search, ChevronDown, Check, X, Calculator, Trash2, Edit2, Calendar, Banknote } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ArrowLeft, RefreshCw, Plus, TrendingUp, Search, ChevronDown, Check, X, Calculator, Trash2, Edit2, Calendar, Banknote, ChevronRight } from 'lucide-react';
 import { AssetSearchModal, Asset } from '../modals/AssetSearchModal';
 import { db, auth } from '../../../../../../infrastructure/firebase/config';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -18,6 +18,20 @@ interface Position {
   date?: string; 
 }
 
+// 🚀 NUEVA INTERFAZ PARA AGRUPAR ACCIONES
+interface GroupedPosition {
+  ticker: string;
+  name: string;
+  totalShares: number;
+  totalInvested: number;
+  currentPrice: number;
+  totalValue: number;
+  changeEur: number;
+  changePct: number;
+  isUp: boolean;
+  lots: Position[];
+}
+
 interface BolsaDetailsProps {
   disponibleGlobal: number; 
   bolsaInvertido: number;
@@ -27,32 +41,18 @@ interface BolsaDetailsProps {
 }
 
 const fetchDirectly = async (url: string) => {
-  try {
-    const res = await fetch(url);
-    if (res.ok) return await res.json();
-  } catch (e) {}
-
+  try { const res = await fetch(url); if (res.ok) return await res.json(); } catch (e) {}
   const proxies = [
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
   ];
-
   for (const p of proxies) {
-    try {
-      const res = await fetch(p);
-      if (res.ok) return await res.json();
-    } catch (e) {}
+    try { const res = await fetch(p); if (res.ok) return await res.json(); } catch (e) {}
   }
   throw new Error("Network error");
 };
 
-export const BolsaDetails = ({ 
-  disponibleGlobal,
-  bolsaInvertido,
-  bolsaGanancias,
-  onEjecutarBolsa,
-  onBack 
-}: BolsaDetailsProps) => {
+export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias, onEjecutarBolsa, onBack }: BolsaDetailsProps) => {
   const [timeframe, setTimeframe] = useState('1M');
   const [isUpdating, setIsUpdating] = useState(false);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
@@ -61,22 +61,23 @@ export const BolsaDetails = ({
 
   const [posiciones, setPosiciones] = useState<Position[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [expandedTickers, setExpandedTickers] = useState<Record<string, boolean>>({}); // 🚀 CONTROL DE DESPLEGABLES
   
   // ESTADOS DE COMPRA
   const [assetToAdd, setAssetToAdd] = useState<Asset | null>(null);
   const [addPrice, setAddPrice] = useState('');
   const [addInvested, setAddInvested] = useState('');
   const [addDate, setAddDate] = useState(new Date().toISOString().split('T')[0]); 
-  const [fundSource, setFundSource] = useState('propio'); // 🚀 ORIGEN DE FONDOS
+  const [fundSource, setFundSource] = useState('propio'); 
 
-  // ESTADOS DE EDICIÓN
+  // ESTADOS DE EDICIÓN (POR LOTE)
   const [editingPos, setEditingPos] = useState<Position | null>(null);
   const [editPrice, setEditPrice] = useState('');
   const [editInvested, setEditInvested] = useState('');
   const [editDate, setEditDate] = useState('');
 
-  // 🚀 ESTADOS DE VENTA
-  const [sellingPos, setSellingPos] = useState<Position | null>(null);
+  // 🚀 ESTADOS DE VENTA FIFO
+  const [sellingGroup, setSellingGroup] = useState<GroupedPosition | null>(null);
   const [sellShares, setSellShares] = useState('');
   const [sellPrice, setSellPrice] = useState('');
 
@@ -112,6 +113,37 @@ export const BolsaDetails = ({
     } catch(e) {}
   };
 
+  // 🚀 LÓGICA DE AGRUPACIÓN (Combina los lotes de la misma empresa)
+  const groupedPositions = useMemo(() => {
+    const groups: Record<string, GroupedPosition> = {};
+    posiciones.forEach(pos => {
+      if (!groups[pos.ticker]) {
+        groups[pos.ticker] = {
+          ticker: pos.ticker, name: pos.name, totalShares: 0, totalInvested: 0, currentPrice: pos.currentPrice, totalValue: 0, changeEur: 0, changePct: 0, isUp: true, lots: []
+        };
+      }
+      groups[pos.ticker].totalShares += pos.shares;
+      groups[pos.ticker].totalInvested += (pos.shares * pos.avgPriceEur);
+      groups[pos.ticker].totalValue += (pos.shares * pos.currentPrice);
+      groups[pos.ticker].currentPrice = pos.currentPrice; 
+      
+      // Ordenamos los lotes por fecha (los más antiguos primero para FIFO)
+      groups[pos.ticker].lots.push(pos);
+      groups[pos.ticker].lots.sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
+    });
+
+    return Object.values(groups).map(g => {
+      g.changeEur = g.totalValue - g.totalInvested;
+      g.changePct = g.totalInvested > 0 ? (g.changeEur / g.totalInvested) * 100 : 0;
+      g.isUp = g.changeEur >= 0;
+      return g;
+    });
+  }, [posiciones]);
+
+  const toggleExpand = (ticker: string) => {
+    setExpandedTickers(prev => ({ ...prev, [ticker]: !prev[ticker] }));
+  };
+
   // --- LÓGICA DE COMPRA ---
   const handleSelectAsset = (asset: Asset) => {
     setIsSearchOpen(false);
@@ -122,21 +154,19 @@ export const BolsaDetails = ({
     setFundSource('propio');
   };
 
+  const handleBuyMore = (group: GroupedPosition) => {
+    const assetMock: Asset = { id: group.ticker, ticker: group.ticker, name: group.name, type: 'Acciones', price: group.currentPrice };
+    handleSelectAsset(assetMock);
+  };
+
   const handleConfirmAdd = () => {
     if (!assetToAdd) return;
     const invested = Number(addInvested);
     const avgPrice = Number(addPrice);
     
-    if (invested <= 0 || avgPrice <= 0) {
-      alert('Por favor, asegúrate de que el precio y el total a invertir son mayores que 0.'); return;
-    }
-
-    if (fundSource === 'propio' && invested > disponibleGlobal) {
-      alert(`Saldo insuficiente en el Disponible Global (${disponibleGlobal.toLocaleString('es-ES')} €).`); return;
-    }
-    if (fundSource === 'ganancia' && invested > bolsaGanancias) {
-      alert(`No tienes suficientes Ganancias/Dividendos (${bolsaGanancias.toLocaleString('es-ES')} €).`); return;
-    }
+    if (invested <= 0 || avgPrice <= 0) { alert('Valores no válidos.'); return; }
+    if (fundSource === 'propio' && invested > disponibleGlobal) { alert('Saldo Disponible insuficiente.'); return; }
+    if (fundSource === 'ganancia' && invested > bolsaGanancias) { alert('Ganancias insuficientes.'); return; }
 
     const shares = invested / avgPrice;
     const currentMarketPrice = assetToAdd.price > 0 ? assetToAdd.price : avgPrice; 
@@ -144,89 +174,110 @@ export const BolsaDetails = ({
     const changeEur = currentValue - invested;
 
     const newPos: Position = {
-      id: Date.now().toString(),
-      ticker: assetToAdd.ticker,
-      name: assetToAdd.name,
-      shares,
-      avgPriceEur: avgPrice,
-      currentPrice: currentMarketPrice,
-      value: currentValue,
-      changePct: invested > 0 ? (changeEur / invested) * 100 : 0,
-      changeEur,
-      isUp: changeEur >= 0,
-      date: addDate
+      id: Date.now().toString(), ticker: assetToAdd.ticker, name: assetToAdd.name, shares, avgPriceEur: avgPrice,
+      currentPrice: currentMarketPrice, value: currentValue, changePct: invested > 0 ? (changeEur / invested) * 100 : 0, changeEur, isUp: changeEur >= 0, date: addDate
     };
 
     const actionType = fundSource === 'propio' ? 'propio' : fundSource === 'ganancia' ? 'ganancia_compra' : 'otro_compra';
     onEjecutarBolsa(invested, actionType);
     savePositions([...posiciones, newPos]); 
-    
     setAssetToAdd(null);
   };
 
-  // --- LÓGICA DE VENTA PROFESIONAL ---
-  const handleOpenSell = (pos: Position) => {
-    setSellingPos(pos);
-    setSellShares(pos.shares.toString()); // Por defecto todo
-    setSellPrice(pos.currentPrice.toString()); // Por defecto el precio actual
+  // --- LÓGICA DE VENTA ESTRICTA FIFO ---
+  const handleOpenSell = (group: GroupedPosition) => {
+    setSellingGroup(group);
+    setSellShares(group.totalShares.toString()); 
+    setSellPrice(group.currentPrice.toString()); 
+  };
+
+  // 🧮 CALCULADORA FIFO EN TIEMPO REAL
+  const calculateFifoCost = (sharesToSell: number, ticker: string) => {
+    let remaining = sharesToSell;
+    let cost = 0;
+    const lots = posiciones.filter(p => p.ticker === ticker).sort((a,b) => new Date(a.date||0).getTime() - new Date(b.date||0).getTime());
+    
+    for(const l of lots){
+      if(remaining <= 0) break;
+      if(l.shares <= remaining){
+        cost += l.shares * l.avgPriceEur;
+        remaining -= l.shares;
+      } else {
+        cost += remaining * l.avgPriceEur;
+        remaining = 0;
+      }
+    }
+    return cost;
   };
 
   const handleConfirmSell = () => {
-    if (!sellingPos) return;
+    if (!sellingGroup) return;
     const sharesToSell = Number(sellShares);
     const priceToSell = Number(sellPrice);
 
-    if (sharesToSell <= 0 || sharesToSell > sellingPos.shares || priceToSell <= 0) {
-      alert('Valores no válidos. Asegúrate de no vender más acciones de las que tienes.'); return;
+    if (sharesToSell <= 0 || sharesToSell > sellingGroup.totalShares || priceToSell <= 0) {
+      alert('Asegúrate de no vender más acciones de las que tienes.'); return;
     }
 
-    const costeOriginalDeLoVendido = sharesToSell * sellingPos.avgPriceEur;
+    let remainingToSell = sharesToSell;
+    let totalCostOriginal = 0;
+    let updatedPosiciones = [...posiciones];
+
+    // 1. OBTENEMOS LOS LOTES ORDENADOS POR FECHA (LOS MÁS ANTIGUOS PRIMERO)
+    const lots = updatedPosiciones
+      .filter(p => p.ticker === sellingGroup.ticker)
+      .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
+
+    // 2. VAMOS RESTANDO ACCIONES DE LOS LOTES MÁS ANTIGUOS
+    for (const lot of lots) {
+      if (remainingToSell <= 0) break;
+
+      if (lot.shares <= remainingToSell) {
+        // Vende el lote completo y lo elimina
+        totalCostOriginal += lot.shares * lot.avgPriceEur;
+        remainingToSell -= lot.shares;
+        updatedPosiciones = updatedPosiciones.filter(p => p.id !== lot.id);
+      } else {
+        // Vende una fracción del lote actual
+        totalCostOriginal += remainingToSell * lot.avgPriceEur;
+        const remainingSharesInLot = lot.shares - remainingToSell;
+        
+        updatedPosiciones = updatedPosiciones.map(p => {
+          if (p.id === lot.id) {
+            const newValue = remainingSharesInLot * p.currentPrice;
+            const newChangeEur = newValue - (remainingSharesInLot * p.avgPriceEur);
+            return {
+              ...p, shares: remainingSharesInLot, value: newValue, changeEur: newChangeEur,
+              changePct: (newChangeEur / (remainingSharesInLot * p.avgPriceEur)) * 100
+            };
+          }
+          return p;
+        });
+        remainingToSell = 0;
+      }
+    }
+
     const valorDeVentaTotal = sharesToSell * priceToSell;
-
-    // Ejecuta la venta (envía valor recibido y coste original para calcular beneficio)
-    onEjecutarBolsa(valorDeVentaTotal, 'vender', costeOriginalDeLoVendido);
-
-    if (sharesToSell === sellingPos.shares) {
-      // Venta total
-      const nuevasPosiciones = posiciones.filter(p => p.id !== sellingPos.id);
-      savePositions(nuevasPosiciones);
-    } else {
-      // Venta parcial
-      const remainingShares = sellingPos.shares - sharesToSell;
-      const updatedPosiciones = posiciones.map(p => {
-        if (p.id === sellingPos.id) {
-          const newValue = remainingShares * p.currentPrice;
-          const newChangeEur = newValue - (remainingShares * p.avgPriceEur);
-          return {
-            ...p,
-            shares: remainingShares,
-            value: newValue,
-            changeEur: newChangeEur,
-            changePct: (newChangeEur / (remainingShares * p.avgPriceEur)) * 100,
-          };
-        }
-        return p;
-      });
-      savePositions(updatedPosiciones);
-    }
-    setSellingPos(null);
+    onEjecutarBolsa(valorDeVentaTotal, 'vender', totalCostOriginal);
+    savePositions(updatedPosiciones);
+    setSellingGroup(null);
   };
 
-  // --- LÓGICA DE BORRADO (DESHACER/PAPELERA) ---
-  const handleDeletePosition = (pos: Position) => {
-    if (confirm(`¿Deshacer operación de ${pos.ticker}?\n\nEsto no registrará beneficios ni pérdidas, simplemente devolverá la inversión original de ${pos.value.toFixed(2)}€ al Saldo Global.`)) {
-      const nuevasPosiciones = posiciones.filter(p => p.id !== pos.id);
+  // --- LÓGICA DE BORRADO DE LOTE (SIN VENTA) ---
+  const handleDeleteLot = (lot: Position) => {
+    if (confirm(`¿Deshacer operación de ${lot.shares.toFixed(4)} acciones en ${lot.ticker}?\n\nSe devolverá la inversión de ${lot.value.toFixed(2)}€ al Saldo sin contar beneficios.`)) {
+      const nuevasPosiciones = posiciones.filter(p => p.id !== lot.id);
       savePositions(nuevasPosiciones); 
-      onEjecutarBolsa(pos.shares * pos.avgPriceEur, 'balance'); // Devuelve el coste original sin registrar venta
+      onEjecutarBolsa(lot.shares * lot.avgPriceEur, 'balance'); // Devuelve solo lo invertido originalmente
     }
   };
 
-  // --- LÓGICA DE EDICIÓN ---
-  const handleOpenEdit = (pos: Position) => {
-    setEditingPos(pos);
-    setEditPrice(pos.avgPriceEur.toString());
-    setEditInvested((pos.shares * pos.avgPriceEur).toString());
-    setEditDate(pos.date || new Date().toISOString().split('T')[0]);
+  // --- LÓGICA DE EDICIÓN DE LOTE ---
+  const handleOpenEdit = (lot: Position) => {
+    setEditingPos(lot);
+    setEditPrice(lot.avgPriceEur.toString());
+    setEditInvested((lot.shares * lot.avgPriceEur).toString());
+    setEditDate(lot.date || new Date().toISOString().split('T')[0]);
   };
 
   const handleConfirmEdit = () => {
@@ -238,7 +289,7 @@ export const BolsaDetails = ({
     if (newInvested <= 0 || newAvgPrice <= 0) return;
 
     const difference = newInvested - oldInvested;
-    if (difference > 0 && difference > disponibleGlobal) { alert('Saldo insuficiente para ampliar.'); return; }
+    if (difference > 0 && difference > disponibleGlobal) { alert('Saldo insuficiente para ampliar este lote.'); return; }
 
     if (difference > 0) onEjecutarBolsa(difference, 'propio');
     else if (difference < 0) onEjecutarBolsa(Math.abs(difference), 'balance');
@@ -312,8 +363,8 @@ export const BolsaDetails = ({
     } catch (error) {} finally { setIsUpdating(false); }
   };
 
-  const totalInvertidoCartera = posiciones.reduce((sum, pos) => sum + (pos.shares * pos.avgPriceEur), 0);
-  const carteraTotal = posiciones.reduce((sum, pos) => sum + pos.value, 0);
+  const totalInvertidoCartera = groupedPositions.reduce((sum, g) => sum + g.totalInvested, 0);
+  const carteraTotal = groupedPositions.reduce((sum, g) => sum + g.totalValue, 0);
   const gananciasTotales = carteraTotal - totalInvertidoCartera;
   const rentabilidadPct = totalInvertidoCartera > 0 ? (gananciasTotales / totalInvertidoCartera) * 100 : 0;
 
@@ -329,8 +380,6 @@ export const BolsaDetails = ({
 
   return (
     <div className="w-full max-w-2xl mx-auto pb-12 animate-in fade-in duration-300 relative">
-      
-      {/* CABECERA */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={onBack} className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-[#2d2d2d] cursor-pointer"><ArrowLeft size={24} /></button>
         <div className="flex gap-3 items-center">
@@ -339,114 +388,127 @@ export const BolsaDetails = ({
         </div>
       </div>
 
-      {/* BALANCE Y COMPARADOR */}
       <div className="flex justify-between items-start mb-8">
         <div>
           <p className="text-gray-400 font-medium text-sm mb-1">Cartera bolsa total</p>
-          <h2 className="text-4xl font-black text-white tracking-tight mb-1.5">
-            {posiciones.length > 0 ? `${carteraTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : `${(bolsaInvertido + bolsaGanancias).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`}
-          </h2>
+          <h2 className="text-4xl font-black text-white tracking-tight mb-1.5">{posiciones.length > 0 ? `${carteraTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : `${(bolsaInvertido + bolsaGanancias).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`}</h2>
           <div className={`flex items-center gap-1.5 font-bold text-sm ${curveType === 'up' ? 'text-emerald-400' : curveType === 'down' ? 'text-rose-400' : 'text-gray-400'}`}>
             <TrendingUp size={16} strokeWidth={2.5} className={curveType === 'down' ? 'transform rotate-180' : ''} />
             <span>{posiciones.length > 0 ? `${gananciasTotales > 0 ? '+' : ''}${rentabilidadPct.toFixed(2)}% · ${gananciasTotales > 0 ? '+' : ''}${gananciasTotales.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €` : `+0.0% · 0,00 €`}</span>
           </div>
         </div>
-
-        <div className="relative text-right">
-          <p className="text-gray-500 text-xs font-medium mb-1.5">Comparar con</p>
-          <button onClick={() => setIsCompareOpen(!isCompareOpen)} className="bg-[#1c1c1e] border border-[#2d2d2d] hover:border-[#3d3d3d] rounded-lg px-3 py-1.5 flex items-center gap-2 text-sm font-bold text-gray-300 hover:text-white transition-colors cursor-pointer">{selectedCompare}<ChevronDown size={14} className="text-gray-500" /></button>
-        </div>
       </div>
 
-      {/* GRÁFICO */}
       {posiciones.length > 0 ? (
         <div className="mb-8">
           <div className="w-full h-48 mb-4 relative">
             <svg viewBox="0 0 400 150" className="w-full h-full preserve-3d" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="gradBolsaDynamic" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={strokeColor} stopOpacity="0.25" /><stop offset="100%" stopColor={strokeColor} stopOpacity="0" /></linearGradient>
-              </defs>
+              <defs><linearGradient id="gradBolsaDynamic" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={strokeColor} stopOpacity="0.25" /><stop offset="100%" stopColor={strokeColor} stopOpacity="0" /></linearGradient></defs>
               <path d="M0 130 Q 100 120, 200 100 T 400 60" fill="none" stroke="#2563eb" strokeWidth="1.5" strokeDasharray="4,4" />
               <path d={`${dynamicSvgPath} L 400 150 L 0 150 Z`} fill="url(#gradBolsaDynamic)" />
               <path d={dynamicSvgPath} fill="none" stroke={strokeColor} strokeWidth="2.5" />
             </svg>
-          </div>
-          <div className="flex gap-4 items-center">
-            <div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-sm`} style={{ backgroundColor: strokeColor }}></div><span className="text-xs font-bold text-gray-300">Mi cartera {gananciasTotales > 0 ? '+' : ''}{rentabilidadPct.toFixed(2)}%</span></div>
-            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-blue-600"></div><span className="text-xs font-bold text-gray-500">{selectedCompare} +11.8%</span></div>
           </div>
         </div>
       ) : (
         <div className="w-full h-40 bg-[#141416] rounded-2xl border border-dashed border-[#2d2d2d] flex flex-col items-center justify-center text-gray-600 mb-10"><TrendingUp size={32} className="mb-3 opacity-30" /><p className="font-bold text-sm text-gray-400 mb-1">Gráfica no disponible</p></div>
       )}
 
-      {/* LISTADO DE POSICIONES CON NUEVOS BOTONES */}
+      {/* 🚀 LISTADO DE POSICIONES DESPLEGABLES */}
       <div>
         <h3 className="text-lg font-bold text-white mb-4">Posiciones</h3>
         
-        {posiciones.length > 0 ? (
+        {groupedPositions.length > 0 ? (
           <div className="space-y-3">
-            {posiciones.map((pos) => (
-              <div key={pos.id} className="bg-[#141416] border border-[#2d2d2d] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-[#1c1c1e] transition-all group gap-4 sm:gap-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#2d2d2d] flex items-center justify-center font-bold text-white text-[10px] border border-[#3d3d3d]">{pos.ticker.substring(0,2)}</div>
-                  <div>
-                    <p className="text-white font-bold text-sm flex items-center gap-2">
-                      {pos.ticker}
-                      <span className="text-[10px] font-medium text-gray-500 bg-[#2d2d2d] px-1.5 py-0.5 rounded flex items-center gap-1"><Calendar size={10} /> {pos.date ? new Date(pos.date).toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit', year:'2-digit'}) : '--/--/--'}</span>
-                    </p>
-                    <p className="text-xs text-gray-500">{pos.name}</p>
-                    <p className="text-[10px] text-gray-600 mt-0.5 font-medium">{pos.shares.toLocaleString('es-ES', { maximumFractionDigits: 5 })} acciones</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
-                  <div className="text-left sm:text-right">
-                    <p className="text-white font-bold text-sm">{pos.value.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
-                    <p className={`text-[11px] font-bold mt-0.5 ${pos.isUp ? 'text-emerald-400' : pos.changePct < 0 ? 'text-rose-400' : 'text-gray-400'}`}>
-                      {pos.isUp && pos.changeEur > 0 ? '+' : ''}{pos.changeEur.toLocaleString('es-ES', { minimumFractionDigits: 2 })} € ({pos.isUp && pos.changePct > 0 ? '+' : ''}{pos.changePct.toFixed(2)}%)
-                    </p>
-                  </div>
+            {groupedPositions.map((group) => {
+              const isExpanded = !!expandedTickers[group.ticker];
+
+              return (
+                <div key={group.ticker} className="bg-[#141416] border border-[#2d2d2d] rounded-2xl overflow-hidden transition-all shadow-sm">
                   
-                  <div className="flex gap-1.5">
-                    {/* 🚀 NUEVO BOTÓN: VENDER (VERDE) */}
-                    <button onClick={() => handleOpenSell(pos)} className="p-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-lg transition-colors cursor-pointer" title="Vender Acciones">
-                      <Banknote size={16} />
-                    </button>
-                    {/* BOTÓN: EDITAR (AZUL) */}
-                    <button onClick={() => handleOpenEdit(pos)} className="p-2 bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white rounded-lg transition-colors cursor-pointer" title="Editar Posición">
-                      <Edit2 size={16} />
-                    </button>
-                    {/* BOTÓN: DESHACER/BORRAR (ROJO) */}
-                    <button onClick={() => handleDeletePosition(pos)} className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-colors cursor-pointer" title="Deshacer (Borrar sin vender)">
-                      <Trash2 size={16} />
-                    </button>
+                  {/* FILA PRINCIPAL (AGREGADA) */}
+                  <div onClick={() => toggleExpand(group.ticker)} className="p-4 flex items-center justify-between hover:bg-[#1c1c1e] cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#2d2d2d] flex items-center justify-center font-bold text-white text-[10px] border border-[#3d3d3d]">{group.ticker.substring(0,2)}</div>
+                      <div>
+                        <p className="text-white font-bold text-sm flex items-center gap-1.5">{group.ticker} {isExpanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}</p>
+                        <p className="text-xs text-gray-500">{group.name}</p>
+                        <p className="text-[10px] text-gray-600 mt-0.5 font-medium">{group.totalShares.toLocaleString('es-ES', { maximumFractionDigits: 5 })} acciones</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-white font-bold text-sm">{group.totalValue.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
+                      <p className={`text-[11px] font-bold mt-0.5 ${group.isUp ? 'text-emerald-400' : group.changePct < 0 ? 'text-rose-400' : 'text-gray-400'}`}>
+                        {group.isUp && group.changeEur > 0 ? '+' : ''}{group.changeEur.toLocaleString('es-ES', { minimumFractionDigits: 2 })} € ({group.isUp && group.changePct > 0 ? '+' : ''}{group.changePct.toFixed(2)}%)
+                      </p>
+                    </div>
                   </div>
+
+                  {/* 🚀 ZONA DESPLEGABLE (LOS LOTES Y BOTONES DE VENTA/COMPRA) */}
+                  {isExpanded && (
+                    <div className="bg-[#101012] border-t border-[#2d2d2d]">
+                      
+                      {/* BARRA DE ACCIONES (COMPRAR / VENDER GLOBAL) */}
+                      <div className="flex items-center justify-end gap-2 p-3 border-b border-[#2d2d2d]/50 bg-[#161618]">
+                        <button onClick={(e) => { e.stopPropagation(); handleOpenSell(group); }} className="px-3 py-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer">
+                          <Banknote size={14} /> Vender
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); handleBuyMore(group); }} className="px-3 py-1.5 bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-black rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer">
+                          <Plus size={14} strokeWidth={3} /> Comprar más
+                        </button>
+                      </div>
+
+                      {/* LISTA DE COMPRAS (LOTES) */}
+                      <div className="divide-y divide-[#2d2d2d]/30">
+                        {group.lots.map((lot, idx) => (
+                          <div key={lot.id} className="p-3 pl-14 flex items-center justify-between hover:bg-[#1a1a1c] transition-colors group/lot">
+                            <div>
+                              <p className="text-xs text-gray-300 font-bold flex items-center gap-1.5">Lote {idx + 1} <span className="text-[9px] font-medium text-gray-500 bg-[#222] px-1.5 py-0.5 rounded">{lot.date ? new Date(lot.date).toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit', year:'2-digit'}) : 'Antiguo'}</span></p>
+                              <p className="text-[10px] text-gray-500 mt-0.5">{lot.shares.toFixed(4)} accs. a {lot.avgPriceEur.toFixed(2)} €</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <p className={`text-xs font-bold ${lot.isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {lot.value.toFixed(2)} €
+                              </p>
+                              
+                              {/* BOTONES DE EDICIÓN DEL LOTE ESPECÍFICO */}
+                              <div className="flex gap-1 opacity-0 group-hover/lot:opacity-100 transition-opacity">
+                                <button onClick={() => handleOpenEdit(lot)} className="p-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white rounded-md transition-colors cursor-pointer" title="Editar lote">
+                                  <Edit2 size={12} />
+                                </button>
+                                <button onClick={() => handleDeleteLot(lot)} className="p-1.5 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-md transition-colors cursor-pointer" title="Deshacer lote">
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
-          <div className="text-center py-10 bg-[#141416] border border-[#2d2d2d] rounded-2xl"><p className="text-gray-500 font-medium text-sm mb-4">Aún no tienes posiciones.</p><button onClick={() => setIsSearchOpen(true)} className="bg-[#eab308] hover:bg-[#ca8a04] text-black font-bold py-2.5 px-6 rounded-xl transition-colors cursor-pointer text-sm">Buscar un activo</button></div>
+          <div className="text-center py-10 bg-[#141416] border border-[#2d2d2d] rounded-2xl">
+            <p className="text-gray-500 font-medium text-sm mb-4">Aún no tienes posiciones en tu cartera.</p>
+            <button onClick={() => setIsSearchOpen(true)} className="bg-[#eab308] hover:bg-[#ca8a04] text-black font-bold py-2.5 px-6 rounded-xl transition-colors cursor-pointer text-sm">Buscar un activo</button>
+          </div>
         )}
       </div>
 
       <AssetSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelectAsset={handleSelectAsset} />
 
-      {/* 🟢 MODAL: AÑADIR POSICIÓN (CON SELECTOR DE ORIGEN) */}
+      {/* 🟢 MODAL: COMPRAR / AÑADIR */}
       {assetToAdd && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
             <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">
-              <div>
-                <h3 className="text-base font-bold text-white tracking-tight">Comprar Activo</h3>
-                <p className="text-xs text-gray-500 mt-0.5">{assetToAdd.name} ({assetToAdd.ticker})</p>
-              </div>
-              <button onClick={() => setAssetToAdd(null)} className="p-2 text-gray-400 hover:text-white transition-colors"><X size={20} /></button>
+              <div><h3 className="text-base font-bold text-white tracking-tight">Comprar Activo</h3><p className="text-xs text-gray-500 mt-0.5">{assetToAdd.name} ({assetToAdd.ticker})</p></div>
+              <button onClick={() => setAssetToAdd(null)} className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer"><X size={20} /></button>
             </div>
-            
             <div className="p-5 space-y-4">
-              {/* 🚀 ORIGEN DE FONDOS */}
               <div>
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Origen del dinero</label>
                 <select value={fundSource} onChange={(e) => setFundSource(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-amber-500 cursor-pointer">
@@ -455,92 +517,67 @@ export const BolsaDetails = ({
                   <option value="otro">Dinero Externo (No resta del saldo)</option>
                 </select>
               </div>
-
               <div>
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Fecha de compra</label>
                 <input type="date" value={addDate} onChange={(e) => setAddDate(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-amber-500" />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Precio de compra (€)</label>
-                  <input type="number" step="any" placeholder="Ej: 150.25" value={addPrice} onChange={(e) => setAddPrice(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Total a Invertir (€)</label>
-                  <input type="number" step="any" placeholder="Ej: 10" value={addInvested} onChange={(e) => setAddInvested(e.target.value)} className="w-full bg-[#1c1c1e] border border-amber-500/50 rounded-xl px-4 py-3 text-base text-white outline-none" />
-                </div>
+                <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Precio de compra (€)</label><input type="number" step="any" placeholder="Ej: 150" value={addPrice} onChange={(e) => setAddPrice(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-amber-500" /></div>
+                <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Total a Invertir (€)</label><input type="number" step="any" placeholder="Ej: 10" value={addInvested} onChange={(e) => setAddInvested(e.target.value)} className="w-full bg-[#1c1c1e] border border-amber-500/50 rounded-xl px-4 py-3 text-base text-white outline-none focus:border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.1)]" /></div>
               </div>
-
-              {addInvested && addPrice && Number(addPrice) > 0 && (
-                <p className="text-xs text-gray-500 text-center font-medium">Estás comprando <span className="text-white font-bold">{(Number(addInvested) / Number(addPrice)).toFixed(5)}</span> acciones</p>
-              )}
-
-              <button onClick={handleConfirmAdd} className="w-full bg-amber-500 hover:bg-amber-400 text-black text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-2">Comprar</button>
+              <button onClick={handleConfirmAdd} className="w-full bg-amber-500 hover:bg-amber-400 text-black text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-2">Registrar Compra</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 🔴 MODAL: VENDER POSICIÓN (EL CÁLCULO LIMPIO) */}
-      {sellingPos && (
+      {/* 🔴 MODAL: VENDER (CÁLCULO LÍQUIDO FIFO) */}
+      {sellingGroup && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
             <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">
-              <div>
-                <h3 className="text-base font-bold text-emerald-400 tracking-tight">Vender Posición</h3>
-                <p className="text-xs text-gray-500 mt-0.5">{sellingPos.name} ({sellingPos.ticker})</p>
-              </div>
-              <button onClick={() => setSellingPos(null)} className="p-2 text-gray-400 hover:text-white transition-colors"><X size={20} /></button>
+              <div><h3 className="text-base font-bold text-emerald-400 tracking-tight">Vender Acciones</h3><p className="text-xs text-gray-500 mt-0.5">{sellingGroup.name} ({sellingGroup.ticker})</p></div>
+              <button onClick={() => setSellingGroup(null)} className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer"><X size={20} /></button>
             </div>
-            
             <div className="p-5 space-y-4">
               <div className="bg-[#1c1c1e] p-4 rounded-xl border border-[#2d2d2d] flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-400">Acciones totales en cartera:</span>
-                <span className="text-sm font-black text-white">{sellingPos.shares.toFixed(5)}</span>
+                <span className="text-sm font-black text-white">{sellingGroup.totalShares.toFixed(5)}</span>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Acciones a Vender</label>
-                  <input type="number" step="any" max={sellingPos.shares} value={sellShares} onChange={(e) => setSellShares(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-emerald-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Precio Venta (€)</label>
-                  <input type="number" step="any" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-emerald-500" />
-                </div>
+                <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Nº de Acciones a Vender</label><input type="number" step="any" max={sellingGroup.totalShares} value={sellShares} onChange={(e) => setSellShares(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-emerald-500" /></div>
+                <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Precio de Venta (€)</label><input type="number" step="any" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-emerald-500" /></div>
               </div>
 
-              {/* 🚀 CÁLCULO DE BENEFICIO LIMPIO */}
+              {/* 🚀 CÁLCULO DE BENEFICIO EN VIVO (FIFO) */}
               {sellShares && sellPrice && Number(sellShares) > 0 && Number(sellPrice) > 0 && (
                 <div className="bg-black/20 border border-[#2d2d2d] p-4 rounded-xl space-y-2 mt-4">
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-500 font-bold">Total recibido (Monto):</span>
+                    <span className="text-gray-500 font-bold">Total a recibir en cuenta:</span>
                     <span className="text-white font-black">{(Number(sellShares) * Number(sellPrice)).toLocaleString('es-ES', {minimumFractionDigits: 2})} €</span>
                   </div>
                   <div className="flex justify-between text-xs border-t border-[#2d2d2d]/50 pt-2">
-                    <span className="text-gray-500 font-bold">Beneficio limpio (Profit):</span>
-                    <span className={`font-black ${(Number(sellShares) * Number(sellPrice)) - (Number(sellShares) * sellingPos.avgPriceEur) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {(((Number(sellShares) * Number(sellPrice)) - (Number(sellShares) * sellingPos.avgPriceEur)) > 0 ? '+' : '')}
-                      {((Number(sellShares) * Number(sellPrice)) - (Number(sellShares) * sellingPos.avgPriceEur)).toLocaleString('es-ES', {minimumFractionDigits: 2})} €
+                    <span className="text-gray-500 font-bold">Beneficio Neto (Ganancia Real):</span>
+                    <span className={`font-black ${((Number(sellShares) * Number(sellPrice)) - calculateFifoCost(Number(sellShares), sellingGroup.ticker)) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {((Number(sellShares) * Number(sellPrice)) - calculateFifoCost(Number(sellShares), sellingGroup.ticker)) > 0 ? '+' : ''}
+                      {((Number(sellShares) * Number(sellPrice)) - calculateFifoCost(Number(sellShares), sellingGroup.ticker)).toLocaleString('es-ES', {minimumFractionDigits: 2})} €
                     </span>
                   </div>
                 </div>
               )}
-
               <button onClick={handleConfirmSell} className="w-full bg-emerald-500 hover:bg-emerald-400 text-black text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-2">Confirmar Venta</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 🔵 MODAL: EDITAR POSICIÓN */}
+      {/* 🔵 MODAL: EDITAR LOTE ESPECÍFICO */}
       {editingPos && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
             <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">
-              <div><h3 className="text-base font-bold text-white tracking-tight">Editar Posición</h3><p className="text-xs text-gray-500 mt-0.5">{editingPos.name} ({editingPos.ticker})</p></div>
-              <button onClick={() => setEditingPos(null)} className="p-2 text-gray-400 hover:text-white transition-colors"><X size={20} /></button>
+              <div><h3 className="text-base font-bold text-white tracking-tight">Editar Lote</h3><p className="text-xs text-gray-500 mt-0.5">{editingPos.name} ({editingPos.ticker})</p></div>
+              <button onClick={() => setEditingPos(null)} className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer"><X size={20} /></button>
             </div>
             <div className="p-5 space-y-4">
               <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Fecha de compra</label><input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-blue-500" /></div>

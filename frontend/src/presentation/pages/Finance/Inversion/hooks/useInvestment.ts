@@ -14,7 +14,6 @@ export const useInvestment = () => {
   const [proyectoInvertido, setProyectoInvertido] = useState(0);
   const [proyectoGanado, setProyectoGanado] = useState(0);
 
-  // NUEVO ESTADO: El historial ahora se controla desde el cerebro
   const [movimientos, setMovimientos] = useState<any[]>([]);
 
   const cargarSaldos = async () => {
@@ -28,14 +27,16 @@ export const useInvestment = () => {
 
       const localGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
 
-      // 1. CARGAMOS EL HISTORIAL REAL DE FIREBASE Y LOCAL
+      // 1. CARGAMOS EL HISTORIAL DE FIREBASE
       const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
-      const firebaseTxs = transSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      // 🚀 CORRECCIÓN: Le decimos explícitamente a TypeScript que esto es un array de cualquier tipo (any[])
+      const firebaseTxs: any[] = transSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const localTxs = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
 
       let pendingGlobalDiff = 0;
 
-      // 2. SINCRONIZACIÓN Y RECUPERACIÓN DE SALDOS PERDIDOS (Aquí recupera tus 74,85€)
+      // 2. SINCRONIZACIÓN Y RECUPERACIÓN DE SALDOS PERDIDOS
       for (const m of localTxs) {
         const exists = firebaseTxs.some(tx => tx.id === m.id || (tx.label === m.label && tx.amount === m.amount && tx.dateString === m.dateString));
         if (!exists) {
@@ -54,7 +55,7 @@ export const useInvestment = () => {
 
       // 3. ACTUALIZAMOS SALDOS CORRIGIENDO DESFASES
       let finalGlobal = data.disponibleGlobal !== undefined ? data.disponibleGlobal : localGlobal;
-      finalGlobal += pendingGlobalDiff; // Suma lo que faltaba
+      finalGlobal += pendingGlobalDiff; 
 
       setDisponibleGlobal(finalGlobal);
       setBolsaInvertido(data.bolsaInvertido || 0);
@@ -62,7 +63,6 @@ export const useInvestment = () => {
       setProyectoInvertido(data.proyectoInvertido || 0);
       setProyectoGanado(data.proyectoGanado || 0);
 
-      // Si hubo que corregir el saldo, lo guardamos para siempre
       if (pendingGlobalDiff !== 0 || !docSnap.exists()) {
         await setDoc(docRef, { disponibleGlobal: finalGlobal }, { merge: true });
         localStorage.setItem('aio_total_invertido_diadia_v2', finalGlobal.toString());
@@ -104,7 +104,6 @@ export const useInvestment = () => {
     } catch (error) {}
   };
 
-  // 🚀 NUEVA FUNCIÓN: ELIMINAR / DESHACER MARCHA ATRÁS
   const eliminarMovimiento = async (id: string, amount: number, label: string) => {
     const user = auth.currentUser;
     if (!user) return;
@@ -117,7 +116,6 @@ export const useInvestment = () => {
     const filtered = currentMovements.filter((m: any) => m.id !== id);
     localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify(filtered));
 
-    // REVERSIÓN MATEMÁTICA DE SALDOS
     let nGlob = disponibleGlobal;
     let nBInv = bolsaInvertido;
     let nPInv = proyectoInvertido;
@@ -128,14 +126,13 @@ export const useInvestment = () => {
     
     if (lower.includes('bolsa')) {
       if (lower.includes('dividendo')) { nBGan -= amount; } 
-      else { nGlob += amount; nBInv -= amount; } // Deshacer compra o venta
+      else { nGlob += amount; nBInv -= amount; } 
     } 
     else if (lower.includes('proyecto')) {
       if (lower.includes('venta')) { nGlob -= amount; nPGan -= amount; } 
       else { nGlob += amount; nPInv -= amount; }
     } 
     else {
-      // Deshacer Aportación o Retirada (Dinero Día a Día)
       nGlob -= amount;
     }
 
@@ -209,6 +206,6 @@ export const useInvestment = () => {
     currentView, setCurrentView, disponibleGlobal, totalInvertidoCalculado, bolsaDisponible: 0,
     bolsaInvertido, bolsaGanancias, proyectoDisponible: 0, proyectoInvertido, proyectoGanado,
     handleTransferirGlobal, handleEjecutarBolsa, handleEjecutarProyecto, loading,
-    movimientos, eliminarMovimiento // 🚀 EXPORTAMOS PARA EL HISTORIAL
+    movimientos, eliminarMovimiento
   };
 };

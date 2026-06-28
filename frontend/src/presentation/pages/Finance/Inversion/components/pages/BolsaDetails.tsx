@@ -15,7 +15,7 @@ interface Position {
   changePct: number;
   changeEur: number;
   isUp: boolean;
-  date?: string; // 🚀 AÑADIDA FECHA DE COMPRA
+  date?: string; 
 }
 
 interface BolsaDetailsProps {
@@ -33,8 +33,8 @@ const fetchDirectly = async (url: string) => {
   } catch (e) {}
 
   const proxies = [
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-    `https://corsproxy.io/?url=${encodeURIComponent(url)}`
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
   ];
 
   for (const p of proxies) {
@@ -62,13 +62,11 @@ export const BolsaDetails = ({
   const [posiciones, setPosiciones] = useState<Position[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   
-  // ESTADOS AÑADIR
   const [assetToAdd, setAssetToAdd] = useState<Asset | null>(null);
   const [addPrice, setAddPrice] = useState('');
   const [addInvested, setAddInvested] = useState('');
-  const [addDate, setAddDate] = useState(new Date().toISOString().split('T')[0]); // Fecha por defecto: Hoy
+  const [addDate, setAddDate] = useState(new Date().toISOString().split('T')[0]); 
 
-  // ESTADOS EDITAR
   const [editingPos, setEditingPos] = useState<Position | null>(null);
   const [editPrice, setEditPrice] = useState('');
   const [editInvested, setEditInvested] = useState('');
@@ -106,7 +104,6 @@ export const BolsaDetails = ({
     } catch(e) {}
   };
 
-  // --- LÓGICA AÑADIR ---
   const handleSelectAsset = (asset: Asset) => {
     setIsSearchOpen(false);
     setAssetToAdd(asset);
@@ -157,7 +154,6 @@ export const BolsaDetails = ({
     setAddInvested('');
   };
 
-  // --- LÓGICA EDITAR ---
   const handleOpenEdit = (pos: Position) => {
     setEditingPos(pos);
     setEditPrice(pos.avgPriceEur.toString());
@@ -178,17 +174,15 @@ export const BolsaDetails = ({
 
     const difference = newInvested - oldInvested;
 
-    // Si aumentas la inversión, comprobamos que tienes saldo
     if (difference > 0 && difference > disponibleGlobal) {
       alert(`Saldo insuficiente para aumentar la posición. Faltan ${difference.toLocaleString('es-ES')} €.`);
       return;
     }
 
-    // Cuadramos el saldo global. Si diff > 0 (invertiste más), se resta de disponible. Si diff < 0, se devuelve dinero al disponible.
     if (difference > 0) {
       onEjecutarBolsa(difference, 'propio');
     } else if (difference < 0) {
-      onEjecutarBolsa(Math.abs(difference), 'balance'); // 'balance' devuelve el dinero al global
+      onEjecutarBolsa(Math.abs(difference), 'balance');
     }
 
     const newShares = newInvested / newAvgPrice;
@@ -210,68 +204,67 @@ export const BolsaDetails = ({
     setEditingPos(null);
   };
 
-  // --- LÓGICA BORRAR / VENDER ---
   const handleDeletePosition = (pos: Position) => {
     if (confirm(`¿Vender / Eliminar posición en ${pos.ticker}?\n\nSe devolverán ${pos.value.toFixed(2)} € a tu Saldo Global y se borrará de tu cartera.`)) {
       const nuevasPosiciones = posiciones.filter(p => p.id !== pos.id);
       savePositions(nuevasPosiciones); 
-      onEjecutarBolsa(pos.value, 'balance'); // Devuelve el valor actual de mercado
+      onEjecutarBolsa(pos.value, 'balance'); 
     }
   };
 
-  // --- LÓGICA ACTUALIZACIÓN DE PRECIOS SIN CACHÉ ---
+  // 🚀 ACTUALIZADOR DE PRECIOS MEJORADO
   const handleUpdatePrices = async () => {
     if (posiciones.length === 0) return;
     setIsUpdating(true);
     
     try {
-      const symbols = posiciones.map(p => p.ticker);
-      symbols.push('EURUSD=X');
-
-      // 🚀 DESTRUCTOR DE CACHÉ: Añadimos la fecha en milisegundos para forzar al servidor a darnos el precio actual
-      const timestamp = Date.now();
-      const priceUrl = `https://query2.finance.yahoo.com/v8/finance/spark?symbols=${symbols.join(',')}&_ts=${timestamp}`;
-      const priceData = await fetchDirectly(priceUrl);
-
-      let priceMap = new Map();
       let usdToEurRate = 0.92;
+      try {
+        const fxRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR');
+        if (fxRes.ok) {
+          const fxData = await fxRes.json();
+          usdToEurRate = fxData.rates.EUR;
+        }
+      } catch(e) {}
 
-      if (priceData?.spark?.result) {
-        priceData.spark.result.forEach((res: any) => {
-          const meta = res.response?.[0]?.meta;
-          if (meta) {
-            priceMap.set(res.symbol, meta);
-            if (res.symbol === 'EURUSD=X') usdToEurRate = 1 / (meta.regularMarketPrice || 1.08);
+      const updatedPosiciones = await Promise.all(posiciones.map(async (pos) => {
+        try {
+          const timestamp = Date.now(); // Destructor de caché estricto
+          let formattedTicker = pos.ticker;
+          if (formattedTicker.endsWith('USD') && formattedTicker.length > 3 && !formattedTicker.includes('-')) {
+            formattedTicker = formattedTicker.replace('USD', '-USD');
           }
-        });
-      }
 
-      const updatedPosiciones = posiciones.map(pos => {
-        const meta = priceMap.get(pos.ticker);
-        if (!meta) return pos;
+          const url = `https://query2.finance.yahoo.com/v8/finance/chart/${formattedTicker}?interval=1d&range=1d&_ts=${timestamp}`;
+          const data = await fetchDirectly(url);
+          
+          const meta = data?.chart?.result?.[0]?.meta;
+          if (meta && meta.regularMarketPrice) {
+            let currentPriceEur = meta.regularMarketPrice;
+            if (meta.currency === 'USD') currentPriceEur *= usdToEurRate;
+            else if (meta.currency === 'GBP') currentPriceEur *= 1.17; 
 
-        let currentPriceEur = meta.regularMarketPrice || pos.currentPrice;
-        if (meta.currency === 'USD') currentPriceEur *= usdToEurRate;
-        else if (meta.currency === 'GBP') currentPriceEur *= 1.17; 
+            const value = pos.shares * currentPriceEur;
+            const invested = pos.shares * pos.avgPriceEur;
+            const changeEur = value - invested;
+            const changePct = invested > 0 ? (changeEur / invested) * 100 : 0;
 
-        const value = pos.shares * currentPriceEur;
-        const invested = pos.shares * pos.avgPriceEur;
-        const changeEur = value - invested;
-        const changePct = invested > 0 ? (changeEur / invested) * 100 : 0;
-
-        return {
-          ...pos,
-          currentPrice: currentPriceEur,
-          value,
-          changeEur,
-          changePct,
-          isUp: changeEur >= 0
-        };
-      });
+            return {
+              ...pos,
+              currentPrice: currentPriceEur,
+              value,
+              changeEur,
+              changePct,
+              isUp: changeEur >= 0
+            };
+          }
+        } catch (e) {}
+        return pos;
+      }));
 
       savePositions(updatedPosiciones);
     } catch (error) {
-      console.warn("Fallo de red actualizando. Mantenemos los precios anteriores.");
+      console.warn("Fallo actualizando precios.");
     } finally {
       setIsUpdating(false);
     }
@@ -282,13 +275,21 @@ export const BolsaDetails = ({
   const gananciasTotales = carteraTotal - totalInvertidoCartera;
   const rentabilidadPct = totalInvertidoCartera > 0 ? (gananciasTotales / totalInvertidoCartera) * 100 : 0;
 
-  // 🚀 GRÁFICO DINÁMICO REACCIONARIO
-  const isPortfolioUp = gananciasTotales >= 0;
-  const dynamicSvgPath = isPortfolioUp 
-    ? "M0 130 Q 100 140, 200 100 T 400 30" // Curva ascendente
-    : "M0 30 Q 100 20, 200 80 T 400 140";  // Curva descendente
-  const strokeColor = isPortfolioUp ? "#10b981" : "#ef4444"; // Verde o Rojo
-  const gradientColor = isPortfolioUp ? "#10b981" : "#ef4444";
+  // 🚀 LÓGICA DE GRÁFICO CORREGIDA
+  let curveType = 'flat';
+  if (rentabilidadPct > 0.1) curveType = 'up';
+  else if (rentabilidadPct < -0.1) curveType = 'down';
+
+  let dynamicSvgPath = "M 0 80 Q 100 70, 200 80 T 400 80"; // Línea plana y gris por defecto
+  let strokeColor = "#9ca3af"; // Gris
+
+  if (curveType === 'up') {
+    dynamicSvgPath = "M0 130 Q 100 140, 200 100 T 400 30";
+    strokeColor = "#10b981"; // Verde esmeralda
+  } else if (curveType === 'down') {
+    dynamicSvgPath = "M0 30 Q 100 20, 200 80 T 400 140";
+    strokeColor = "#ef4444"; // Rojo
+  }
 
   return (
     <div className="w-full max-w-2xl mx-auto pb-12 animate-in fade-in duration-300 relative">
@@ -327,11 +328,11 @@ export const BolsaDetails = ({
               : `${(bolsaInvertido + bolsaGanancias).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`
             }
           </h2>
-          <div className={`flex items-center gap-1.5 font-bold text-sm ${gananciasTotales >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            <TrendingUp size={16} strokeWidth={2.5} className={gananciasTotales < 0 ? 'transform rotate-180' : ''} />
+          <div className={`flex items-center gap-1.5 font-bold text-sm ${curveType === 'up' ? 'text-emerald-400' : curveType === 'down' ? 'text-rose-400' : 'text-gray-400'}`}>
+            <TrendingUp size={16} strokeWidth={2.5} className={curveType === 'down' ? 'transform rotate-180' : ''} />
             <span>
               {posiciones.length > 0 
-                ? `${gananciasTotales >= 0 ? '+' : ''}${rentabilidadPct.toFixed(1)}% · ${gananciasTotales >= 0 ? '+' : ''}${gananciasTotales.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`
+                ? `${gananciasTotales > 0 ? '+' : ''}${rentabilidadPct.toFixed(2)}% · ${gananciasTotales > 0 ? '+' : ''}${gananciasTotales.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`
                 : `+0.0% · 0,00 €`
               }
             </span>
@@ -378,15 +379,12 @@ export const BolsaDetails = ({
             <svg viewBox="0 0 400 150" className="w-full h-full preserve-3d" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="gradBolsaDynamic" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={gradientColor} stopOpacity="0.25" />
-                  <stop offset="100%" stopColor={gradientColor} stopOpacity="0" />
+                  <stop offset="0%" stopColor={strokeColor} stopOpacity="0.25" />
+                  <stop offset="100%" stopColor={strokeColor} stopOpacity="0" />
                 </linearGradient>
               </defs>
-              {/* Línea Comparativa */}
               <path d="M0 130 Q 100 120, 200 100 T 400 60" fill="none" stroke="#2563eb" strokeWidth="1.5" strokeDasharray="4,4" />
-              {/* Relleno Dinámico */}
               <path d={`${dynamicSvgPath} L 400 150 L 0 150 Z`} fill="url(#gradBolsaDynamic)" />
-              {/* Línea Principal Dinámica */}
               <path d={dynamicSvgPath} fill="none" stroke={strokeColor} strokeWidth="2.5" />
             </svg>
           </div>
@@ -408,7 +406,7 @@ export const BolsaDetails = ({
           <div className="flex gap-4 items-center">
             <div className="flex items-center gap-2">
               <div className={`w-3 h-3 rounded-sm`} style={{ backgroundColor: strokeColor }}></div>
-              <span className="text-xs font-bold text-gray-300">Mi cartera {gananciasTotales >= 0 ? '+' : ''}{rentabilidadPct.toFixed(1)}%</span>
+              <span className="text-xs font-bold text-gray-300">Mi cartera {gananciasTotales > 0 ? '+' : ''}{rentabilidadPct.toFixed(2)}%</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-sm bg-blue-600"></div>
@@ -424,7 +422,7 @@ export const BolsaDetails = ({
         </div>
       )}
 
-      {/* LISTADO DE POSICIONES CON EDITAR Y BORRAR */}
+      {/* LISTADO DE POSICIONES */}
       <div>
         <h3 className="text-lg font-bold text-white mb-4">Posiciones</h3>
         
@@ -451,17 +449,15 @@ export const BolsaDetails = ({
                 <div className="flex items-center gap-4">
                   <div className="text-right">
                     <p className="text-white font-bold text-sm">{pos.value.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
-                    <p className={`text-[11px] font-bold mt-0.5 ${pos.isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {pos.isUp ? '+' : ''}{pos.changeEur.toLocaleString('es-ES', { minimumFractionDigits: 2 })} € ({pos.isUp ? '+' : ''}{pos.changePct.toFixed(2)}%)
+                    <p className={`text-[11px] font-bold mt-0.5 ${pos.isUp ? 'text-emerald-400' : pos.changePct < 0 ? 'text-rose-400' : 'text-gray-400'}`}>
+                      {pos.isUp && pos.changeEur > 0 ? '+' : ''}{pos.changeEur.toLocaleString('es-ES', { minimumFractionDigits: 2 })} € ({pos.isUp && pos.changePct > 0 ? '+' : ''}{pos.changePct.toFixed(2)}%)
                     </p>
                   </div>
                   
                   <div className="flex flex-col sm:flex-row gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                    {/* BOTÓN EDITAR */}
                     <button onClick={() => handleOpenEdit(pos)} className="p-2 bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white rounded-lg transition-colors cursor-pointer" title="Editar Posición">
                       <Edit2 size={16} />
                     </button>
-                    {/* BOTÓN BORRAR */}
                     <button onClick={() => handleDeletePosition(pos)} className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-colors cursor-pointer" title="Vender o borrar">
                       <Trash2 size={16} />
                     </button>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, RefreshCw, Plus, TrendingUp, Search, ChevronDown, Check, X, Calculator, Trash2 } from 'lucide-react';
 import { AssetSearchModal, Asset } from '../modals/AssetSearchModal';
-import { db, auth } from '../../../../../../../infrastructure/firebase/config';
+import { db, auth } from '../../../../../../infrastructure/firebase/config'; // 🚀 RUTA CORREGIDA (6 niveles)
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface Position {
@@ -69,7 +69,6 @@ export const BolsaDetails = ({
   const allIndices = ['S&P500', 'MSCI World', 'IBEX 35', 'Nasdaq 100', 'DAX 40', 'Euro Stoxx 50', 'Dow Jones'];
   const filteredIndices = allIndices.filter(idx => idx.toLowerCase().includes(searchIndex.toLowerCase()));
 
-  // 🚀 CARGAMOS LAS POSICIONES DESDE FIREBASE PARA QUE NUNCA DESAPAREZCAN
   useEffect(() => {
     const loadPositions = async () => {
       const local = JSON.parse(localStorage.getItem('aio_bolsa_posiciones_v2') || '[]');
@@ -89,7 +88,6 @@ export const BolsaDetails = ({
     loadPositions();
   }, []);
 
-  // 🚀 FUNCIÓN PARA GUARDARLAS SIEMPRE QUE HAYA CAMBIOS
   const savePositions = async (newPos: Position[]) => {
     setPosiciones(newPos);
     localStorage.setItem('aio_bolsa_posiciones_v2', JSON.stringify(newPos));
@@ -141,20 +139,18 @@ export const BolsaDetails = ({
     };
 
     onEjecutarBolsa(invested, 'propio');
-    savePositions([...posiciones, newPos]); // 💾 GUARDADO PERMANENTE
+    savePositions([...posiciones, newPos]); 
     
     setAssetToAdd(null);
     setAddPrice('');
     setAddInvested('');
   };
 
-  // 🚀 NUEVA FUNCIÓN PARA BORRAR / VENDER ACCIONES DIRECTAMENTE
   const handleDeletePosition = (pos: Position) => {
     if (confirm(`¿Vender / Eliminar posición en ${pos.ticker}?\n\nSe devolverán ${pos.value.toFixed(2)} € a tu Saldo Global y se borrará de tu cartera.`)) {
       const nuevasPosiciones = posiciones.filter(p => p.id !== pos.id);
-      savePositions(nuevasPosiciones); // 💾 GUARDADO PERMANENTE
+      savePositions(nuevasPosiciones); 
       
-      // Devolvemos el dinero de la venta al saldo global
       onEjecutarBolsa(pos.value, 'balance');
     }
   };
@@ -206,7 +202,7 @@ export const BolsaDetails = ({
         };
       });
 
-      savePositions(updatedPosiciones); // 💾 GUARDADO PERMANENTE
+      savePositions(updatedPosiciones);
     } catch (error) {
       console.warn("Fallo de red actualizando. Mantenemos los precios anteriores.");
     } finally {
@@ -359,7 +355,6 @@ export const BolsaDetails = ({
         </div>
       )}
 
-      {/* LISTADO DE POSICIONES REALES CON BOTÓN BORRAR/VENDER */}
       <div>
         <h3 className="text-lg font-bold text-white mb-4">Posiciones</h3>
         
@@ -386,7 +381,6 @@ export const BolsaDetails = ({
                     </p>
                   </div>
                   
-                  {/* 🚀 BOTÓN DE BORRAR / VENDER */}
                   <button 
                     onClick={() => handleDeletePosition(pos)}
                     className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-colors cursor-pointer sm:opacity-0 sm:group-hover:opacity-100"

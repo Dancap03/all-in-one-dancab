@@ -96,33 +96,39 @@ export const useInvestment = () => {
     } catch (error) {}
   };
 
-  const handleTransferirGlobal = async (monto: number, destino: 'bolsa' | 'proyecto' | 'diadia') => {
+  // 🚀 AHORA SÍ: Suma o resta dependiendo de lo que elijas en "Gestionar Saldo"
+  const handleTransferirGlobal = async (monto: number, destino: string) => {
     let nGlob = disponibleGlobal;
-    if (destino === 'diadia') {
+    
+    if (destino === 'diadia' || destino === 'retirar') {
       nGlob = Math.max(0, disponibleGlobal - monto);
-      registrarMovimientoHistorial(-monto, 'Retirada de capital de Balance a Día a Día');
+      registrarMovimientoHistorial(-monto, 'Retirada de capital a Día a Día');
+    } else {
+      // Si el destino no es retirar, es que estás metiendo dinero nuevo (Aportar)
+      nGlob = disponibleGlobal + monto;
+      registrarMovimientoHistorial(monto, 'Aportación de capital');
     }
+
     setDisponibleGlobal(nGlob);
     localStorage.setItem('aio_total_invertido_diadia_v2', nGlob.toString());
     await guardarEnFirebase({ disponibleGlobal: nGlob });
   };
 
-  // 🚀 LÓGICA DE BOLSA UNIFICADA CON LA CAJA FUERTE GLOBAL
   const handleEjecutarBolsa = async (monto: number, tipo: 'propio' | 'ganancia' | 'diadia' | 'balance') => {
     let nBInv = bolsaInvertido;
     let nBGan = bolsaGanancias;
     let nGlob = disponibleGlobal;
 
     if (tipo === 'propio') {
-      nGlob = Math.max(0, disponibleGlobal - monto); // Resta del saldo global
-      nBInv = bolsaInvertido + monto; // Suma a acciones activas
+      nGlob = Math.max(0, disponibleGlobal - monto); 
+      nBInv = bolsaInvertido + monto; 
       registrarMovimientoHistorial(monto, 'Compra de activos en Bolsa');
     } else if (tipo === 'ganancia') {
       nBGan = bolsaGanancias + monto;
       registrarMovimientoHistorial(monto, 'Cobro de Dividendos / Premios');
     } else if (tipo === 'diadia' || tipo === 'balance') {
       nBInv = Math.max(0, bolsaInvertido - monto);
-      nGlob = disponibleGlobal + monto; // Devuelve el dinero vendido al global
+      nGlob = disponibleGlobal + monto; 
       registrarMovimientoHistorial(-monto, 'Venta de activos en Bolsa');
     }
 
@@ -133,21 +139,20 @@ export const useInvestment = () => {
     await guardarEnFirebase({ bolsaInvertido: nBInv, bolsaGanancias: nBGan, disponibleGlobal: nGlob });
   };
 
-  // 🚀 LÓGICA DE PROYECTOS UNIFICADA CON LA CAJA FUERTE GLOBAL
   const handleEjecutarProyecto = async (modo: 'comprar' | 'vender' | 'diadia' | 'balance', coste: number, venta?: number) => {
     let nPInv = proyectoInvertido;
     let nPGan = proyectoGanado;
     let nGlob = disponibleGlobal;
 
     if (modo === 'comprar') {
-      nGlob = Math.max(0, disponibleGlobal - coste); // Resta del saldo global
+      nGlob = Math.max(0, disponibleGlobal - coste); 
       nPInv = proyectoInvertido + coste;
       registrarMovimientoHistorial(coste, 'Inversión en Proyectos');
     } else if (modo === 'vender' && venta !== undefined) {
       const ganancia = venta - coste;
       nPGan = proyectoGanado + ganancia;
       nPInv = Math.max(0, proyectoInvertido - coste);
-      nGlob = disponibleGlobal + venta; // El dinero total de la venta vuelve al global
+      nGlob = disponibleGlobal + venta; 
       registrarMovimientoHistorial(ganancia, `Venta de proyecto completada`);
     } else if (modo === 'diadia' || modo === 'balance') {
       nPInv = Math.max(0, proyectoInvertido - coste);

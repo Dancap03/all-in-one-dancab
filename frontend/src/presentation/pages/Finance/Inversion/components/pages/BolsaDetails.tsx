@@ -42,12 +42,12 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
   const [editPrice, setEditPrice] = useState('');
   const [editInvested, setEditInvested] = useState('');
   const [editDate, setEditDate] = useState('');
+  const [editFundSource, setEditFundSource] = useState('propio'); // 🚀 NUEVO: Editar el origen del lote
 
   const [sellingGroup, setSellingGroup] = useState<GroupedPosition | null>(null);
   const [sellShares, setSellShares] = useState('');
   const [sellPrice, setSellPrice] = useState('');
 
-  // 🚀 ESTADO PARA FORZAR PRECIO MANUAL
   const [manualPriceGroup, setManualPriceGroup] = useState<GroupedPosition | null>(null);
   const [manualPriceInput, setManualPriceInput] = useState('');
 
@@ -191,8 +191,13 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
     }
   };
 
+  // 🚀 AÑADIDA LECTURA DEL ORIGEN EN LA EDICIÓN
   const handleOpenEdit = (lot: Position) => {
-    setEditingPos(lot); setEditPrice(lot.avgPriceEur.toString()); setEditInvested((lot.shares * lot.avgPriceEur).toString()); setEditDate(lot.date || new Date().toISOString().split('T')[0]);
+    setEditingPos(lot); 
+    setEditPrice(lot.avgPriceEur.toString()); 
+    setEditInvested((lot.shares * lot.avgPriceEur).toString()); 
+    setEditDate(lot.date || new Date().toISOString().split('T')[0]);
+    setEditFundSource(lot.fundSource || 'propio'); // Carga el origen actual (o 'propio' si es viejo)
   };
 
   const handleConfirmEdit = () => {
@@ -202,14 +207,14 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
     if (newInvested <= 0 || newAvgPrice <= 0) return;
 
     const difference = newInvested - oldInvested;
-    const source = editingPos.fundSource || 'propio';
 
+    // Ajuste de saldos si aumenta o disminuye la cantidad (ignoramos si solo cambia el origen)
     if (difference > 0) {
-      if (source === 'propio' && difference > disponibleGlobal) return;
-      if (source === 'ganancia' && difference > bolsaGanancias) return;
-      onEjecutarBolsa(difference, source === 'propio' ? 'propio' : source === 'ganancia' ? 'ganancia_compra' : 'otro_compra');
+      if (editFundSource === 'propio' && difference > disponibleGlobal) return;
+      if (editFundSource === 'ganancia' && difference > bolsaGanancias) return;
+      onEjecutarBolsa(difference, editFundSource === 'propio' ? 'propio' : editFundSource === 'ganancia' ? 'ganancia_compra' : 'otro_compra');
     } else if (difference < 0) {
-      onEjecutarBolsa(Math.abs(difference), `deshacer_${source}`); 
+      onEjecutarBolsa(Math.abs(difference), `deshacer_${editFundSource}`); 
     }
 
     const newShares = newInvested / newAvgPrice;
@@ -218,13 +223,13 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
 
     const updatedPosiciones = posiciones.map(p => p.id === editingPos.id ? {
       ...p, shares: newShares, avgPriceEur: newAvgPrice, value: currentValue, changeEur,
-      changePct: newInvested > 0 ? (changeEur / newInvested) * 100 : 0, isUp: changeEur >= 0, date: editDate
+      changePct: newInvested > 0 ? (changeEur / newInvested) * 100 : 0, isUp: changeEur >= 0, date: editDate,
+      fundSource: editFundSource // 🚀 Guarda la nueva etiqueta
     } : p);
 
     savePositions(updatedPosiciones); setEditingPos(null);
   };
 
-  // 🚀 ACTUALIZACIÓN AUTOMÁTICA EN BATCH
   const handleUpdatePrices = async () => {
     if (posiciones.length === 0) return;
     setIsUpdating(true);
@@ -272,7 +277,6 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
     } catch (error) {} finally { setIsUpdating(false); }
   };
 
-  // 🚀 FORZAR PRECIO MANUAL
   const handleConfirmManualPrice = () => {
     if (!manualPriceGroup) return;
     const newPrice = Number(manualPriceInput);
@@ -290,8 +294,7 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
       return p;
     });
 
-    savePositions(updatedPosiciones);
-    setManualPriceGroup(null);
+    savePositions(updatedPosiciones); setManualPriceGroup(null);
   };
 
   const totalInvertidoCartera = groupedPositions.reduce((sum, g) => sum + g.totalInvested, 0);
@@ -366,7 +369,6 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
 
                   {isExpanded && (
                     <div className="bg-[#101012] border-t border-[#2d2d2d]">
-                      {/* 🚀 BOTONERA SUPERIOR (Incluye Forzar Precio) */}
                       <div className="flex items-center justify-end gap-2 p-3 border-b border-[#2d2d2d]/50 bg-[#161618]">
                         <button onClick={(e) => { e.stopPropagation(); setManualPriceGroup(group); setManualPriceInput(group.currentPrice.toString()); }} className="px-3 py-1.5 bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer">
                           <Edit2 size={14} /> Forzar Precio
@@ -409,7 +411,7 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
 
       <AssetSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelectAsset={handleSelectAsset} />
 
-      {/* 🚀 MODAL: FORZAR PRECIO MANUAL */}
+      {/* MODAL PARA FORZAR PRECIO */}
       {manualPriceGroup && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
@@ -419,19 +421,47 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
             </div>
             <div className="p-5 space-y-4">
               <div className="bg-[#1c1c1e] p-4 rounded-xl border border-[#2d2d2d] flex justify-between items-center"><span className="text-xs font-bold text-gray-400">Precio actual en app:</span><span className="text-sm font-black text-white">{manualPriceGroup.currentPrice.toFixed(4)} €</span></div>
-              
               <div>
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Nuevo precio de mercado (€)</label>
                 <input type="number" step="any" placeholder="Precio real actual" value={manualPriceInput} onChange={(e) => setManualPriceInput(e.target.value)} className="w-full bg-[#1c1c1e] border border-blue-500/50 rounded-xl px-4 py-3 text-base text-white outline-none focus:border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.1)]" autoFocus />
               </div>
-
               <button onClick={handleConfirmManualPrice} className="w-full bg-blue-500 hover:bg-blue-400 text-white text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-4">Actualizar Precio</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODALES CLÁSICOS */}
+      {/* 🟢 MODAL: EDITAR LOTE (AHORA CON SELECTOR DE ORIGEN) */}
+      {editingPos && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">
+              <div><h3 className="text-base font-bold text-white tracking-tight">Editar Lote</h3><p className="text-xs text-gray-500 mt-0.5">{editingPos.name} ({editingPos.ticker})</p></div>
+              <button onClick={() => setEditingPos(null)} className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer"><X size={20} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* 🚀 NUEVO: SELECTOR DE ORIGEN PARA EDITAR */}
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Origen del dinero</label>
+                <select value={editFundSource} onChange={(e) => setEditFundSource(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-blue-500 cursor-pointer">
+                  <option value="propio">Dinero de mi bolsillo (Suma al coste base)</option>
+                  <option value="ganancia">Dividendos/Ganancias (No cuenta como coste)</option>
+                  <option value="otro">Dinero Externo (No cuenta como coste)</option>
+                </select>
+              </div>
+
+              <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Fecha de compra</label><input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-blue-500" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Precio de compra</label><input type="number" step="any" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-blue-500" /></div>
+                <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Total Invertido (€)</label><input type="number" step="any" value={editInvested} onChange={(e) => setEditInvested(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-blue-500" /></div>
+              </div>
+              <button onClick={handleConfirmEdit} className="w-full bg-blue-500 hover:bg-blue-400 text-white text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-4">Guardar Cambios</button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* (EL MODAL DE AÑADIR NUEVO SE MANTIENE IGUAL POR ESPACIO) */}
       {assetToAdd && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
@@ -454,50 +484,6 @@ export const BolsaDetails = ({ disponibleGlobal, bolsaInvertido, bolsaGanancias,
                 <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Total a Invertir (€)</label><input type="number" step="any" placeholder="Ej: 10" value={addInvested} onChange={(e) => setAddInvested(e.target.value)} className="w-full bg-[#1c1c1e] border border-amber-500/50 rounded-xl px-4 py-3 text-base text-white outline-none focus:border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.1)]" /></div>
               </div>
               <button onClick={handleConfirmAdd} className="w-full bg-amber-500 hover:bg-amber-400 text-black text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-2">Registrar Compra</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {sellingGroup && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">
-              <div><h3 className="text-base font-bold text-emerald-400 tracking-tight">Vender Acciones</h3><p className="text-xs text-gray-500 mt-0.5">{sellingGroup.name} ({sellingGroup.ticker})</p></div>
-              <button onClick={() => setSellingGroup(null)} className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer"><X size={20} /></button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div className="bg-[#1c1c1e] p-4 rounded-xl border border-[#2d2d2d] flex justify-between items-center"><span className="text-xs font-bold text-gray-400">Acciones en cartera:</span><span className="text-sm font-black text-white">{sellingGroup.totalShares.toFixed(5)}</span></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Nº a Vender</label><input type="number" step="any" max={sellingGroup.totalShares} value={sellShares} onChange={(e) => setSellShares(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-emerald-500" /></div>
-                <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Precio de Venta (€)</label><input type="number" step="any" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-emerald-500" /></div>
-              </div>
-              {sellShares && sellPrice && Number(sellShares) > 0 && Number(sellPrice) > 0 && (
-                <div className="bg-black/20 border border-[#2d2d2d] p-4 rounded-xl space-y-2 mt-4">
-                  <div className="flex justify-between text-xs"><span className="text-gray-500 font-bold">Total a recibir en cuenta:</span><span className="text-white font-black">{(Number(sellShares) * Number(sellPrice)).toLocaleString('es-ES', {minimumFractionDigits: 2})} €</span></div>
-                  <div className="flex justify-between text-xs border-t border-[#2d2d2d]/50 pt-2"><span className="text-gray-500 font-bold">Beneficio Neto (Ganancia Real):</span><span className={`font-black ${((Number(sellShares) * Number(sellPrice)) - calculateFifoCost(Number(sellShares), sellingGroup.ticker)) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{((Number(sellShares) * Number(sellPrice)) - calculateFifoCost(Number(sellShares), sellingGroup.ticker)) > 0 ? '+' : ''}{((Number(sellShares) * Number(sellPrice)) - calculateFifoCost(Number(sellShares), sellingGroup.ticker)).toLocaleString('es-ES', {minimumFractionDigits: 2})} €</span></div>
-                </div>
-              )}
-              <button onClick={handleConfirmSell} className="w-full bg-emerald-500 hover:bg-emerald-400 text-black text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-2">Confirmar Venta</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editingPos && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">
-              <div><h3 className="text-base font-bold text-white tracking-tight">Editar Lote</h3><p className="text-xs text-gray-500 mt-0.5">{editingPos.name} ({editingPos.ticker})</p></div>
-              <button onClick={() => setEditingPos(null)} className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer"><X size={20} /></button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Fecha de compra</label><input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-blue-500" /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Precio de compra</label><input type="number" step="any" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-blue-500" /></div>
-                <div><label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Total Invertido (€)</label><input type="number" step="any" value={editInvested} onChange={(e) => setEditInvested(e.target.value)} className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-base text-white outline-none focus:border-blue-500" /></div>
-              </div>
-              <button onClick={handleConfirmEdit} className="w-full bg-blue-500 hover:bg-blue-400 text-white text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-4">Guardar Cambios</button>
             </div>
           </div>
         </div>

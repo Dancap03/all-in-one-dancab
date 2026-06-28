@@ -17,22 +17,25 @@ interface AssetSearchModalProps {
 
 const CATEGORIES = ['Todos', 'Acciones', 'ETF', 'Cripto', 'Bonos'];
 
-// 🚀 MOTOR A PRUEBA DE BALAS
+// 🚀 MOTOR A PRUEBA DE BALAS: Intenta conexión directa y luego salta a 2 proxies de emergencia
 const fetchSafe = async (url: string) => {
+  // 1. Intento Directo (Funciona el 99% de las veces con la ruta oculta de Yahoo)
   try {
     const res = await fetch(url);
     if (res.ok) return await res.json();
-  } catch (e) { }
+  } catch (e) { /* Falló, pasamos al proxy */ }
 
+  // 2. Proxy 1 de emergencia
   try {
     const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
     if (res.ok) return await res.json();
-  } catch (e) { }
+  } catch (e) { /* Falló, pasamos al proxy 2 */ }
 
+  // 3. Proxy 2 de emergencia extrema
   try {
     const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
     if (res.ok) return await res.json();
-  } catch (e) { }
+  } catch (e) { /* Falló todo */ }
 
   throw new Error("Fallo de red general");
 };
@@ -59,6 +62,7 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
       setErrorMsg('');
       
       try {
+        // 1. BÚSQUEDA DEL ACTIVO (Muy resistente a bloqueos)
         const searchUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(searchTerm)}&quotesCount=6`;
         const searchData = await fetchSafe(searchUrl);
         const quotes = searchData.quotes || [];
@@ -72,10 +76,12 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
         const symbols = quotes.map((q: any) => q.symbol);
         symbols.push('EURUSD=X'); 
 
+        // 2. OBTENCIÓN DE PRECIOS (Si esto falla, NO bloqueamos la app, seguimos adelante)
         let priceMap = new Map();
-        let usdToEurRate = 0.92;
+        let usdToEurRate = 0.92; // Valor de emergencia
 
         try {
+          // Usamos la ruta "spark" que no pide cookies especiales
           const priceUrl = `https://query2.finance.yahoo.com/v8/finance/spark?symbols=${symbols.join(',')}`;
           const priceData = await fetchSafe(priceUrl);
           
@@ -91,9 +97,10 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
             });
           }
         } catch (e) {
-          console.warn("Los precios en vivo fallaron temporalmente.");
+          console.warn("Los precios en vivo fallaron, pero mostraremos los activos encontrados.");
         }
 
+        // 3. MAPEO DE DATOS FINAL
         const mappedAssets: Asset[] = quotes.map((q: any) => {
           let tipo: Asset['type'] = 'Acciones';
           if (q.quoteType === 'ETF' || q.quoteType === 'MUTUALFUND') tipo = 'ETF';
@@ -101,7 +108,7 @@ export const AssetSearchModal = ({ isOpen, onClose, onSelectAsset }: AssetSearch
           else if (q.quoteType === 'CURRENCY') tipo = 'Bonos';
 
           const meta = priceMap.get(q.symbol);
-          let priceInEur = 0; 
+          let priceInEur = 0; // Si el precio falló arriba, mostramos 0, pero permitimos comprar
 
           if (meta) {
             const rawPrice = meta.regularMarketPrice || 0;

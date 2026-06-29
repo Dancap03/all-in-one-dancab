@@ -70,32 +70,38 @@ export const InvestmentSummaryCards = ({
           setBolsaCostePropio(0);
         }
 
-        // 🚀 SCRIPT DE AUTO-CURACIÓN PARA EL 1,69 € ATASCADO
+        // 🚀 SCRIPT DE AUTO-CURACIÓN PARA RESCATAR TUS 1,69 € (Y SIMILARES)
         const user = auth.currentUser;
         if (user) {
           const txsSnap = await getDocs(collection(db, `users/${user.uid}/transactions`));
-          let localChanged = false;
-          const localTrans = JSON.parse(localStorage.getItem('transactions') || '[]');
-
+          
           for (const d of txsSnap.docs) {
             const data = d.data();
-            // Si es la transacción antigua que no tenía descripción, la reparamos
-            if (data.title === 'Ingreso de Inversión' && !data.description) {
-              await setDoc(doc(db, `users/${user.uid}/transactions`, d.id), {
-                description: 'Retorno de Inversión',
-                category: 'Inversión'
-              }, { merge: true });
+            
+            // Busca cualquier envío antiguo al Día a Día que se haya atascado
+            if (data.title === 'Ingreso de Inversión' || data.title === 'Retorno de Inversión' || data.description === 'Retorno de Inversión') {
+              let needsUpdate = false;
+              let updatePayload: any = {};
 
-              const index = localTrans.findIndex((t: any) => t.id === d.id);
-              if (index !== -1) {
-                localTrans[index].description = 'Retorno de Inversión';
-                localTrans[index].category = 'Inversión';
-                localChanged = true;
+              // Reparar Fecha: Si se guardó como un texto "2026-...", Firebase no sabe ordenarlo. Lo pasamos a Objeto.
+              if (typeof data.createdAt === 'string') {
+                updatePayload.createdAt = new Date(data.createdAt);
+                needsUpdate = true;
+              }
+              
+              // Reparar Etiquetas: Nos aseguramos de que Día a Día lo entienda
+              if (!data.type || data.type !== 'income') {
+                updatePayload.type = 'income';
+                updatePayload.tipo = 'ingreso';
+                updatePayload.name = 'Retorno de Inversión';
+                needsUpdate = true;
+              }
+
+              if (needsUpdate) {
+                // Inyectamos la curación en la base de datos
+                await setDoc(doc(db, `users/${user.uid}/transactions`, d.id), updatePayload, { merge: true });
               }
             }
-          }
-          if (localChanged) {
-            localStorage.setItem('transactions', JSON.stringify(localTrans));
           }
         }
 

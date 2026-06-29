@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { db, auth } from '../../../../infrastructure/firebase/config';
 import { collection, onSnapshot } from 'firebase/firestore';
 
-// 🚀 IMPORTAMOS TODOS LOS COMPONENTES EN BASE A TUS CAPTURAS
+// Componentes del módulo
 import { SummaryCards } from './components/SummaryCards';
 import { ExpensesChart } from './components/ExpensesChart';
 import { ComparisonChart } from './components/ComparisonChart';
@@ -17,10 +17,16 @@ export const DiaaDia = () => {
   const [currentDate, setCurrentDate] = useState(new Date(2026, 5, 1)); // Junio 2026
   const [transactions, setTransactions] = useState<any[]>([]);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+  
+  // Estado para controlar el tipo de transacción al abrir el modal
+  const [modalType, setModalType] = useState<'income' | 'expense' | 'transfer'>('expense');
 
   const year = currentDate.getFullYear();
   const month = String(currentDate.getMonth() + 1).padStart(2, '0');
   const monthKey = `${year}-${month}`; // "2026-06"
+
+  const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const monthLabel = `${monthNames[currentDate.getMonth()]} De ${year}`; // "Junio De 2026"
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -28,11 +34,11 @@ export const DiaaDia = () => {
 
     const txRef = collection(db, `users/${user.uid}/transactions`);
     
-    // 🚀 ESCUCHADOR EN VIVO: Trae todo y filtra por mes para alimentar los componentes
+    // Escuchador en tiempo real para capturar cualquier cambio externo (como el 1,69 €)
     const unsubscribe = onSnapshot(txRef, (snapshot) => {
       const allTxs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      // Filtramos únicamente las transacciones que pertenezcan al mes activo
+      // Filtramos las transacciones del mes activo
       const currentMonthTxs = allTxs.filter((tx: any) => tx.date && tx.date.startsWith(monthKey));
 
       setTransactions(currentMonthTxs);
@@ -47,53 +53,65 @@ export const DiaaDia = () => {
   const handlePrevMonth = () => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
   const handleNextMonth = () => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
 
-  const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  // Función rápida para abrir el modal con un tipo específico
+  const openModalWithProps = (type: 'income' | 'expense' | 'transfer') => {
+    setModalType(type);
+    setIsTxModalOpen(true);
+  };
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 pb-16 animate-in fade-in duration-300">
       
-      {/* Selector de Mes Superior */}
+      {/* Selector de Mes */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <button onClick={handlePrevMonth} className="p-2 text-gray-400 hover:text-white bg-[#141416] border border-[#2d2d2d] rounded-xl transition-colors cursor-pointer">
             <ChevronLeft size={20}/>
           </button>
-          <h2 className="text-xl font-black text-white px-2">{monthNames[currentDate.getMonth()]} De {year}</h2>
+          <h2 className="text-xl font-black text-white px-2">{monthLabel}</h2>
           <button onClick={handleNextMonth} className="p-2 text-gray-400 hover:text-white bg-[#141416] border border-[#2d2d2d] rounded-xl transition-colors cursor-pointer">
             <ChevronRight size={20}/>
           </button>
         </div>
+        <button onClick={() => openModalWithProps('expense')} className="bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-colors cursor-pointer">
+          <Plus size={16} strokeWidth={3}/> Añadir movimiento
+        </button>
       </div>
 
-      {/* 💳 TARJETAS DE BALANCE (Balance, Ingresos, Salidas) */}
+      {/* Tarjetas de Balance resumido */}
       <SummaryCards transactions={transactions} />
 
-      {/* 📊 SECCIÓN DE GRÁFICOS (Distribución e Ingresos vs Salidas side-by-side) */}
+      {/* Gráficas mensuales */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
         <ExpensesChart transactions={transactions} />
         <ComparisonChart transactions={transactions} />
       </div>
 
-      {/* 📑 REPARTO EN DOS COLUMNAS IGUAL QUE EN TUS CAPTURAS */}
+      {/* Bloques de contenido y listas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         
-        {/* COLUMNA IZQUIERDA: Presupuesto Mensual + Otros Gastos */}
+        {/* COLUMNA IZQUIERDA */}
         <div className="space-y-6">
-          <BudgetCard transactions={transactions} monthKey={monthKey} />
-          <OtherExpensesList transactions={transactions} />
+          <BudgetCard transactions={transactions} />
+          <OtherExpensesList transactions={transactions} monthId={monthKey} monthLabel={monthLabel} />
         </div>
 
-        {/* COLUMNA DERECHA: Lista de Ingresos + Lista de Transacciones */}
+        {/* COLUMNA DERECHA */}
         <div className="space-y-6">
-          <IncomeList transactions={transactions} />
-          <TransfersList transactions={transactions} />
+          <IncomeList transactions={transactions} monthId={monthKey} monthLabel={monthLabel} />
+          <TransfersList transactions={transactions} monthId={monthKey} monthLabel={monthLabel} />
         </div>
 
       </div>
 
-      {/* MODAL DE TRANSACCIONES */}
+      {/* Modal de Transacciones con todas sus propiedades estrictas */}
       {isTxModalOpen && (
-        <TransactionModal isOpen={isTxModalOpen} onClose={() => setIsTxModalOpen(false)} />
+        <TransactionModal 
+          isOpen={isTxModalOpen} 
+          onClose={() => setIsTxModalOpen(false)} 
+          monthId={monthKey}
+          type={modalType}
+        />
       )}
 
     </div>

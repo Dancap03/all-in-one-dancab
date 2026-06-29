@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db, auth } from '../../../../../infrastructure/firebase/config';
-import { doc, getDoc, setDoc, collection, getDocs, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, Timestamp } from 'firebase/firestore';
 
 type ViewState = 'summary' | 'global' | 'bolsa' | 'proyecto';
 
@@ -122,7 +122,7 @@ export const useInvestment = () => {
     await guardarEnFirebase({ bolsaInvertido: nBInv, proyectoInvertido: nPInv, bolsaGanancias: nBGan, proyectoGanado: nPGan });
   };
 
-  // 🚀 LA FUNCIÓN DEL PUENTE CORREGIDA
+  // 🚀 LA FUNCIÓN DEL PUENTE CORREGIDA AL 100%
   const handleTransferirGlobal = async (monto: number, destino: string, concepto?: string) => {
     const esRetirada = destino === 'diadia' || destino === 'retirar';
     const labelFinal = concepto || (esRetirada ? 'Retorno a Día a Día' : 'Aportación de capital');
@@ -131,30 +131,35 @@ export const useInvestment = () => {
     await syncGlobalBalance(nuevoSaldo);
     await registrarMovimientoHistorial(esRetirada ? -monto : monto, labelFinal);
 
-    // 🚀 PUENTE DIRECTO A DÍA A DÍA
+    // PUENTE DIRECTO A LA SUBCOLECCIÓN MENSUAL CORRECTA
     if (destino === 'diadia') {
       const user = auth.currentUser;
       if (user) {
         try {
           const newTxId = `tx-${Date.now()}`;
-          const todayStr = new Date().toISOString().split('T')[0]; // Formato exacto "2026-06-29"
+          const today = new Date();
+          
+          // Genera el ID mensual correcto dinámicamente (ej: "2026-06")
+          const currentMonthId = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
-          // El objeto exacto que entiende Día a Día
+          // Objeto estructurado para encajar con el tipado e indexación de Día a Día
           const txData = {
             id: newTxId,
-            description: 'Retorno de Inversión', // ESTA ES LA CLAVE (No 'title')
-            title: 'Retorno de Inversión',       // Por si acaso
-            amount: monto,
-            type: 'income',                      // Ingreso en verde
-            category: 'Inversión',               // Mapeado a tus categorías
-            date: todayStr,
-            createdAt: new Date().toISOString()
+            label: concepto || 'Retorno de Inversión', 
+            amount: Number(monto),
+            type: 'income',                      // Requisito para IncomeList
+            category: 'Inversión',
+            dateString: today.toISOString(),     // Usado para formatear y renderizar el día
+            date: Timestamp.now()                // Usado por el query orderBy de FinanceService
           };
           
-          // 1. Guardar la transacción en la colección principal
-          await setDoc(doc(db, `users/${user.uid}/transactions`, newTxId), txData);
+          // 1. Guardar la transacción en el histórico mensual real de Firestore
+          await setDoc(doc(db, `users/${user.uid}/finance_months/${currentMonthId}/transactions`, newTxId), txData);
 
-          // 2. Forzar actualización en el almacenamiento local para que se vea instantáneo
+          // 2. Unificar documento padre del mes correspondiente
+          await setDoc(doc(db, `users/${user.uid}/finance_months/${currentMonthId}`), {}, { merge: true });
+
+          // 3. Actualización de LocalStorage preventiva
           const localTrans = JSON.parse(localStorage.getItem('transactions') || '[]');
           localStorage.setItem('transactions', JSON.stringify([txData, ...localTrans]));
           
@@ -182,7 +187,7 @@ export const useInvestment = () => {
       const n = bolsaInvertido + monto; setBolsaInvertido(n); guardarEnFirebase({ bolsaInvertido: n });
     } else if (tipo === 'ganancia') {
       await registrarMovimientoHistorial(monto, 'Cobro de Dividendos en Bolsa');
-      const n = bolsaGanancias + monto; setBolsaGanancias(n); guardarEnFirebase({ bolsaGanancias: n });
+      const n = bolsaGanancias + monto; setBolsaGanancias(n); guardarEnFirebase({ clanG: n, bolsaGanancias: n });
     } else if (tipo === 'vender') {
       const gananciaLimpia = monto - (costeOriginal || 0); 
       await registrarMovimientoHistorial(monto, `Venta en Bolsa ${gananciaLimpia >= 0 ? '(Beneficio)' : '(Pérdida)'}`);

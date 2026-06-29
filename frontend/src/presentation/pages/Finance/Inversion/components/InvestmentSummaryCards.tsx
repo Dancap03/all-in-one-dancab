@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, ArrowRightLeft, Trash2 } from 'lucide-react';
+import { TrendingUp, ArrowRightLeft, Trash2, X, ArrowRight } from 'lucide-react';
 import { db, auth } from '../../../../../infrastructure/firebase/config';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 
 interface InvestmentSummaryCardsProps {
   disponibleGlobal: number;
@@ -30,6 +30,11 @@ export const InvestmentSummaryCards = ({
 
   const [bolsaLiveValue, setBolsaLiveValue] = useState(0);
   const [bolsaCostePropio, setBolsaCostePropio] = useState(0);
+  const [hasPositions, setHasPositions] = useState(false); 
+
+  // 🚀 ESTADOS PARA EL NUEVO MODAL DE RETIRADA DIRECTA
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
 
   useEffect(() => {
     const fetchBolsaLive = async () => {
@@ -47,13 +52,12 @@ export const InvestmentSummaryCards = ({
         }
         
         if (posiciones.length > 0) {
+          setHasPositions(true);
           let liveVal = 0;
           let costePropio = 0;
 
           posiciones.forEach((p: any) => {
             liveVal += (p.value || 0);
-            // 🚀 EL CORAZÓN DEL CÁLCULO: Solo cuenta como coste lo que salió de tu bolsillo
-            // Si compraste con dividendos o dinero externo, el coste es 0 (potenciando tu beneficio)
             if (!p.fundSource || p.fundSource === 'propio') {
               costePropio += (p.shares * p.avgPriceEur);
             }
@@ -62,6 +66,7 @@ export const InvestmentSummaryCards = ({
           setBolsaLiveValue(liveVal);
           setBolsaCostePropio(costePropio);
         } else {
+          setHasPositions(false);
           setBolsaLiveValue(0);
           setBolsaCostePropio(0);
         }
@@ -80,28 +85,37 @@ export const InvestmentSummaryCards = ({
     }
   };
 
-  // --- 🧮 MATEMÁTICA PURA (A PRUEBA DE HISTORIALES ROTOS) ---
+  // 🚀 FUNCIÓN PARA CONFIRMAR LA TRANSFERENCIA A DÍA A DÍA
+  const handleConfirmWithdraw = async () => {
+    const amount = Number(withdrawAmount);
+    if (amount <= 0 || amount > disponibleGlobal) {
+      alert(`Cantidad no válida. Puedes retirar hasta ${disponibleGlobal.toLocaleString('es-ES')} €.`);
+      return;
+    }
+    
+    // Llamamos a la función puente con el destino 'diadia'
+    await onTransferirGlobal(amount, 'diadia', 'Retorno a Día a Día');
+    
+    setIsWithdrawModalOpen(false);
+    setWithdrawAmount('');
+  };
+
   const valorBolsa = bolsaLiveValue > 0 ? bolsaLiveValue : bolsaInvertido;
   const valorProyectos = proyectoInvertido; 
   
-  // 1. Dinero físico actual en toda la sección de Inversión
   const carteraTotal = disponibleGlobal + valorBolsa + valorProyectos;
 
-  // 2. Coste Base Real (Solo tu dinero de bolsillo)
-  const costeBaseBolsa = bolsaCostePropio > 0 ? bolsaCostePropio : bolsaInvertido;
+  const costeBaseBolsa = hasPositions ? bolsaCostePropio : bolsaInvertido;
   const costeBaseTotal = costeBaseBolsa + proyectoInvertido;
   
-  // 3. Beneficio Flotante y Realizado
   const beneficioFlotanteBolsa = valorBolsa - costeBaseBolsa;
   const gananciaNetaTotal = beneficioFlotanteBolsa + bolsaGanancias + proyectoGanado;
   
-  // 4. Rentabilidad %
   const baseForRoi = costeBaseTotal > 0 ? costeBaseTotal : 1;
   const rentabilidadPct = (gananciaNetaTotal / baseForRoi) * 100;
   
   const isUp = gananciaNetaTotal >= 0;
 
-  // --- GRÁFICOS ---
   const totalCircle = carteraTotal > 0 ? carteraTotal : 1;
   const pctBolsa = (valorBolsa / totalCircle) * 100;
   const pctProyectos = (valorProyectos / totalCircle) * 100;
@@ -110,7 +124,6 @@ export const InvestmentSummaryCards = ({
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 animate-in fade-in duration-300">
       
-      {/* 🚀 TARJETA PRINCIPAL (CARTERA TOTAL Y BENEFICIO NETO) */}
       <div className="bg-[#141416] border border-[#2d2d2d] rounded-3xl p-6">
         <div className="flex justify-between items-start mb-6">
           <div>
@@ -127,7 +140,6 @@ export const InvestmentSummaryCards = ({
           </div>
         </div>
 
-        {/* GRÁFICO ESTÉTICO */}
         <div className="w-full h-20 mb-6">
           <svg viewBox="0 0 400 100" className="w-full h-full preserve-3d" preserveAspectRatio="none">
             <defs>
@@ -141,7 +153,6 @@ export const InvestmentSummaryCards = ({
           </svg>
         </div>
 
-        {/* SUB-BLOQUES DE VALORACIÓN */}
         <div className="grid grid-cols-3 gap-4">
           <button onClick={() => onNavigate('bolsa')} className="bg-[#1c1c1e] hover:bg-[#252528] transition-colors border border-[#2d2d2d] rounded-2xl p-4 text-left cursor-pointer">
             <p className="text-xs font-bold text-gray-500 mb-1">Bolsa</p>
@@ -160,12 +171,11 @@ export const InvestmentSummaryCards = ({
         </div>
       </div>
 
-      {/* 🚀 SALDO DISPONIBLE Y BOTÓN FANTASMA */}
       <div className="bg-[#141416] border border-amber-500/20 rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_0_15px_rgba(245,158,11,0.05)]">
         <div>
           <p className="text-amber-500 font-black text-sm mb-1">Saldo disponible para invertir</p>
           <h3 className="text-3xl font-black text-white mb-1">{disponibleGlobal.toLocaleString('es-ES')} €</h3>
-          <p className="text-xs text-gray-500 font-medium">Enviado desde Día a día · sin asignar</p>
+          <p className="text-xs text-gray-500 font-medium">Dinero líquido · Listo para asignar o retirar</p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           {disponibleGlobal > 0 && (
@@ -173,13 +183,13 @@ export const InvestmentSummaryCards = ({
               <Trash2 size={18} />
             </button>
           )}
-          <button onClick={() => onNavigate('global')} className="flex-1 border border-amber-500/50 text-amber-500 hover:bg-amber-500 hover:text-black px-4 py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer">
+          {/* 🚀 BOTÓN GESTIONAR SALDO (AHORA ABRE EL MODAL DIRECTO) */}
+          <button onClick={() => setIsWithdrawModalOpen(true)} className="flex-1 border border-amber-500/50 text-amber-500 hover:bg-amber-500 hover:text-black px-4 py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer">
             <ArrowRightLeft size={16} /> Gestionar Saldo
           </button>
         </div>
       </div>
 
-      {/* 🚀 DISTRIBUCIÓN DE CARTERA (DONUT) */}
       <div className="bg-[#141416] border border-[#2d2d2d] rounded-3xl p-6">
         <h3 className="text-lg font-black text-white mb-6">Distribución de cartera</h3>
         <div className="flex flex-col sm:flex-row items-center gap-8">
@@ -222,6 +232,61 @@ export const InvestmentSummaryCards = ({
           </div>
         </div>
       </div>
+
+      {/* 🟢 MODAL DIRECTO PARA RETIRAR A DÍA A DÍA */}
+      {isWithdrawModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#141416] border border-[#2d2d2d] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-[#2d2d2d]">
+              <div>
+                <h3 className="text-base font-bold text-white tracking-tight">Pasar a Día a Día</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Dinero disponible: {disponibleGlobal.toLocaleString('es-ES')} €</p>
+              </div>
+              <button onClick={() => setIsWithdrawModalOpen(false)} className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer"><X size={20} /></button>
+            </div>
+            
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Monto a retirar (€)</label>
+                <input 
+                  type="number" 
+                  step="any" 
+                  placeholder="0.00" 
+                  value={withdrawAmount} 
+                  onChange={(e) => setWithdrawAmount(e.target.value)} 
+                  className="w-full bg-[#1c1c1e] border border-[#2d2d2d] rounded-xl px-4 py-3 text-2xl font-black text-white outline-none focus:border-amber-500 text-center" 
+                  autoFocus 
+                />
+              </div>
+
+              {/* Botones rápidos */}
+              <div className="flex gap-2 justify-center">
+                <button onClick={() => setWithdrawAmount((disponibleGlobal * 0.5).toFixed(2))} className="px-3 py-1.5 bg-[#1c1c1e] hover:bg-[#2d2d2d] border border-[#2d2d2d] rounded-lg text-xs font-bold text-gray-400 hover:text-white transition-colors cursor-pointer">
+                  50%
+                </button>
+                <button onClick={() => setWithdrawAmount(disponibleGlobal.toString())} className="px-3 py-1.5 bg-[#1c1c1e] hover:bg-[#2d2d2d] border border-[#2d2d2d] rounded-lg text-xs font-bold text-gray-400 hover:text-white transition-colors cursor-pointer">
+                  MAX
+                </button>
+              </div>
+
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl mt-4 flex items-start gap-3">
+                <ArrowRight className="text-emerald-500 shrink-0 mt-0.5" size={16} />
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Este dinero se registrará automáticamente como un <strong className="text-emerald-400">Ingreso de Inversión</strong> en tu saldo principal.
+                </p>
+              </div>
+
+              <button 
+                onClick={handleConfirmWithdraw} 
+                disabled={!withdrawAmount || Number(withdrawAmount) <= 0 || Number(withdrawAmount) > disponibleGlobal}
+                className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:hover:bg-amber-500 text-black text-base font-black py-3.5 rounded-xl transition-colors cursor-pointer mt-2"
+              >
+                Confirmar transferencia
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

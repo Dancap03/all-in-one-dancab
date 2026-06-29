@@ -90,137 +90,136 @@ export const useInvestment = () => {
   const eliminarMovimiento = async (id: string, amount: number, label: string) => {
     const user = auth.currentUser;
     if (!user) return;
-
-    try {
-      await deleteDoc(doc(db, `users/${user.uid}/investment_transactions`, id));
-    } catch (e) {}
+    try { await deleteDoc(doc(db, `users/${user.uid}/investment_transactions`, id)); } catch (e) {}
 
     const currentMovements = JSON.parse(localStorage.getItem('aio_inversion_movimientos_v2') || '[]');
     const filtered = currentMovements.filter((m: any) => m.id !== id);
     localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify(filtered));
 
-    let nGlob = disponibleGlobal;
-    let nBInv = bolsaInvertido;
-    let nPInv = proyectoInvertido;
-    let nBGan = bolsaGanancias;
-    let nPGan = proyectoGanado;
+    let nGlob = disponibleGlobal; let nBInv = bolsaInvertido; let nPInv = proyectoInvertido;
+    let nBGan = bolsaGanancias; let nPGan = proyectoGanado;
 
     const lower = label.toLowerCase();
-    
     if (lower.includes('bolsa')) {
       if (lower.includes('dividendo')) { nBGan -= amount; } 
-      else { nBInv -= amount; } 
-    } 
-    else if (lower.includes('proyecto')) {
-      if (lower.includes('venta')) { nPGan -= amount; } 
-      else { nPInv -= amount; }
+      else { nGlob += amount; nBInv -= amount; } 
+    } else if (lower.includes('proyecto')) {
+      if (lower.includes('venta')) { nGlob -= amount; nPGan -= amount; } 
+      else { nGlob += amount; nPInv -= amount; }
+    } else {
+      nGlob -= amount; 
     }
 
-    nBInv = Math.max(0, nBInv);
-    nPInv = Math.max(0, nPInv);
-
-    setBolsaInvertido(nBInv);
-    setProyectoInvertido(nPInv);
-    setBolsaGanancias(nBGan);
-    setProyectoGanado(nPGan);
-    
+    nGlob = Math.max(0, nGlob); nBInv = Math.max(0, nBInv); nPInv = Math.max(0, nPInv);
+    await syncGlobalBalance(nGlob); 
+    setBolsaInvertido(nBInv); setProyectoInvertido(nPInv); setBolsaGanancias(nBGan); setProyectoGanado(nPGan);
     setMovimientos(prev => prev.filter(m => m.id !== id));
-    await guardarEnFirebase({
-      bolsaInvertido: nBInv, proyectoInvertido: nPInv, bolsaGanancias: nBGan, proyectoGanado: nPGan
-    });
-    
-    cargarSaldos();
+    await guardarEnFirebase({ bolsaInvertido: nBInv, proyectoInvertido: nPInv, bolsaGanancias: nBGan, proyectoGanado: nPGan });
   };
 
   const handleTransferirGlobal = async (monto: number, destino: string, concepto?: string) => {
     const esRetirada = destino === 'diadia' || destino === 'retirar';
-    const labelFinal = concepto || (esRetirada ? 'Retirada de capital' : 'Aportación de capital');
-    
+    const labelFinal = concepto || (esRetirada ? 'Retirada a Día a Día' : 'Aportación de capital');
     const nuevoSaldo = esRetirada ? Math.max(0, disponibleGlobal - monto) : disponibleGlobal + monto;
+    
     await syncGlobalBalance(nuevoSaldo);
     await registrarMovimientoHistorial(esRetirada ? -monto : monto, labelFinal);
+
+    // 🚀 PUENTE DIRECTO A DÍA A DÍA (FINANZAS GLOBALES)
+    if (destino === 'diadia') {
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          const newTxId = `tx-${Date.now()}`;
+          const txData = {
+            id: newTxId,
+            title: 'Ingreso de Inversión',
+            amount: monto,
+            type: 'income',
+            category: 'inversiones', 
+            date: new Date().toISOString(),
+            createdAt: new Date()
+          };
+          
+          // 1. Guardar la transacción en la base de datos general de transacciones
+          await setDoc(doc(db, `users/${user.uid}/transactions`, newTxId), txData);
+
+          // 2. Intentar actualizar saldos generales en Firebase y LocalStorage
+          const walletRef = doc(db, `users/${user.uid}/finances`, 'balance');
+          const walletSnap = await getDoc(walletRef);
+          if (walletSnap.exists()) {
+            await setDoc(walletRef, { total: (walletSnap.data().total || 0) + monto }, { merge: true });
+          }
+
+          const localTrans = JSON.parse(localStorage.getItem('aio_transactions') || '[]');
+          localStorage.setItem('aio_transactions', JSON.stringify([txData, ...localTrans]));
+          
+        } catch (e) {
+          console.error("Error enviando saldo a Día a Día:", e);
+        }
+      }
+    }
+
     cargarSaldos();
   };
 
-  // 🚀 NUEVA LÓGICA DE COMPRA Y VENTA AVANZADA
   const handleEjecutarBolsa = async (monto: number, tipo: string, costeOriginal?: number) => {
-    // 1. COMPRAS
     if (tipo === 'propio') {
       await registrarMovimientoHistorial(-monto, 'Compra Bolsa (Saldo Disponible)');
       await syncGlobalBalance(Math.max(0, disponibleGlobal - monto));
-      const n = bolsaInvertido + monto;
-      setBolsaInvertido(n);
-      guardarEnFirebase({ bolsaInvertido: n });
+      const n = bolsaInvertido + monto; setBolsaInvertido(n); guardarEnFirebase({ bolsaInvertido: n });
     } else if (tipo === 'ganancia_compra') {
       await registrarMovimientoHistorial(-monto, 'Re-inversión Bolsa (Dividendos)');
-      const nGan = Math.max(0, bolsaGanancias - monto);
-      setBolsaGanancias(nGan);
-      const nInv = bolsaInvertido + monto;
-      setBolsaInvertido(nInv);
+      const nGan = Math.max(0, bolsaGanancias - monto); setBolsaGanancias(nGan);
+      const nInv = bolsaInvertido + monto; setBolsaInvertido(nInv);
       guardarEnFirebase({ bolsaGanancias: nGan, bolsaInvertido: nInv });
     } else if (tipo === 'otro_compra') {
-      await registrarMovimientoHistorial(monto, 'Compra Bolsa (Dinero Externo)');
-      const n = bolsaInvertido + monto;
-      setBolsaInvertido(n);
-      guardarEnFirebase({ bolsaInvertido: n });
-    
-    // 2. DIVIDENDOS
+      await registrarMovimientoHistorial(-monto, 'Compra Bolsa (Dinero Externo)');
+      const n = bolsaInvertido + monto; setBolsaInvertido(n); guardarEnFirebase({ bolsaInvertido: n });
     } else if (tipo === 'ganancia') {
       await registrarMovimientoHistorial(monto, 'Cobro de Dividendos en Bolsa');
-      const n = bolsaGanancias + monto;
-      setBolsaGanancias(n);
-      guardarEnFirebase({ bolsaGanancias: n });
-    
-    // 3. VENTAS (El núcleo de lo que pedías)
+      const n = bolsaGanancias + monto; setBolsaGanancias(n); guardarEnFirebase({ bolsaGanancias: n });
     } else if (tipo === 'vender') {
-      const gananciaLimpia = monto - (costeOriginal || 0); // monto = dinero total recibido
+      const gananciaLimpia = monto - (costeOriginal || 0); 
       await registrarMovimientoHistorial(monto, `Venta en Bolsa ${gananciaLimpia >= 0 ? '(Beneficio)' : '(Pérdida)'}`);
-      
-      // El dinero de la venta va a tu saldo global disponible
       await syncGlobalBalance(disponibleGlobal + monto);
-      
-      // Se resta la parte invertida original de la métrica de Invertido
-      const nInv = Math.max(0, bolsaInvertido - (costeOriginal || 0));
-      setBolsaInvertido(nInv);
-
-      // El beneficio limpio (o pérdida) modifica tus ganancias históricas
-      const nGan = bolsaGanancias + gananciaLimpia;
-      setBolsaGanancias(nGan);
-
+      const nInv = Math.max(0, bolsaInvertido - (costeOriginal || 0)); setBolsaInvertido(nInv);
+      const nGan = bolsaGanancias + gananciaLimpia; setBolsaGanancias(nGan);
       guardarEnFirebase({ bolsaInvertido: nInv, bolsaGanancias: nGan });
-    
-    // 4. BORRADO SIMPLE SIN REGISTRO (Papelera)
+    } else if (tipo === 'deshacer_propio') {
+      await registrarMovimientoHistorial(monto, 'Ajuste: Deshacer Compra (Propio)');
+      const n = Math.max(0, bolsaInvertido - monto); setBolsaInvertido(n); guardarEnFirebase({ bolsaInvertido: n });
+      await syncGlobalBalance(disponibleGlobal + monto); 
+    } else if (tipo === 'deshacer_ganancia') {
+      await registrarMovimientoHistorial(monto, 'Ajuste: Deshacer Compra (Dividendos)');
+      const nInv = Math.max(0, bolsaInvertido - monto); setBolsaInvertido(nInv);
+      const nGan = bolsaGanancias + monto; setBolsaGanancias(nGan);
+      guardarEnFirebase({ bolsaInvertido: nInv, bolsaGanancias: nGan }); 
+    } else if (tipo === 'deshacer_otro') {
+      await registrarMovimientoHistorial(monto, 'Ajuste: Deshacer Compra (Externo)');
+      const n = Math.max(0, bolsaInvertido - monto); setBolsaInvertido(n); guardarEnFirebase({ bolsaInvertido: n });
     } else if (tipo === 'balance') {
       await registrarMovimientoHistorial(monto, 'Ajuste de Cartera (Borrado)');
-      const n = Math.max(0, bolsaInvertido - monto);
-      setBolsaInvertido(n);
-      guardarEnFirebase({ bolsaInvertido: n });
+      const n = Math.max(0, bolsaInvertido - monto); setBolsaInvertido(n); guardarEnFirebase({ bolsaInvertido: n });
       await syncGlobalBalance(disponibleGlobal + monto);
     }
-
     cargarSaldos();
   };
 
   const handleEjecutarProyecto = async (modo: 'comprar' | 'vender' | 'diadia' | 'balance', coste: number, venta?: number) => {
     if (modo === 'comprar') {
       await registrarMovimientoHistorial(-coste, 'Inversión en Proyectos');
-      const n = proyectoInvertido + coste;
-      setProyectoInvertido(n);
-      guardarEnFirebase({ proyectoInvertido: n });
+      const n = proyectoInvertido + coste; setProyectoInvertido(n); guardarEnFirebase({ proyectoInvertido: n });
       await syncGlobalBalance(Math.max(0, disponibleGlobal - coste));
     } else if (modo === 'vender' && venta !== undefined) {
       await registrarMovimientoHistorial(venta, 'Venta de proyecto completada');
-      const nGan = proyectoGanado + (venta - coste);
-      setProyectoGanado(nGan);
-      const nInv = Math.max(0, proyectoInvertido - coste);
-      setProyectoInvertido(nInv);
+      const nGan = proyectoGanado + (venta - coste); setProyectoGanado(nGan);
+      const nInv = Math.max(0, proyectoInvertido - coste); setProyectoInvertido(nInv);
       guardarEnFirebase({ proyectoGanado: nGan, proyectoInvertido: nInv });
       await syncGlobalBalance(disponibleGlobal + venta);
     } else {
       await registrarMovimientoHistorial(coste, 'Retorno de capital de Proyectos');
-      const n = Math.max(0, proyectoInvertido - coste);
-      setProyectoInvertido(n);
-      guardarEnFirebase({ proyectoInvertido: n });
+      const n = Math.max(0, proyectoInvertido - coste); setProyectoInvertido(n); guardarEnFirebase({ proyectoInvertido: n });
       await syncGlobalBalance(disponibleGlobal + coste);
     }
     cargarSaldos();

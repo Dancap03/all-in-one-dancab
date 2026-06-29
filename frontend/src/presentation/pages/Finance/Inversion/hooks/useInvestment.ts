@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db, auth } from '../../../../../infrastructure/firebase/config';
-import { doc, getDoc, setDoc, collection, addDoc, getDocs, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc } from 'firebase/firestore';
 
 type ViewState = 'summary' | 'global' | 'bolsa' | 'proyecto';
 
@@ -24,7 +24,7 @@ export const useInvestment = () => {
       const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
       const firebaseTxs: any[] = transSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      firebaseTxs.sort((a, b) => new Date(b.dateString).getTime() - new Date(a.dateString).getTime());
+      firebaseTxs.sort((a, b) => new Date(b.dateString || b.date || 0).getTime() - new Date(a.dateString || a.date || 0).getTime());
       setMovimientos(firebaseTxs);
 
       const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
@@ -96,10 +96,14 @@ export const useInvestment = () => {
     const filtered = currentMovements.filter((m: any) => m.id !== id);
     localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify(filtered));
 
-    let nGlob = disponibleGlobal; let nBInv = bolsaInvertido; let nPInv = proyectoInvertido;
-    let nBGan = bolsaGanancias; let nPGan = proyectoGanado;
+    let nGlob = disponibleGlobal;
+    let nBInv = bolsaInvertido;
+    let nPInv = proyectoInvertido;
+    let nBGan = bolsaGanancias;
+    let nPGan = proyectoGanado;
 
     const lower = label.toLowerCase();
+    
     if (lower.includes('bolsa')) {
       if (lower.includes('dividendo')) { nBGan -= amount; } 
       else { nGlob += amount; nBInv -= amount; } 
@@ -111,48 +115,48 @@ export const useInvestment = () => {
     }
 
     nGlob = Math.max(0, nGlob); nBInv = Math.max(0, nBInv); nPInv = Math.max(0, nPInv);
+
     await syncGlobalBalance(nGlob); 
     setBolsaInvertido(nBInv); setProyectoInvertido(nPInv); setBolsaGanancias(nBGan); setProyectoGanado(nPGan);
     setMovimientos(prev => prev.filter(m => m.id !== id));
     await guardarEnFirebase({ bolsaInvertido: nBInv, proyectoInvertido: nPInv, bolsaGanancias: nBGan, proyectoGanado: nPGan });
   };
 
+  // 🚀 LA FUNCIÓN DEL PUENTE CORREGIDA
   const handleTransferirGlobal = async (monto: number, destino: string, concepto?: string) => {
     const esRetirada = destino === 'diadia' || destino === 'retirar';
-    const labelFinal = concepto || (esRetirada ? 'Retirada a Día a Día' : 'Aportación de capital');
+    const labelFinal = concepto || (esRetirada ? 'Retorno a Día a Día' : 'Aportación de capital');
     const nuevoSaldo = esRetirada ? Math.max(0, disponibleGlobal - monto) : disponibleGlobal + monto;
     
     await syncGlobalBalance(nuevoSaldo);
     await registrarMovimientoHistorial(esRetirada ? -monto : monto, labelFinal);
 
-    // 🚀 PUENTE DIRECTO A DÍA A DÍA (FINANZAS GLOBALES)
+    // 🚀 PUENTE DIRECTO A DÍA A DÍA
     if (destino === 'diadia') {
       const user = auth.currentUser;
       if (user) {
         try {
           const newTxId = `tx-${Date.now()}`;
+          const todayStr = new Date().toISOString().split('T')[0]; // Formato exacto "2026-06-29"
+
+          // El objeto exacto que entiende Día a Día
           const txData = {
             id: newTxId,
-            title: 'Ingreso de Inversión',
+            description: 'Retorno de Inversión', // ESTA ES LA CLAVE (No 'title')
+            title: 'Retorno de Inversión',       // Por si acaso
             amount: monto,
-            type: 'income',
-            category: 'inversiones', 
-            date: new Date().toISOString(),
-            createdAt: new Date()
+            type: 'income',                      // Ingreso en verde
+            category: 'Inversión',               // Mapeado a tus categorías
+            date: todayStr,
+            createdAt: new Date().toISOString()
           };
           
-          // 1. Guardar la transacción en la base de datos general de transacciones
+          // 1. Guardar la transacción en la colección principal
           await setDoc(doc(db, `users/${user.uid}/transactions`, newTxId), txData);
 
-          // 2. Intentar actualizar saldos generales en Firebase y LocalStorage
-          const walletRef = doc(db, `users/${user.uid}/finances`, 'balance');
-          const walletSnap = await getDoc(walletRef);
-          if (walletSnap.exists()) {
-            await setDoc(walletRef, { total: (walletSnap.data().total || 0) + monto }, { merge: true });
-          }
-
-          const localTrans = JSON.parse(localStorage.getItem('aio_transactions') || '[]');
-          localStorage.setItem('aio_transactions', JSON.stringify([txData, ...localTrans]));
+          // 2. Forzar actualización en el almacenamiento local para que se vea instantáneo
+          const localTrans = JSON.parse(localStorage.getItem('transactions') || '[]');
+          localStorage.setItem('transactions', JSON.stringify([txData, ...localTrans]));
           
         } catch (e) {
           console.error("Error enviando saldo a Día a Día:", e);

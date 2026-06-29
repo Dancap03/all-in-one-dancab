@@ -122,7 +122,7 @@ export const useInvestment = () => {
     await guardarEnFirebase({ bolsaInvertido: nBInv, proyectoInvertido: nPInv, bolsaGanancias: nBGan, proyectoGanado: nPGan });
   };
 
-  // 🚀 LA FUNCIÓN DEL PUENTE CORREGIDA AL 100%
+  // 🚀 LA FUNCIÓN DEL PUENTE CORREGIDA AL 100% (Con redundancia total para Día a Día)
   const handleTransferirGlobal = async (monto: number, destino: string, concepto?: string) => {
     const esRetirada = destino === 'diadia' || destino === 'retirar';
     const labelFinal = concepto || (esRetirada ? 'Retorno a Día a Día' : 'Aportación de capital');
@@ -141,16 +141,20 @@ export const useInvestment = () => {
           
           // Genera el ID mensual correcto dinámicamente (ej: "2026-06")
           const currentMonthId = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+          const fechaLimpia = today.toISOString().split('T')[0];
 
           // Objeto estructurado para encajar con el tipado e indexación de Día a Día
           const txData = {
             id: newTxId,
-            label: concepto || 'Retorno de Inversión', 
+            label: labelFinal, 
+            concept: labelFinal,
+            title: labelFinal,
             amount: Number(monto),
             type: 'income',                      // Requisito para IncomeList
+            tipo: 'ingreso',                     // Redundancia idiomática
             category: 'Inversión',
-            dateString: today.toISOString(),     // Usado para formatear y renderizar el día
-            date: Timestamp.now()                // Usado por el query orderBy de FinanceService
+            dateString: fechaLimpia,             // Usado para formatear y renderizar el día
+            date: Timestamp.now()                // ¡CRÍTICO!: Usado por el query orderBy de FinanceService
           };
           
           // 1. Guardar la transacción en el histórico mensual real de Firestore
@@ -170,6 +174,56 @@ export const useInvestment = () => {
     }
 
     cargarSaldos();
+  };
+
+  // 🚀 NUEVA FUNCIÓN: PERMITE EDITAR UN MOVIMIENTO EXISTENTE Y FORZAR EL REENVÍO A DÍA A DÍA
+  const handleEditarYReenviar = async (id: string, nuevoMonto: number, nuevoConcepto: string) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      const today = new Date();
+      const currentMonthId = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      const fechaLimpia = today.toISOString().split('T')[0];
+
+      // A. Actualizamos el registro en el historial propio de inversiones
+      const invTxRef = doc(db, `users/${user.uid}/investment_transactions`, id);
+      await setDoc(invTxRef, {
+        amount: Number(nuevoMonto),
+        label: nuevoConcepto,
+        dateString: today.toISOString(),
+        updatedAt: Timestamp.now()
+      }, { merge: true });
+
+      // B. Preparamos el payload blindado para Día a Día
+      const txData = {
+        id: id,
+        label: nuevoConcepto,
+        concept: nuevoConcepto,
+        title: nuevoConcepto,
+        amount: Math.abs(Number(nuevoMonto)), // Forzamos valor positivo
+        type: 'income',
+        tipo: 'ingreso',
+        category: 'Inversión',
+        dateString: fechaLimpia,
+        date: Timestamp.now()
+      };
+
+      // C. Forzamos la actualización directa en el mes activo de Día a Día
+      await setDoc(doc(db, `users/${user.uid}/finance_months/${currentMonthId}/transactions`, id), txData);
+
+      // D. Actualizamos la caché local
+      const localTrans = JSON.parse(localStorage.getItem('transactions') || '[]');
+      const filteredLocal = localTrans.filter((tx: any) => tx.id !== id);
+      localStorage.setItem('transactions', JSON.stringify([txData, ...filteredLocal]));
+
+      await cargarSaldos();
+    } catch (error) {
+      console.error("Error al editar y reenviar el movimiento:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEjecutarBolsa = async (monto: number, tipo: string, costeOriginal?: number) => {
@@ -240,6 +294,6 @@ export const useInvestment = () => {
     currentView, setCurrentView, disponibleGlobal, totalInvertidoCalculado, bolsaDisponible: 0,
     bolsaInvertido, bolsaGanancias, proyectoDisponible: 0, proyectoInvertido, proyectoGanado,
     handleTransferirGlobal, handleEjecutarBolsa, handleEjecutarProyecto, loading,
-    movimientos, eliminarMovimiento
+    movimientos, eliminarMovimiento, handleEditarYReenviar
   };
 };

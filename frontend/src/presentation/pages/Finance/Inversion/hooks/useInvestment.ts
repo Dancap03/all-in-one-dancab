@@ -47,7 +47,7 @@ export const useInvestment = () => {
 
     } catch (error) {
       console.error("Error cargando datos:", error);
-    } fill {
+    } finally {
       setLoading(false);
     }
   };
@@ -128,7 +128,6 @@ export const useInvestment = () => {
     const nuevoSaldo = esRetirada ? Math.max(0, disponibleGlobal - monto) : disponibleGlobal + monto;
     
     await syncGlobalBalance(nuevoSaldo);
-    // 🛠️ CORREGIDO: Eliminado el 'vote =>' erróneo de aquí
     await registrarMovimientoHistorial(esRetirada ? -monto : monto, labelFinal);
 
     if (destino === 'diadia') {
@@ -412,7 +411,6 @@ export const useInvestment = () => {
       const n = proyectoInvertido + coste; setProyectoInvertido(n); guardarEnFirebase({ proyectoInvertido: n });
       await syncGlobalBalance(Math.max(0, disponibleGlobal - coste));
     } else if (modo === 'vender' && venta !== undefined) {
-      // 🛠️ CORREGIDO: Cambiado registrarMovimientoInvest por registrarMovimientoHistorial
       await registrarMovimientoHistorial(venta, 'Venta de proyecto completada');
       const nGan = proyectoGanado + (venta - coste); setProyectoGanado(nGan);
       const nInv = Math.max(0, proyectoInvertido - coste); setProyectoInvertido(nInv);

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db, auth } from '../../../../../infrastructure/firebase/config';
-import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 
 type ViewState = 'summary' | 'global' | 'bolsa' | 'proyecto';
 
@@ -122,7 +122,6 @@ export const useInvestment = () => {
     await guardarEnFirebase({ bolsaInvertido: nBInv, proyectoInvertido: nPInv, bolsaGanancias: nBGan, proyectoGanado: nPGan });
   };
 
-  // 🚀 LA FUNCIÓN DEL PUENTE CORREGIDA AL 100% (Con redundancia total para Día a Día)
   const handleTransferirGlobal = async (monto: number, destino: string, concepto?: string) => {
     const esRetirada = destino === 'diadia' || destino === 'retirar';
     const labelFinal = concepto || (esRetirada ? 'Retorno a Día a Día' : 'Aportación de capital');
@@ -131,39 +130,36 @@ export const useInvestment = () => {
     await syncGlobalBalance(nuevoSaldo);
     await registrarMovimientoHistorial(esRetirada ? -monto : monto, labelFinal);
 
-    // PUENTE DIRECTO A LA SUBCOLECCIÓN MENSUAL CORRECTA
     if (destino === 'diadia') {
       const user = auth.currentUser;
       if (user) {
         try {
           const newTxId = `tx-${Date.now()}`;
           const today = new Date();
-          
-          // Genera el ID mensual correcto dinámicamente (ej: "2026-06")
           const currentMonthId = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
           const fechaLimpia = today.toISOString().split('T')[0];
 
-          // Objeto estructurado para encajar con el tipado e indexación de Día a Día
           const txData = {
             id: newTxId,
             label: labelFinal, 
             concept: labelFinal,
             title: labelFinal,
             amount: Number(monto),
-            type: 'income',                      // Requisito para IncomeList
-            tipo: 'ingreso',                     // Redundancia idiomática
+            type: 'income',                      
+            tipo: 'ingreso',                     
             category: 'Inversión',
-            dateString: fechaLimpia,             // Usado para formatear y renderizar el día
-            date: Timestamp.now()                // ¡CRÍTICO!: Usado por el query orderBy de FinanceService
+            dateString: fechaLimpia,             
+            date: Timestamp.now()                
           };
+
+          const monthDocRef = doc(db, `users/${user.uid}/finance_months/${currentMonthId}`);
           
-          // 1. Guardar la transacción en el histórico mensual real de Firestore
+          await setDoc(monthDocRef, {
+            transactions: arrayUnion(txData)
+          }, { merge: true });
+
           await setDoc(doc(db, `users/${user.uid}/finance_months/${currentMonthId}/transactions`, newTxId), txData);
 
-          // 2. Unificar documento padre del mes correspondiente
-          await setDoc(doc(db, `users/${user.uid}/finance_months/${currentMonthId}`), {}, { merge: true });
-
-          // 3. Actualización de LocalStorage preventiva
           const localTrans = JSON.parse(localStorage.getItem('transactions') || '[]');
           localStorage.setItem('transactions', JSON.stringify([txData, ...localTrans]));
           
@@ -176,7 +172,6 @@ export const useInvestment = () => {
     cargarSaldos();
   };
 
-  // 🚀 NUEVA FUNCIÓN: PERMITE EDITAR UN MOVIMIENTO EXISTENTE Y FORZAR EL REENVÍO A DÍA A DÍA
   const handleEditarYReenviar = async (id: string, nuevoMonto: number, nuevoConcepto: string) => {
     const user = auth.currentUser;
     if (!user) return;
@@ -187,7 +182,6 @@ export const useInvestment = () => {
       const currentMonthId = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
       const fechaLimpia = today.toISOString().split('T')[0];
 
-      // A. Actualizamos el registro en el historial propio de inversiones
       const invTxRef = doc(db, `users/${user.uid}/investment_transactions`, id);
       await setDoc(invTxRef, {
         amount: Number(nuevoMonto),
@@ -196,13 +190,12 @@ export const useInvestment = () => {
         updatedAt: Timestamp.now()
       }, { merge: true });
 
-      // B. Preparamos el payload blindado para Día a Día
       const txData = {
         id: id,
         label: nuevoConcepto,
         concept: nuevoConcepto,
         title: nuevoConcepto,
-        amount: Math.abs(Number(nuevoMonto)), // Forzamos valor positivo
+        amount: Math.abs(Number(nuevoMonto)),
         type: 'income',
         tipo: 'ingreso',
         category: 'Inversión',
@@ -210,10 +203,22 @@ export const useInvestment = () => {
         date: Timestamp.now()
       };
 
-      // C. Forzamos la actualización directa en el mes activo de Día a Día
+      const monthDocRef = doc(db, `users/${user.uid}/finance_months/${currentMonthId}`);
+      
+      const docSnap = await getDoc(monthDocRef);
+      if (docSnap.exists()) {
+        const currentData = docSnap.data();
+        const currentList = currentData.transactions || [];
+        const updatedList = currentList.filter((t: any) => t.id !== id);
+        updatedList.push(txData);
+        
+        await setDoc(monthDocRef, { transactions: updatedList }, { merge: true });
+      } else {
+        await setDoc(monthDocRef, { transactions: [txData] }, { merge: true });
+      }
+
       await setDoc(doc(db, `users/${user.uid}/finance_months/${currentMonthId}/transactions`, id), txData);
 
-      // D. Actualizamos la caché local
       const localTrans = JSON.parse(localStorage.getItem('transactions') || '[]');
       const filteredLocal = localTrans.filter((tx: any) => tx.id !== id);
       localStorage.setItem('transactions', JSON.stringify([txData, ...filteredLocal]));
@@ -221,6 +226,81 @@ export const useInvestment = () => {
       await cargarSaldos();
     } catch (error) {
       console.error("Error al editar y reenviar el movimiento:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🚀 NUEVA FUNCIÓN 1: EDITAR UNA OPERACIÓN ESPECÍFICA DE UN PROYECTO RECALCULANDO TODO
+  const handleEditarOperacionProyecto = async (
+    idOperacion: string,
+    tipo: 'compra' | 'venta',
+    valoresAntiguos: { coste: number; venta?: number },
+    valoresNuevos: { coste: number; venta?: number; label?: string }
+  ) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      let diffInvertido = 0;
+      let diffGanado = 0;
+
+      if (tipo === 'compra') {
+        diffInvertido = valoresNuevos.coste - valoresAntiguos.coste;
+      } else if (tipo === 'venta' && valoresAntiguos.venta !== undefined && valoresNuevos.venta !== undefined) {
+        const gananciaAntigua = valoresAntiguos.venta - valoresAntiguos.coste;
+        const gananciaNueva = valoresNuevos.venta - valoresNuevos.coste;
+        
+        diffInvertido = valoresNuevos.coste - valoresAntiguos.coste;
+        diffGanado = gananciaNueva - gananciaAntigua;
+      }
+
+      const nProyectoInvertido = Math.max(0, proyectoInvertido + diffInvertido);
+      const nProyectoGanado = proyectoGanado + diffGanado;
+
+      setProyectoInvertido(nProyectoInvertido);
+      setProyectoGanado(nProyectoGanado);
+
+      await guardarEnFirebase({
+        proyectoInvertido: nProyectoInvertido,
+        proyectoGanado: nProyectoGanado
+      });
+
+      if (valoresNuevos.label) {
+        await registrarMovimientoHistorial(
+          tipo === 'compra' ? -valoresNuevos.coste : (valoresNuevos.venta || 0),
+          `Edición: ${valoresNuevos.label}`
+        );
+      }
+
+      await cargarSaldos();
+    } catch (e) {
+      console.error("Error editando operación de proyecto:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🚀 NUEVA FUNCIÓN 2: FORZAR BALANCES MANUALMENTE DESDE LA INTERFAZ PARA ARREGLAR ERRORES DE BORRADO
+  const handleForzarBalancesProyecto = async (nuevoInvertido: number, nuevoGanado: number) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      setProyectoInvertido(nuevoInvertido);
+      setProyectoGanado(nuevoGanado);
+
+      await guardarEnFirebase({
+        proyectoInvertido: nuevoInvertido,
+        proyectoGanado: nuevoGanado
+      });
+
+      await registrarMovimientoHistorial(0, 'Ajuste manual de balances de Proyectos');
+      await cargarSaldos();
+    } catch (e) {
+      console.error("Error forzando balances:", e);
     } finally {
       setLoading(false);
     }
@@ -294,6 +374,6 @@ export const useInvestment = () => {
     currentView, setCurrentView, disponibleGlobal, totalInvertidoCalculado, bolsaDisponible: 0,
     bolsaInvertido, bolsaGanancias, proyectoDisponible: 0, proyectoInvertido, proyectoGanado,
     handleTransferirGlobal, handleEjecutarBolsa, handleEjecutarProyecto, loading,
-    movimientos, eliminarMovimiento, handleEditarYReenviar
+    movimientos, eliminarMovimiento, handleEditarYReenviar, handleEditarOperacionProyecto, handleForzarBalancesProyecto
   };
 };

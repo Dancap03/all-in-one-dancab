@@ -164,7 +164,7 @@ export const useInvestment = () => {
           localStorage.setItem('transactions', JSON.stringify([txData, ...localTrans]));
           
         } catch (e) {
-          console.error("Error enviando saldo a Día a Día:", e);
+          console.error("Error sending balance to Día a Día:", e);
         }
       }
     }
@@ -225,82 +225,100 @@ export const useInvestment = () => {
 
       await cargarSaldos();
     } catch (error) {
-      console.error("Error al editar y reenviar el movimiento:", error);
+      console.error("Error editing and resending transaction:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  // 🚀 NUEVA FUNCIÓN 1: EDITAR UNA OPERACIÓN ESPECÍFICA DE UN PROYECTO RECALCULANDO TODO
-  const handleEditarOperacionProyecto = async (
+  // 🚀 SOLUCIÓN DEFINITIVA: GUARDA, RECREA O REEMPLAZA OPERACIONES DE PROYECTOS REPARANDO LOS TOTALES GLOBALES
+  const handleGuardarOperacionProyecto = async (
     idOperacion: string,
     tipo: 'compra' | 'venta',
-    valoresAntiguos: { coste: number; venta?: number },
-    valoresNuevos: { coste: number; venta?: number; label?: string }
+    monto: number,
+    label: string,
+    costeOriginal: number = 0,
+    projectName: string = 'Proyecto'
   ) => {
     const user = auth.currentUser;
     if (!user) return;
 
     try {
       setLoading(true);
-      let diffInvertido = 0;
-      let diffGanado = 0;
 
-      if (tipo === 'compra') {
-        diffInvertido = valoresNuevos.coste - valoresAntiguos.coste;
-      } else if (tipo === 'venta' && valoresAntiguos.venta !== undefined && valoresNuevos.venta !== undefined) {
-        const gananciaAntigua = valoresAntiguos.venta - valoresAntiguos.coste;
-        const gananciaNueva = valoresNuevos.venta - valoresNuevos.coste;
+      let nGlob = disponibleGlobal;
+      let nPInv = proyectoInvertido;
+      let nPGan = proyectoGanado;
+
+      // 1. Buscamos si la transacción existía antes en Firestore
+      const txDocRef = doc(db, `users/${user.uid}/investment_transactions`, idOperacion);
+      const txSnap = await getDoc(txDocRef);
+
+      if (txSnap.exists()) {
+        const oldTx = txSnap.data();
+        const oldAmount = Number(oldTx.amount || 0);
+        const oldCoste = Number(oldTx.costeOriginal || 0);
+        const oldLabel = String(oldTx.label || '').toLowerCase();
+
+        // DESHACEMOS el impacto financiero de la transacción antigua antes de borrarla
+        if (oldLabel.includes('venta') || oldTx.type === 'venta') {
+          nGlob -= oldAmount; 
+          nPInv += oldCoste;  
+          nPGan -= (oldAmount - oldCoste); 
+        } else {
+          // Era una compra
+          nGlob += Math.abs(oldAmount); 
+          nPInv -= Math.abs(oldAmount); 
+        }
         
-        diffInvertido = valoresNuevos.coste - valoresAntiguos.coste;
-        diffGanado = gananciaNueva - gananciaAntigua;
+        // La eliminamos para meter la nueva limpia
+        await deleteDoc(txDocRef);
       }
 
-      const nProyectoInvertido = Math.max(0, proyectoInvertido + diffInvertido);
-      const nProyectoGanado = proyectoGanado + diffGanado;
+      // 2. APLICAMOS EL IMPACTO DE LA NUEVA TRANSACCIÓN (Tanto si editamos una vieja como si la re-creamos desde cero)
+      const exactAmount = Number(monto);
+      const exactCoste = Number(costeOriginal);
 
-      setProyectoInvertido(nProyectoInvertido);
-      setProyectoGanado(nProyectoGanado);
+      if (tipo === 'venta') {
+        nGlob += exactAmount;
+        nPInv -= exactCoste;
+        nPGan += (exactAmount - exactCoste);
+      } else {
+        // Es una compra
+        nGlob -= Math.abs(exactAmount);
+        nPInv += Math.abs(exactAmount);
+      }
+
+      // Aseguramos que los contadores no bajen de cero de forma absurda
+      nGlob = Math.max(0, nGlob);
+      nPInv = Math.max(0, nPInv);
+
+      // 3. GUARDAMOS LA NUEVA TRANSACCIÓN EN EL HISTORIAL
+      const nuevoMovimiento = {
+        id: idOperacion,
+        amount: tipo === 'compra' ? -Math.abs(exactAmount) : Math.abs(exactAmount),
+        label: `${tipo === 'compra' ? 'Compra De Stock' : 'Venta De Artículo'} - ${label} (${projectName})`,
+        type: tipo,
+        costeOriginal: tipo === 'venta' ? exactCoste : 0,
+        dateString: new Date().toISOString(),
+        createdAt: Timestamp.now()
+      };
+
+      await setDoc(doc(db, `users/${user.uid}/investment_transactions`, idOperacion), nuevoMovimiento);
+
+      // 4. ACTUALIZAMOS LOS CONTADORES EN FIREBASE Y LOCALSTORAGE
+      await syncGlobalBalance(nGlob);
+      setProyectoInvertido(nPInv);
+      setProyectoGanado(nPGan);
 
       await guardarEnFirebase({
-        proyectoInvertido: nProyectoInvertido,
-        proyectoGanado: nProyectoGanado
+        proyectoInvertido: nPInv,
+        proyectoGanado: nPGan
       });
-
-      if (valoresNuevos.label) {
-        await registrarMovimientoHistorial(
-          tipo === 'compra' ? -valoresNuevos.coste : (valoresNuevos.venta || 0),
-          `Edición: ${valoresNuevos.label}`
-        );
-      }
 
       await cargarSaldos();
     } catch (e) {
-      console.error("Error editando operación de proyecto:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 🚀 NUEVA FUNCIÓN 2: FORZAR BALANCES MANUALMENTE DESDE LA INTERFAZ PARA ARREGLAR ERRORES DE BORRADO
-  const handleForzarBalancesProyecto = async (nuevoInvertido: number, nuevoGanado: number) => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    try {
-      setLoading(true);
-      setProyectoInvertido(nuevoInvertido);
-      setProyectoGanado(nuevoGanado);
-
-      await guardarEnFirebase({
-        proyectoInvertido: nuevoInvertido,
-        proyectoGanado: nuevoGanado
-      });
-
-      await registrarMovimientoHistorial(0, 'Ajuste manual de balances de Proyectos');
-      await cargarSaldos();
-    } catch (e) {
-      console.error("Error forzando balances:", e);
+      console.error("Error guardando/reparando transacción del proyecto:", e);
     } finally {
       setLoading(false);
     }
@@ -374,6 +392,6 @@ export const useInvestment = () => {
     currentView, setCurrentView, disponibleGlobal, totalInvertidoCalculado, bolsaDisponible: 0,
     bolsaInvertido, bolsaGanancias, proyectoDisponible: 0, proyectoInvertido, proyectoGanado,
     handleTransferirGlobal, handleEjecutarBolsa, handleEjecutarProyecto, loading,
-    movimientos, eliminarMovimiento, handleEditarYReenviar, handleEditarOperacionProyecto, handleForzarBalancesProyecto
+    movimientos, eliminarMovimiento, handleEditarYReenviar, handleGuardarOperacionProyecto
   };
 };

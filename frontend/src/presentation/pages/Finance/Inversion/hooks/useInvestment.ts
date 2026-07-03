@@ -47,7 +47,7 @@ export const useInvestment = () => {
 
     } catch (error) {
       console.error("Error cargando datos:", error);
-    } finally {
+    } fill {
       setLoading(false);
     }
   };
@@ -128,7 +128,8 @@ export const useInvestment = () => {
     const nuevoSaldo = esRetirada ? Math.max(0, disponibleGlobal - monto) : disponibleGlobal + monto;
     
     await syncGlobalBalance(nuevoSaldo);
-    await registrarMovimientoHistorial(esRetirada ? -monto : vote => monto, labelFinal);
+    // 🛠️ CORREGIDO: Eliminado el 'vote =>' erróneo de aquí
+    await registrarMovimientoHistorial(esRetirada ? -monto : monto, labelFinal);
 
     if (destino === 'diadia') {
       const user = auth.currentUser;
@@ -231,10 +232,9 @@ export const useInvestment = () => {
     }
   };
 
-  // 🚀 FUNCIÓN DINÁMICA ABSOLUTA: VALE PARA CUALQUIER PROYECTO (ELIMINA EL VIEJO E INYECTA EL NUEVO RECALCULANDO AMBOS NIVELES)
   const handleGuardarOperacionProyecto = async (
     idOperacion: string,
-    projectId: string, // 'wallapop' o cualquier id dinámico de tus proyectos
+    projectId: string,
     tipo: 'compra' | 'venta',
     monto: number,
     label: string,
@@ -246,17 +246,14 @@ export const useInvestment = () => {
     try {
       setLoading(true);
 
-      // Contadores globales
       let nGlob = disponibleGlobal;
       let nPInv = proyectoInvertido;
       let nPGan = proyectoGanado;
 
-      // Contadores específicos del proyecto (Soporta múltiples esquemas de nombres por seguridad)
       let pCompras = 0;
       let pVentas = 0;
       let pStock = 0;
 
-      // A. OBTENER DATOS ACTUALES DEL PROYECTO CONCRETO EN FIRESTORE
       const projDocRef = doc(db, `users/${user.uid}/projects`, projectId);
       const projSnap = await getDoc(projDocRef);
       
@@ -267,7 +264,6 @@ export const useInvestment = () => {
         pStock = Number(pData.stockActivo || pData.stockCoste || 0);
       }
 
-      // B. DESHACER EL IMPACTO ANTERIOR SI LA TRANSACCIÓN YA EXISTÍA (EVITA DUPLICADOS AL EDITAR)
       const txDocRef = doc(db, `users/${user.uid}/investment_transactions`, idOperacion);
       const txSnap = await getDoc(txDocRef);
 
@@ -285,7 +281,6 @@ export const useInvestment = () => {
           pVentas -= oldAmount;
           pStock += oldCoste;
         } else {
-          // Era una compra
           nGlob += oldAmount;
           nPInv -= oldAmount;
           
@@ -293,13 +288,11 @@ export const useInvestment = () => {
           pStock -= oldAmount;
         }
 
-        // Borramos el documento antiguo de las colecciones e históricos donde pudiera estar
         await deleteDoc(txDocRef);
         try { await deleteDoc(doc(db, `users/${user.uid}/projects/${projectId}/transactions`, idOperacion)); } catch(e){}
         try { await deleteDoc(doc(db, `users/${user.uid}/projects/${projectId}/operations`, idOperacion)); } catch(e){}
       }
 
-      // C. APLICAR EL IMPACTO DE LA NUEVA TRANSACCIÓN MODIFICADA
       const exactAmount = Math.abs(Number(monto));
       const exactCoste = Math.abs(Number(costeOriginal));
 
@@ -311,7 +304,6 @@ export const useInvestment = () => {
         pVentas += exactAmount;
         pStock -= exactCoste;
       } else {
-        // Es una compra
         nGlob -= exactAmount;
         nPInv += exactAmount;
 
@@ -319,14 +311,12 @@ export const useInvestment = () => {
         pStock += exactAmount;
       }
 
-      // Validaciones de seguridad para evitar números negativos extraños
       nGlob = Math.max(0, nGlob);
       nPInv = Math.max(0, nPInv);
       pStock = Math.max(0, pStock);
       pCompras = Math.max(0, pCompras);
       pVentas = Math.max(0, pVentas);
 
-      // D. PREPARAR PAYLOAD DE LA NUEVA TRANSACCIÓN BIEN INDEXADA
       const nuevoMovimiento = {
         id: idOperacion,
         amount: tipo === 'compra' ? -exactAmount : exactAmount,
@@ -339,12 +329,10 @@ export const useInvestment = () => {
         createdAt: Timestamp.now()
       };
 
-      // E. GUARDAR EN TODOS LOS HISTÓRICOS POSIBLES DE TU APP
       await setDoc(doc(db, `users/${user.uid}/investment_transactions`, idOperacion), nuevoMovimiento);
       await setDoc(doc(db, `users/${user.uid}/projects/${projectId}/transactions`, idOperacion), nuevoMovimiento, { merge: true });
       await setDoc(doc(db, `users/${user.uid}/projects/${projectId}/operations`, idOperacion), nuevoMovimiento, { merge: true });
 
-      // F. ACTUALIZAR LOS CONTADORES ESPECÍFICOS DEL PROYECTO AFECTADO
       const projectPayload = {
         totalCompras: pCompras,
         comprasTotales: pCompras,
@@ -358,7 +346,6 @@ export const useInvestment = () => {
       };
       await setDoc(projDocRef, projectPayload, { merge: true });
 
-      // G. SINCRONIZAR SALDOS EN LA CARTERA GLOBAL
       await syncGlobalBalance(nGlob);
       setProyectoInvertido(nPInv);
       setProyectoGanado(nPGan);
@@ -425,7 +412,8 @@ export const useInvestment = () => {
       const n = proyectoInvertido + coste; setProyectoInvertido(n); guardarEnFirebase({ proyectoInvertido: n });
       await syncGlobalBalance(Math.max(0, disponibleGlobal - coste));
     } else if (modo === 'vender' && venta !== undefined) {
-      await registrarMovimientoInvest(venta, 'Venta de proyecto completada');
+      // 🛠️ CORREGIDO: Cambiado registrarMovimientoInvest por registrarMovimientoHistorial
+      await registrarMovimientoHistorial(venta, 'Venta de proyecto completada');
       const nGan = proyectoGanado + (venta - coste); setProyectoGanado(nGan);
       const nInv = Math.max(0, proyectoInvertido - coste); setProyectoInvertido(nInv);
       guardarEnFirebase({ proyectoGanado: nGan, proyectoInvertido: nInv });

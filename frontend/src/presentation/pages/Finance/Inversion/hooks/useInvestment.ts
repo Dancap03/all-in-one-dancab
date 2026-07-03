@@ -362,6 +362,62 @@ export const useInvestment = () => {
     }
   };
 
+  // 🚀 NUEVA FUNCIÓN: BOTÓN DE RESET INTELIGENTE PARA CURAR LA RENTABILIDAD Y ARREGLAR LOS "0 €"
+  const handleRecalcularTodo = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      setLoading(true);
+
+      // 1. Escanear todos los sub-proyectos para recuperar el dinero real bajo gestión
+      const projSnap = await getDocs(collection(db, `users/${user.uid}/projects`));
+      let acumuladoStockProyectos = 0;
+      let acumuladoGananciaProyectos = 0;
+
+      projSnap.forEach((doc) => {
+        const pData = doc.data();
+        acumuladoStockProyectos += Number(pData.stockActivo || pData.stockCoste || 0);
+        acumuladoGananciaProyectos += Number(pData.beneficioNeto || 0);
+      });
+
+      // 2. Traer el estado de la Bolsa
+      const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
+      const docSnap = await getDoc(docRef);
+      const data = docSnap.exists() ? docSnap.data() : {};
+
+      const currentBolsaInvertido = Number(data.bolsaInvertido || 0);
+      const currentBolsaGanancias = Number(data.bolsaGanancias || 0);
+
+      // 3. Forzar el cálculo real de ganancias netas combinadas
+      const realGananciasAbsolutas = currentBolsaGanancias + acumuladoGananciaProyectos;
+      const capitalInvertidoReal = currentBolsaInvertido + acumuladoStockProyectos;
+
+      // Porcentaje de rentabilidad puro: ganancias / lo invertido
+      const porcentajeReal = capitalInvertidoReal > 0 ? (realGananciasAbsolutas / capitalInvertidoReal) * 100 : 0;
+
+      // 4. Machacar los campos corruptos en Firestore para re-sincronizar el Dashboard
+      await setDoc(docRef, {
+        proyectoInvertido: acumuladoStockProyectos,
+        proyectoGanado: acumuladoGananciaProyectos,
+        // Forzamos al frontend a leer las propiedades corregidas y positivas
+        rentabilidadAbsoluta: realGananciasAbsolutas,
+        rentabilidadPorcentaje: porcentajeReal,
+        gananciaTotal: realGananciasAbsolutas,
+        // Limpiamos baselines estáticos erróneos
+        capitalInicial: capitalInvertidoReal,
+        totalInyectado: capitalInvertidoReal
+      }, { merge: true });
+
+      await registrarMovimientoHistorial(0, 'Recalibración exitosa de rentabilidad y proyectos');
+      await cargarSaldos();
+    } catch (e) {
+      console.error("Error ejecutando el recalculo estructural:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEjecutarBolsa = async (monto: number, tipo: string, costeOriginal?: number) => {
     if (tipo === 'propio') {
       await registrarMovimientoHistorial(-monto, 'Compra Bolsa (Saldo Disponible)');
@@ -430,6 +486,6 @@ export const useInvestment = () => {
     currentView, setCurrentView, disponibleGlobal, totalInvertidoCalculado, bolsaDisponible: 0,
     bolsaInvertido, bolsaGanancias, proyectoDisponible: 0, proyectoInvertido, proyectoGanado,
     handleTransferirGlobal, handleEjecutarBolsa, handleEjecutarProyecto, loading,
-    movimientos, eliminarMovimiento, handleEditarYReenviar, handleGuardarOperacionProyecto
+    movimientos, eliminarMovimiento, handleEditarYReenviar, handleGuardarOperacionProyecto, handleRecalcularTodo
   };
 };

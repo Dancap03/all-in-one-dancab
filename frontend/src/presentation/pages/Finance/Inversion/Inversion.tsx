@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, ChevronDown, ChevronRight, TrendingDown, TrendingUp, Tag, Package } from 'lucide-react';
+import { ArrowLeft, RefreshCw, ChevronDown, ChevronRight, TrendingDown, TrendingUp, DollarSign, Plus, Percent, X } from 'lucide-react';
 import { useInvestment } from './hooks/useInvestment';
 
 export const Inversion = () => {
@@ -16,13 +16,20 @@ export const Inversion = () => {
     proyectoGanado,
     movimientos,
     loading,
-    handleRecalcularTodo
+    handleRecalcularTodo,
+    handleEjecutarBolsa
   } = useInvestment();
 
   const [isAñoOpen, setIsAñoOpen] = useState(true);
   const [hasHealed, setHasHealed] = useState(false);
 
-  // Auto-heal controlado de un solo impacto
+  // Estados para el Modal interno de Bolsa
+  const [isBolsaModalOpen, setIsBolsaModalOpen] = useState(false);
+  const [bolsaModalType, setBolsaModalType] = useState<'propio' | 'ganancia' | 'vender'>('propio');
+  const [bolsaMonto, setBolsaMonto] = useState('');
+  const [bolsaCosteOriginal, setBolsaCosteOriginal] = useState('');
+
+  // Auto-heal controlado de un solo impacto al montar la pantalla
   useEffect(() => {
     if (!loading && !hasHealed) {
       setHasHealed(true);
@@ -38,41 +45,122 @@ export const Inversion = () => {
     );
   }
 
-  // Métricas maestras unificadas de tu bolsillo
-  const totalValorBolsa = bolsaInvertido + bolsaGanancias; // 200 + 65.05 = 265.05 €
+  // Métricas unificadas dinámicas
+  const totalValorBolsa = bolsaInvertido + bolsaGanancias; 
   const carteraTotal = disponibleGlobal + totalValorBolsa + proyectoInvertido;
   const gananciasTotales = bolsaGanancias + proyectoGanado;
   
   const capitalInyectadoTotal = bolsaInvertido + proyectoInvertido;
   const rentabilidadPorcentaje = capitalInyectadoTotal > 0 ? (gananciasTotales / capitalInyectadoTotal) * 100 : 0;
 
-  // 🚀 VISTA RESTAURADA 1: DETALLE DE BOLSA ORIGINAL EN ALTA RESOLUCIÓN
+  // Manejador del formulario express de Bolsa
+  const handleConfirmarBolsa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bolsaMonto) return;
+
+    const montoNum = Number(bolsaMonto);
+    const costeNum = bolsaModalType === 'vender' ? Number(bolsaCosteOriginal || 0) : undefined;
+
+    await handleEjecutarBolsa(montoNum, bolsaModalType, costeNum);
+    
+    setIsBolsaModalOpen(false);
+    setBolsaMonto('');
+    setBolsaCosteOriginal('');
+  };
+
+  // Abrir modal configurando su tipo
+  const openBolsaAction = (type: 'propio' | 'ganancia' | 'vender') => {
+    setBolsaModalType(type);
+    setBolsaMonto('');
+    setBolsaCosteOriginal('');
+    setIsBolsaModalOpen(true);
+  };
+
+  // 🚀 VISTA COMPLETADA: DETALLE DE BOLSA CON BOTONES, TARJETAS E HISTORIAL FILTRADO
   if (currentView === 'bolsa') {
+    // Filtramos las operaciones del feed que pertenezcan a Bolsa o Dividendos
+    const bolsaOps = movimientos.filter(m => 
+      String(m.label).toLowerCase().includes('bolsa') || 
+      String(m.label).toLowerCase().includes('dividendo')
+    );
+
+    const bolsaRoi = bolsaInvertido > 0 ? (bolsaGanancias / bolsaInvertido) * 100 : 0;
+
     return (
       <div className="min-h-screen bg-[#0c0c0c] text-white p-4 md:p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => setCurrentView('summary')} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer">
-            <ArrowLeft size={24} />
-          </button>
-          <h1 className="text-2xl font-bold tracking-tight">Módulo de Bolsa</h1>
+        {/* Cabecera del módulo */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setCurrentView('summary')} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer">
+              <ArrowLeft size={24} />
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight">Módulo de Bolsa</h1>
+          </div>
+          
+          {/* Botones de acción dinámicos para Bolsa */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => openBolsaAction('propio')} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#451a03] text-amber-400 border border-amber-500/20 hover:bg-[#78350f] transition-all cursor-pointer">
+              <Plus size={14} /> Comprar Acciones
+            </button>
+            <button onClick={() => openBolsaAction('vender')} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#052e16] text-emerald-400 border border-emerald-500/20 hover:bg-[#064e3b] transition-all cursor-pointer">
+              <DollarSign size={14} /> Registrar Venta
+            </button>
+            <button onClick={() => openBolsaAction('ganancia')} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#1e1b4b] text-indigo-400 border border-indigo-500/20 hover:bg-[#312e81] transition-all cursor-pointer">
+              <Percent size={14} /> Cobrar Dividendo
+            </button>
+          </div>
         </div>
         
-        <div className="bg-[#141414] border border-[#232323] rounded-2xl p-6 mb-6">
-          <p className="text-xs text-gray-400 uppercase font-semibold tracking-wider mb-1">Cartera bolsa total</p>
-          <h2 className="text-3xl font-black text-white mb-2">{totalValorBolsa.toFixed(2)} €</h2>
-          <p className="text-xs text-emerald-400 font-bold flex items-center gap-1">
-            <TrendingUp size={14} /> +0.00 € (+32.53%) desde el inicio
-          </p>
+        {/* Fila de Tarjetas Maestras de Bolsa */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-[#141414] border border-[#232323] p-5 rounded-2xl">
+            <p className="text-xs font-semibold text-gray-400 mb-1">Cartera Bolsa Total</p>
+            <p className="text-2xl font-black text-white">{totalValorBolsa.toFixed(2)} €</p>
+            <p className="text-[11px] text-emerald-400 font-bold mt-1 flex items-center gap-0.5">
+              <TrendingUp size={12} /> +{bolsaGanancias.toFixed(2)} € (+{bolsaRoi.toFixed(2)}%)
+            </p>
+          </div>
+          <div className="bg-[#141414] border border-[#232323] p-5 rounded-2xl">
+            <p className="text-xs font-semibold text-gray-400 mb-1">Capital Invertido (Coste)</p>
+            <p className="text-2xl font-black text-amber-500">{bolsaInvertido.toFixed(2)} €</p>
+            <p className="text-[11px] text-gray-500 mt-1">Fondos asignados de mi bolsillo</p>
+          </div>
+          <div className="bg-[#141414] border border-[#232323] p-5 rounded-2xl">
+            <p className="text-xs font-semibold text-gray-400 mb-1">Plusvalías + Dividendos</p>
+            <p className="text-2xl font-black text-indigo-400">+{bolsaGanancias.toFixed(2)} €</p>
+            <p className="text-[11px] text-gray-500 mt-1">Rendimiento neto acumulado</p>
+          </div>
         </div>
 
-        <div className="w-full bg-[#141414] border border-[#232323] rounded-2xl p-6 min-h-[250px] flex items-center justify-center text-xs text-gray-500">
-          [Gráfico de Tendencia de Bolsa Activo]
+        {/* Feed de Operaciones Exclusivo de Bolsa */}
+        <div className="bg-[#141414] border border-[#232323] rounded-2xl p-5">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-300 mb-4">📋 Histórico de Operaciones - Bolsa</h3>
+          <div className="flex flex-col gap-2">
+            {bolsaOps.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-6">No hay transacciones de Bolsa registradas en el historial.</p>
+            ) : (
+              bolsaOps.map((op) => {
+                const esIngreso = Number(op.amount) >= 0;
+                return (
+                  <div key={op.id} className="flex items-center justify-between p-3.5 rounded-xl bg-[#1a1a1a] border border-[#262626]">
+                    <div>
+                      <p className="text-xs font-bold text-gray-200">{op.label}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">{op.dateString || 'Fecha no registrada'}</p>
+                    </div>
+                    <span className={`text-xs font-black ${esIngreso ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {esIngreso ? '+' : ''}{op.amount.toFixed(2)} €
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
-  // 🚀 VISTA RESTAURADA 2: PROYECTOS PERSONALES ORIGINAL CON SUS 4 TARJETAS REALES
+  // VISTA RESTAURADA 2: PROYECTOS PERSONALES ORIGINAL
   if (currentView === 'proyecto') {
     return (
       <div className="min-h-screen bg-[#0c0c0c] text-white p-4 md:p-6">
@@ -86,7 +174,6 @@ export const Inversion = () => {
           </button>
         </div>
 
-        {/* Las 4 Tarjetas de Sumario de Proyectos de tus capturas */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="bg-[#141414] border border-[#232323] p-4 rounded-xl">
             <p className="text-[11px] text-gray-400 font-medium mb-1">Beneficio neto total</p>
@@ -107,8 +194,7 @@ export const Inversion = () => {
             <p className="text-md font-bold text-rose-500">-1%</p>
           </div>
         </div>
-
-        {/* Tarjeta del Proyecto Wallapop Conectado de tus capturas */}
+        
         <div 
           onClick={() => navigate('/finance/inversion/proyecto/wallapop')}
           className="bg-[#141414] border border-[#232323] hover:border-emerald-500/50 p-5 rounded-xl flex justify-between items-center cursor-pointer transition-all group"
@@ -131,7 +217,7 @@ export const Inversion = () => {
     );
   }
 
-  // VISTA GENERAL PRINCIPAL (SUMMARY)
+  // PANTALLA MAESTRA PRINCIPAL (SUMMARY)
   return (
     <div className="min-h-screen bg-[#0c0c0c] text-white p-4 md:p-6">
       
@@ -142,7 +228,7 @@ export const Inversion = () => {
         <h1 className="text-3xl font-black tracking-tight text-white">Inversión</h1>
       </div>
 
-      {/* TARJETA MAESTRA */}
+      {/* TARJETA MASTER */}
       <div className="bg-[#141414] border border-[#232323] rounded-2xl p-6 mb-6 relative overflow-hidden">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cartera total</p>
         <h2 className="text-3xl font-black tracking-tight mb-2">{carteraTotal.toFixed(2)} €</h2>
@@ -161,7 +247,7 @@ export const Inversion = () => {
         </div>
       </div>
 
-      {/* 🚀 LAS TRES TARJETAS COMPLETAMENTE LOGADAS E INTERACTIVAS */}
+      {/* LAS TRES TARJETAS INTERACTIVAS ORIGINALES */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div 
           onClick={() => setCurrentView('bolsa')}
@@ -187,7 +273,7 @@ export const Inversion = () => {
         </div>
       </div>
 
-      {/* ACCIONES DE SALDO LIQUIDO Y SINCRONIZACIÓN */}
+      {/* ACCIONES DE SALDO LIQUIDO */}
       <div className="bg-[#141414] border border-[#232323] rounded-2xl p-6 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Saldo disponible para invertir</p>
@@ -212,45 +298,7 @@ export const Inversion = () => {
         </div>
       </div>
 
-      {/* DISTRIBUCIÓN GRÁFICA */}
-      <div className="bg-[#141414] border border-[#232323] rounded-2xl p-6 mb-8">
-        <h4 className="text-sm font-bold uppercase tracking-wider text-gray-300 mb-4">Distribución de cartera</h4>
-        <div className="flex flex-col sm:flex-row items-center gap-8">
-          <div className="relative w-32 h-32 flex items-center justify-center">
-            <div className="absolute inset-0 rounded-full border-[12px] border-[#202020]"></div>
-            <div className="flex flex-col items-center justify-center z-10">
-              <span className="text-xs text-gray-400 uppercase font-bold text-[9px]">Total</span>
-              <span className="text-md font-black">{Math.round(carteraTotal)}</span>
-            </div>
-          </div>
-
-          <div className="flex-1 w-full flex flex-col gap-2.5">
-            <div className="flex items-center justify-between text-xs text-gray-300">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                <span>Bolsa</span>
-              </div>
-              <span className="font-bold">{totalValorBolsa.toFixed(2)} €</span>
-            </div>
-            <div className="flex items-center justify-between text-xs text-gray-300">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-                <span>Proyectos</span>
-              </div>
-              <span className="font-bold">{proyectoInvertido.toFixed(2)} €</span>
-            </div>
-            <div className="flex items-center justify-between text-xs text-gray-300">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-gray-500"></span>
-                <span>Sin asignar</span>
-              </div>
-              <span className="font-bold">{disponibleGlobal.toFixed(2)} €</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ACORDEÓN HISTÓRICO */}
+      {/* HISTORIAL GENERAL (ACORDEÓN) */}
       <div className="border-t border-[#232323] pt-6">
         <h3 className="text-xs font-bold tracking-widest text-gray-400 uppercase mb-4">💼 Historial de Capital Invertido</h3>
         <div className="bg-[#141414] border border-[#232323] rounded-2xl overflow-hidden">
@@ -279,6 +327,61 @@ export const Inversion = () => {
           )}
         </div>
       </div>
+
+      {/* MODAL INTERNO SÍNCRONO PARA OPERACIONES DE BOLSA */}
+      {isBolsaModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-[#161616] border border-[#2d2d2d] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between p-4 border-b border-[#2d2d2d]">
+              <h3 className="font-bold text-sm text-white capitalize">
+                Registrar {bolsaModalType === 'propio' ? 'Compra Bolsa' : bolsaModalType === 'vender' ? 'Venta Bolsa' : 'Cobro Dividendos'}
+              </h3>
+              <button onClick={() => setIsBolsaModalOpen(false)} className="text-gray-400 hover:text-white p-1 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmarBolsa} className="p-4 flex flex-col gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Monto (€)</label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  required 
+                  value={bolsaMonto} 
+                  onChange={(e) => setBolsaMonto(e.target.value)}
+                  placeholder="0.00" 
+                  className="w-full bg-[#202020] border border-[#303030] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-gray-500"
+                />
+              </div>
+
+              {bolsaModalType === 'vender' && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Coste de Compra Original (€)</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    required 
+                    value={bolsaCosteOriginal} 
+                    onChange={(e) => setBolsaCosteOriginal(e.target.value)}
+                    placeholder="¿Cuánto te costaron estas acciones al comprarlas?" 
+                    className="w-full bg-[#202020] border border-[#303030] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-gray-500"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 mt-2">
+                <button type="button" onClick={() => setIsBolsaModalOpen(false)} className="flex-1 py-2.5 rounded-xl border border-[#303030] text-sm font-semibold text-gray-400 hover:text-white cursor-pointer">
+                  Cancelar
+                </button>
+                <button type="submit" className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-amber-500 text-black hover:bg-amber-600 cursor-pointer">
+                  Confirmar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

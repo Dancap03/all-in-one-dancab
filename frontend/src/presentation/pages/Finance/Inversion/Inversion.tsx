@@ -108,9 +108,9 @@ export const Inversion = () => {
 
         {/* Panel de control de acciones */}
         <div className="flex items-center gap-2 self-end sm:self-center">
-          {/* Botón de pánico/sincronización manual que sustituye la papelera de la captura */}
+          {/* Botón de pánico/sincronización manual corregido */}
           <button 
-            onClick={() => handleRecalculTodo()}
+            onClick={() => handleRecalcularTodo()}
             title="Forzar recalculo de balances"
             className="p-3 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer"
           >

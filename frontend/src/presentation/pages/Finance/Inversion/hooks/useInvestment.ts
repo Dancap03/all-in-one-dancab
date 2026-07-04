@@ -21,18 +21,15 @@ export const useInvestment = () => {
     if (!user) return;
 
     try {
-      // 1. Cargar histórico general de transacciones
       const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
       const firebaseTxs: any[] = transSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       firebaseTxs.sort((a, b) => new Date(b.dateString || b.date || 0).getTime() - new Date(a.dateString || a.date || 0).getTime());
       setMovimientos(firebaseTxs);
 
-      // 2. Cargar balances maestros de inversión
       const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
       const docSnap = await getDoc(docRef);
       const data = docSnap.exists() ? docSnap.data() : {};
 
-      // 3. Cargar datos específicos del proyecto Wallapop para evitar desincronizaciones
       const wallapopSnap = await getDoc(doc(db, `users/${user.uid}/projects`, 'wallapop'));
       let stockWallapop = 19.09; 
       let beneficioWallapop = -0.63;
@@ -235,7 +232,6 @@ export const useInvestment = () => {
     } catch (error) {
       console.error("Error al editar y reenviar:", error);
     } finally {
-      // 🛠️ CORREGIDO: Cambiado 'fill' por 'finally' para corregir el error TS1434
       setLoading(false);
     }
   };
@@ -391,12 +387,45 @@ export const useInvestment = () => {
         rentabilidadPorcentaje: roiGlobalCalculado
       }, { merge: true });
 
+      // 🛠️ ¡CORTADO EL GRIFO! Eliminada por completo la escritura automática de transacciones de 0,00€ aquí
+
     } catch (e) {
       console.error("Error en sincronización de rentabilidad:", e);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // 🚀 NUEVA FUNCIÓN MAESTRA: BUSCA Y DESTRUYE LOS 1049 REGISTROS VACÍOS DE FIRESTORE
+  const handleLimpiarBasura = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
+      
+      // Filtramos en memoria para borrar solo lo que está a 0€ o es una recalibración redundante
+      for (const d of transSnap.docs) {
+        const tx = d.data();
+        const label = String(tx.label || '');
+        const amount = Number(tx.amount || 0);
+
+        if (amount === 0 || label.includes('Recalibración exitosa')) {
+          await deleteDoc(d.ref);
+        }
+      }
+      
+      // Limpiamos también el LocalStorage por si acaso
+      localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify([]));
+      
+      await handleRecalcularTodo();
+    } catch (e) {
+      console.error("Error ejecutando la purga de base de datos:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEjecutarBolsa = async (monto: number, tipo: string, costeOriginal?: number) => {
     if (tipo === 'propio') {
@@ -428,6 +457,7 @@ export const useInvestment = () => {
     currentView, setCurrentView, disponibleGlobal, totalInvertidoCalculado, bolsaDisponible: 0,
     bolsaInvertido, bolsaGanancias, proyectoDisponible: 0, proyectoInvertido, proyectoGanado,
     handleTransferirGlobal, handleEjecutarBolsa, handleEjecutarProyecto, loading,
-    movimientos, eliminarMovimiento, handleEditarYReenviar, handleGuardarOperacionProyecto, handleRecalcularTodo
+    movimientos, eliminarMovimiento, handleEditarYReenviar, handleGuardarOperacionProyecto, handleRecalcularTodo,
+    handleLimpiarBasura // <-- Exportado con éxito
   };
 };

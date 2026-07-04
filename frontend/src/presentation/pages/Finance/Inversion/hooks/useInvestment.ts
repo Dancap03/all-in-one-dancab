@@ -34,7 +34,7 @@ export const useInvestment = () => {
 
       // 3. Cargar datos específicos del proyecto Wallapop para evitar desincronizaciones
       const wallapopSnap = await getDoc(doc(db, `users/${user.uid}/projects`, 'wallapop'));
-      let stockWallapop = 19.09; // Valor de respaldo por defecto según tus capturas fijas
+      let stockWallapop = 19.09; 
       let beneficioWallapop = -0.63;
 
       if (wallapopSnap.exists()) {
@@ -234,7 +234,8 @@ export const useInvestment = () => {
       await cargarSaldos();
     } catch (error) {
       console.error("Error al editar y reenviar:", error);
-    } fill {
+    } finally {
+      // 🛠️ CORREGIDO: Cambiado 'fill' por 'finally' para corregir el error TS1434
       setLoading(false);
     }
   };
@@ -348,7 +349,6 @@ export const useInvestment = () => {
     }
   };
 
-  // 🚀 FÓRMULA DE RECALCULO PURA: ARRASTRA LA RENTABILIDAD EN POSITIVO BASÁNDOSE EN TU BOLSILLO
   const handleRecalcularTodo = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) return;
@@ -364,7 +364,6 @@ export const useInvestment = () => {
       const bGanancias = data.bolsaGanancias !== undefined ? Number(data.bolsaGanancias) : 65.05;
       const liqActual = data.disponibleGlobal !== undefined ? Number(data.disponibleGlobal) : Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
 
-      // Cargar Wallapop directamente sin pisarlo
       const wallapopSnap = await getDoc(doc(db, `users/${user.uid}/projects`, 'wallapop'));
       let stockProyectos = 19.09;
       let gananciasProyectos = -0.63;
@@ -375,9 +374,8 @@ export const useInvestment = () => {
         gananciasProyectos = Number(wData.beneficioNeto !== undefined ? wData.beneficioNeto : -0.63);
       }
 
-      // Matemáticas de tu bolsillo: la Bolsa arrastra el ROI total a positivo
-      const beneficioNetoGlobal = bGanancias + gananciasProyectos; // 65.05 - 0.63 = 64.42 €
-      const capitalDesembolsadoReal = bInvertido + stockProyectos; // 200.00 + 19.09 = 219.09 €
+      const beneficioNetoGlobal = bGanancias + gananciasProyectos; 
+      const capitalDesembolsadoReal = bInvertido + stockProyectos; 
       const roiGlobalCalculado = capitalDesembolsadoReal > 0 ? (beneficioNetoGlobal / capitalDesembolsadoReal) * 100 : 0;
 
       setDisponibleGlobal(liqActual);
@@ -411,7 +409,7 @@ export const useInvestment = () => {
       await syncGlobalBalance(disponibleGlobal + monto);
       const nInv = Math.max(0, bolsaInvertido - (costeOriginal || 0)); setBolsaInvertido(nInv);
       const nGan = bolsaGanancias + gananciaLimpia; setBolsaGanancias(nGan);
-      guardarEnFirebase({ bolsaInvertido: nInv, bolsaGanancias: nGan });
+      guardarEnFirebase({ nInv, bolsaGanancias: nGan });
     }
     await handleRecalcularTodo();
   };

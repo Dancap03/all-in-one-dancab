@@ -6,7 +6,7 @@ import { useInvestment } from './hooks/useInvestment';
 export const Inversion = () => {
   const navigate = useNavigate();
   
-  // Consumimos todo el estado y la nueva función del hook curativo
+  // Consumimos todo el estado y la función del hook
   const {
     currentView,
     setCurrentView,
@@ -21,18 +21,21 @@ export const Inversion = () => {
     handleRecalcularTodo
   } = useInvestment();
 
-  // Estados para el acordeón visual del histórico de tu captura
+  // Estados para el acordeón visual del histórico
   const [isAñoOpen, setIsAñoOpen] = useState(true);
+  
+  // 🚀 FLAG DE SEGURIDAD: Evita que el useEffect entre en un bucle infinito con el loading de Firestore
+  const [hasHealed, setHasHealed] = useState(false);
 
-  // 🚀 AUTO-HEAL: En cuanto entras a la página, fuerza el recalculo automático de rentabilidad
+  // Auto-heal controlado: Solo se ejecuta una vez cuando la carga inicial es correcta
   useEffect(() => {
-    if (!loading) {
-      // Se ejecuta de forma síncrona en el cliente para limpiar Firebase al vuelo
+    if (!loading && !hasHealed) {
+      setHasHealed(true); // Bloqueamos ejecuciones posteriores inmediatas
       handleRecalcularTodo();
     }
-  }, [loading]);
+  }, [loading, hasHealed, handleRecalcularTodo]);
 
-  if (loading) {
+  if (loading && !hasHealed) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0c0c0c]">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-500"></div>
@@ -40,11 +43,10 @@ export const Inversion = () => {
     );
   }
 
-  // Cálculos dinámicas para pintar la interfaz de las capturas
+  // Cálculos dinámicos para pintar los balances de tu bolsillo
   const carteraTotal = disponibleGlobal + bolsaInvertido + proyectoInvertido;
   const gananciasTotales = bolsaGanancias + proyectoGanado;
   
-  // Cálculo del porcentaje de rentabilidad global
   const capitalInyectadoTotal = bolsaInvertido + proyectoInvertido;
   const rentabilidadPorcentaje = capitalInyectadoTotal > 0 ? (gananciasTotales / capitalInyectadoTotal) * 100 : 0;
 

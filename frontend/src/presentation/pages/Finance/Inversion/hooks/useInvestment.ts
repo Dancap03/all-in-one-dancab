@@ -345,7 +345,6 @@ export const useInvestment = () => {
     }
   };
 
-  // 🚀 CONCILIACIÓN AUTOMÁTICA EXTRAORDINARIA: ENCUENTRA FUGAS EN FIRESTORE Y ACTUALIZA SALDOS SIN QUE TOQUES NADA
   const handleRecalcularTodo = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) return;
@@ -353,11 +352,9 @@ export const useInvestment = () => {
     try {
       setLoading(true);
 
-      // 1. Obtener todas las operaciones registradas globalmente para crear un mapa de IDs
       const globalTxSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
       const globalTxIds = new Set(globalTxSnap.docs.map(d => d.id));
 
-      // 2. Escanear todos los proyectos buscando transacciones huerfanas (como tu venta de 62,50€)
       const projSnap = await getDocs(collection(db, `users/${user.uid}/projects`));
       let acumuladoStockProyectos = 0;
       let acumuladoGananciaProyectos = 0;
@@ -367,14 +364,12 @@ export const useInvestment = () => {
         const projectId = projectDoc.id;
         const pData = projectDoc.data();
 
-        // Escaneamos las operaciones internas de este proyecto concreto
         const subTxSnap = await getDocs(collection(db, `users/${user.uid}/projects/${projectId}/transactions`));
         
         for (const subDoc of subTxSnap.docs) {
           const subTx = subDoc.data();
           const subTxId = subDoc.id;
 
-          // 🌟 RECONCILIACIÓN MÁGICA: Si la venta está en Wallapop pero no en global, ¡la rescatamos!
           if (!globalTxIds.has(subTxId)) {
             const amt = Math.abs(Number(subTx.amount || 0));
             const cost = Math.abs(Number(subTx.costeOriginal || 0));
@@ -392,10 +387,8 @@ export const useInvestment = () => {
               createdAt: subTx.createdAt || Timestamp.now()
             };
 
-            // La guardamos en el histórico global de forma transparente
             await setDoc(doc(db, `users/${user.uid}/investment_transactions`, subTxId), recoveredGlobalTx);
             
-            // Si era una venta, este dinero te corresponde sumarlo en líquido
             if (calculatedType === 'venta') {
               saldoLiquidoAFavor += amt;
             } else {
@@ -404,12 +397,10 @@ export const useInvestment = () => {
           }
         }
 
-        // Sumamos los acumulados oficiales del documento maestro del proyecto
         acumuladoStockProyectos += Number(pData.stockActivo !== undefined ? pData.stockActivo : (pData.stockCoste !== undefined ? pData.stockCoste : 0));
         acumuladoGananciaProyectos += Number(pData.beneficioNeto || 0);
       }
 
-      // 3. Cargar los balances maestros de inversión
       const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
       const docSnap = await getDoc(docRef);
       const data = docSnap.exists() ? docSnap.data() : {};
@@ -418,11 +409,9 @@ export const useInvestment = () => {
       const bGanancias = data.bolsaGanancias !== undefined ? Number(data.bolsaGanancias) : 65.05;
       const baseLiquidez = data.disponibleGlobal !== undefined ? Number(data.disponibleGlobal) : Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
 
-      // Sincronizamos la inyección automática (+62,50 €) al saldo real disponible
       let liqActual = baseLiquidez + saldoLiquidoAFavor;
       if (liqActual < 0) liqActual = 0;
 
-      // Fórmulas unificadas de tu bolsillo
       const beneficioNetoGlobal = bGanancias + acumuladoGananciaProyectos; 
       const capitalDesembolsadoReal = bInvertido + acumuladoStockProyectos; 
       const roiGlobalCalculado = capitalDesembolsadoReal > 0 ? (beneficioNetoGlobal / capitalDesembolsadoReal) * 100 : 0;
@@ -433,7 +422,6 @@ export const useInvestment = () => {
       setProyectoInvertido(acumuladoStockProyectos);
       setProyectoGanado(acumuladoGananciaProyectos);
 
-      // Guardamos el estado curado definitivo en Firestore
       await setDoc(docRef, {
         disponibleGlobal: liqActual,
         proyectoInvertido: acumuladoStockProyectos,
@@ -442,7 +430,6 @@ export const useInvestment = () => {
         rentabilidadPorcentaje: roiGlobalCalculado
       }, { merge: true });
 
-      // Actualizamos el feed del LocalStorage y del estado de movimientos
       const refreshSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
       const freshList: any[] = refreshSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       freshList.sort((a, b) => new Date(b.dateString || b.date || 0).getTime() - new Date(a.dateString || a.date || 0).getTime());
@@ -456,6 +443,34 @@ export const useInvestment = () => {
       setLoading(false);
     }
   }, []);
+
+  // 🚀 RESTAURADA: Función para pulgar la base de datos de basuras a 0.00€
+  const handleLimpiarBasura = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
+      
+      for (const d of transSnap.docs) {
+        const tx = d.data();
+        const label = String(tx.label || '');
+        const amount = Number(tx.amount || 0);
+
+        if (amount === 0 || label.includes('Recalibración exitosa')) {
+          await deleteDoc(d.ref);
+        }
+      }
+      
+      localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify([]));
+      await handleRecalcularTodo();
+    } catch (e) {
+      console.error("Error ejecutando la purga de base de datos:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEjecutarBolsa = async (monto: number, tipo: string, costeOriginal?: number) => {
     if (tipo === 'propio') {
@@ -487,6 +502,7 @@ export const useInvestment = () => {
     currentView, setCurrentView, disponibleGlobal, totalInvertidoCalculado, bolsaDisponible: 0,
     bolsaInvertido, bolsaGanancias, proyectoDisponible: 0, proyectoInvertido, proyectoGanado,
     handleTransferirGlobal, handleEjecutarBolsa, handleEjecutarProyecto, loading,
-    movimientos, eliminarMovimiento, handleEditarYReenviar, handleGuardarOperacionProyecto, handleRecalcularTodo
+    movimientos, eliminarMovimiento, handleEditarYReenviar, handleGuardarOperacionProyecto, handleRecalcularTodo,
+    handleLimpiarBasura // <-- Vuelve a estar en su sitio sana y salva
   };
 };

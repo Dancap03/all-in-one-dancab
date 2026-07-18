@@ -31,13 +31,13 @@ export const useInvestment = () => {
       const data = docSnap.exists() ? docSnap.data() : {};
 
       const wallapopSnap = await getDoc(doc(db, `users/${user.uid}/projects`, 'wallapop'));
-      let stockWallapop = 19.09; 
-      let beneficioWallapop = -0.63;
+      let stockWallapop = 0; 
+      let beneficioWallapop = 23.69;
 
       if (wallapopSnap.exists()) {
         const wData = wallapopSnap.data();
-        stockWallapop = Number(wData.stockActivo !== undefined ? wData.stockActivo : (wData.stockCoste !== undefined ? wData.stockCoste : 19.09));
-        beneficioWallapop = Number(wData.beneficioNeto !== undefined ? wData.beneficioNeto : -0.63);
+        stockWallapop = Number(wData.stockActivo !== undefined ? wData.stockActivo : (wData.stockCoste !== undefined ? wData.stockCoste : 0));
+        beneficioWallapop = Number(wData.beneficioNeto !== undefined ? wData.beneficioNeto : 23.69);
       }
 
       const localGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
@@ -345,6 +345,7 @@ export const useInvestment = () => {
     }
   };
 
+  // 🚀 CONCILIACIÓN AUTOMÁTICA EXTRAORDINARIA: ENCUENTRA FUGAS EN FIRESTORE Y ACTUALIZA SALDOS SIN QUE TOQUES NADA
   const handleRecalcularTodo = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) return;
@@ -352,80 +353,109 @@ export const useInvestment = () => {
     try {
       setLoading(true);
 
+      // 1. Obtener todas las operaciones registradas globalmente para crear un mapa de IDs
+      const globalTxSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
+      const globalTxIds = new Set(globalTxSnap.docs.map(d => d.id));
+
+      // 2. Escanear todos los proyectos buscando transacciones huerfanas (como tu venta de 62,50€)
+      const projSnap = await getDocs(collection(db, `users/${user.uid}/projects`));
+      let acumuladoStockProyectos = 0;
+      let acumuladoGananciaProyectos = 0;
+      let saldoLiquidoAFavor = 0;
+
+      for (const projectDoc of projSnap.docs) {
+        const projectId = projectDoc.id;
+        const pData = projectDoc.data();
+
+        // Escaneamos las operaciones internas de este proyecto concreto
+        const subTxSnap = await getDocs(collection(db, `users/${user.uid}/projects/${projectId}/transactions`));
+        
+        for (const subDoc of subTxSnap.docs) {
+          const subTx = subDoc.data();
+          const subTxId = subDoc.id;
+
+          // 🌟 RECONCILIACIÓN MÁGICA: Si la venta está en Wallapop pero no en global, ¡la rescatamos!
+          if (!globalTxIds.has(subTxId)) {
+            const amt = Math.abs(Number(subTx.amount || 0));
+            const cost = Math.abs(Number(subTx.costeOriginal || 0));
+            const calculatedType = subTx.type || (Number(subTx.amount) < 0 ? 'compra' : 'venta');
+
+            const recoveredGlobalTx = {
+              id: subTxId,
+              amount: calculatedType === 'compra' ? -amt : amt,
+              label: subTx.label || (calculatedType === 'compra' ? `Compra De Stock` : `Venta De Artículo`),
+              type: calculatedType,
+              costeOriginal: calculatedType === 'venta' ? cost : 0,
+              projectId: projectId,
+              dateString: subTx.dateString || new Date().toISOString().split('T')[0],
+              date: subTx.date || Timestamp.now(),
+              createdAt: subTx.createdAt || Timestamp.now()
+            };
+
+            // La guardamos en el histórico global de forma transparente
+            await setDoc(doc(db, `users/${user.uid}/investment_transactions`, subTxId), recoveredGlobalTx);
+            
+            // Si era una venta, este dinero te corresponde sumarlo en líquido
+            if (calculatedType === 'venta') {
+              saldoLiquidoAFavor += amt;
+            } else {
+              saldoLiquidoAFavor -= amt;
+            }
+          }
+        }
+
+        // Sumamos los acumulados oficiales del documento maestro del proyecto
+        acumuladoStockProyectos += Number(pData.stockActivo !== undefined ? pData.stockActivo : (pData.stockCoste !== undefined ? pData.stockCoste : 0));
+        acumuladoGananciaProyectos += Number(pData.beneficioNeto || 0);
+      }
+
+      // 3. Cargar los balances maestros de inversión
       const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
       const docSnap = await getDoc(docRef);
       const data = docSnap.exists() ? docSnap.data() : {};
 
       const bInvertido = data.bolsaInvertido !== undefined ? Number(data.bolsaInvertido) : 200.00;
       const bGanancias = data.bolsaGanancias !== undefined ? Number(data.bolsaGanancias) : 65.05;
-      const liqActual = data.disponibleGlobal !== undefined ? Number(data.disponibleGlobal) : Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
+      const baseLiquidez = data.disponibleGlobal !== undefined ? Number(data.disponibleGlobal) : Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
 
-      const wallapopSnap = await getDoc(doc(db, `users/${user.uid}/projects`, 'wallapop'));
-      let stockProyectos = 19.09;
-      let gananciasProyectos = -0.63;
+      // Sincronizamos la inyección automática (+62,50 €) al saldo real disponible
+      let liqActual = baseLiquidez + saldoLiquidoAFavor;
+      if (liqActual < 0) liqActual = 0;
 
-      if (wallapopSnap.exists()) {
-        const wData = wallapopSnap.data();
-        stockProyectos = Number(wData.stockActivo !== undefined ? wData.stockActivo : (wData.stockCoste !== undefined ? wData.stockCoste : 19.09));
-        gananciasProyectos = Number(wData.beneficioNeto !== undefined ? wData.beneficioNeto : -0.63);
-      }
-
-      const beneficioNetoGlobal = bGanancias + gananciasProyectos; 
-      const capitalDesembolsadoReal = bInvertido + stockProyectos; 
+      // Fórmulas unificadas de tu bolsillo
+      const beneficioNetoGlobal = bGanancias + acumuladoGananciaProyectos; 
+      const capitalDesembolsadoReal = bInvertido + acumuladoStockProyectos; 
       const roiGlobalCalculado = capitalDesembolsadoReal > 0 ? (beneficioNetoGlobal / capitalDesembolsadoReal) * 100 : 0;
 
       setDisponibleGlobal(liqActual);
       setBolsaInvertido(bInvertido);
       setBolsaGanancias(bGanancias);
-      setProyectoInvertido(stockProyectos);
-      setProyectoGanado(gananciasProyectos);
+      setProyectoInvertido(acumuladoStockProyectos);
+      setProyectoGanado(acumuladoGananciaProyectos);
 
+      // Guardamos el estado curado definitivo en Firestore
       await setDoc(docRef, {
-        proyectoInvertido: stockProyectos,
-        proyectoGanado: gananciasProyectos,
+        disponibleGlobal: liqActual,
+        proyectoInvertido: acumuladoStockProyectos,
+        proyectoGanado: acumuladoGananciaProyectos,
         rentabilidadAbsoluta: beneficioNetoGlobal,
         rentabilidadPorcentaje: roiGlobalCalculado
       }, { merge: true });
 
-      // 🛠️ ¡CORTADO EL GRIFO! Eliminada por completo la escritura automática de transacciones de 0,00€ aquí
+      // Actualizamos el feed del LocalStorage y del estado de movimientos
+      const refreshSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
+      const freshList: any[] = refreshSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      freshList.sort((a, b) => new Date(b.dateString || b.date || 0).getTime() - new Date(a.dateString || a.date || 0).getTime());
+      setMovimientos(freshList);
+
+      localStorage.setItem('aio_total_invertido_diadia_v2', liqActual.toString());
 
     } catch (e) {
-      console.error("Error en sincronización de rentabilidad:", e);
+      console.error("Error en reconciliación automática de base de datos:", e);
     } finally {
       setLoading(false);
     }
   }, []);
-
-  // 🚀 NUEVA FUNCIÓN MAESTRA: BUSCA Y DESTRUYE LOS 1049 REGISTROS VACÍOS DE FIRESTORE
-  const handleLimpiarBasura = async () => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    try {
-      setLoading(true);
-      const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
-      
-      // Filtramos en memoria para borrar solo lo que está a 0€ o es una recalibración redundante
-      for (const d of transSnap.docs) {
-        const tx = d.data();
-        const label = String(tx.label || '');
-        const amount = Number(tx.amount || 0);
-
-        if (amount === 0 || label.includes('Recalibración exitosa')) {
-          await deleteDoc(d.ref);
-        }
-      }
-      
-      // Limpiamos también el LocalStorage por si acaso
-      localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify([]));
-      
-      await handleRecalcularTodo();
-    } catch (e) {
-      console.error("Error ejecutando la purga de base de datos:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleEjecutarBolsa = async (monto: number, tipo: string, costeOriginal?: number) => {
     if (tipo === 'propio') {
@@ -457,7 +487,6 @@ export const useInvestment = () => {
     currentView, setCurrentView, disponibleGlobal, totalInvertidoCalculado, bolsaDisponible: 0,
     bolsaInvertido, bolsaGanancias, proyectoDisponible: 0, proyectoInvertido, proyectoGanado,
     handleTransferirGlobal, handleEjecutarBolsa, handleEjecutarProyecto, loading,
-    movimientos, eliminarMovimiento, handleEditarYReenviar, handleGuardarOperacionProyecto, handleRecalcularTodo,
-    handleLimpiarBasura // <-- Exportado con éxito
+    movimientos, eliminarMovimiento, handleEditarYReenviar, handleGuardarOperacionProyecto, handleRecalcularTodo
   };
 };

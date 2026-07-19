@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { db, auth } from '../../../../../infrastructure/firebase/config';
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 
@@ -16,46 +16,121 @@ export const useInvestment = () => {
 
   const [movimientos, setMovimientos] = useState<any[]>([]);
 
+  // 🚀 ESCÁNER MAESTRO: Carga los saldos y rescata automáticamente el dinero atrapado
   const cargarSaldos = async () => {
     const user = auth.currentUser;
     if (!user) return;
 
     try {
-      const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
-      const firebaseTxs: any[] = transSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      firebaseTxs.sort((a, b) => new Date(b.dateString || b.date || 0).getTime() - new Date(a.dateString || a.date || 0).getTime());
-      setMovimientos(firebaseTxs);
+      setLoading(true);
 
       const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
       const docSnap = await getDoc(docRef);
       const data = docSnap.exists() ? docSnap.data() : {};
 
-      const wallapopSnap = await getDoc(doc(db, `users/${user.uid}/projects`, 'wallapop'));
-      let stockWallapop = 0; 
-      let beneficioWallapop = 23.69;
+      // Liquidez base conocida
+      let saldoLiquidoReal = data.disponibleGlobal !== undefined ? Number(data.disponibleGlobal) : Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
+      let saldoModificado = false;
 
-      if (wallapopSnap.exists()) {
-        const wData = wallapopSnap.data();
-        stockWallapop = Number(wData.stockActivo !== undefined ? wData.stockActivo : (wData.stockCoste !== undefined ? wData.stockCoste : 0));
-        beneficioWallapop = Number(wData.beneficioNeto !== undefined ? wData.beneficioNeto : 23.69);
+      // 1. MAPEO DEL HISTORIAL GLOBAL (Para saber qué tenemos y qué nos falta)
+      const globalTxRef = collection(db, `users/${user.uid}/investment_transactions`);
+      const globalSnap = await getDocs(globalTxRef);
+      const globalIds = new Set(globalSnap.docs.map(d => d.id));
+
+      // 2. ESCÁNER PROFUNDO DE PROYECTOS (Aquí atraparemos los 62,50€ perdidos)
+      const projCol = await getDocs(collection(db, `users/${user.uid}/projects`));
+      const projectIds = projCol.docs.map(d => d.id);
+      if (!projectIds.includes('wallapop')) projectIds.push('wallapop');
+
+      let acumuladoStock = 0;
+      let acumuladoGanancia = 0;
+
+      for (const pid of projectIds) {
+        // Obtenemos saldos oficiales del proyecto (Ej: Stock = 0, Beneficio = +23.69)
+        const pDoc = await getDoc(doc(db, `users/${user.uid}/projects`, pid));
+        if (pDoc.exists()) {
+           const pd = pDoc.data();
+           acumuladoStock += Number(pd.stockActivo !== undefined ? pd.stockActivo : (pd.stockCoste || 0));
+           acumuladoGanancia += Number(pd.beneficioNeto || 0);
+        }
+
+        // Rastrear operaciones huérfanas en las dos subcolecciones posibles
+        const paths = [`transactions`, `operations`];
+        for (const sub of paths) {
+          try {
+            const subSnap = await getDocs(collection(db, `users/${user.uid}/projects/${pid}/${sub}`));
+            for (const subDoc of subSnap.docs) {
+              if (!globalIds.has(subDoc.id)) {
+                // 🚨 ¡OPERACIÓN PERDIDA ENCONTRADA! Rescatando...
+                const txData = subDoc.data();
+                const amt = Math.abs(Number(txData.amount || 0));
+                const isVenta = txData.type === 'venta' || String(txData.label).toLowerCase().includes('venta') || Number(txData.amount) > 0;
+
+                const recoveredTx = {
+                  id: subDoc.id,
+                  amount: isVenta ? amt : -amt,
+                  label: txData.label || (isVenta ? 'Venta De Artículo' : 'Compra De Stock'),
+                  type: isVenta ? 'venta' : 'compra',
+                  costeOriginal: txData.costeOriginal || 0,
+                  projectId: pid,
+                  dateString: txData.dateString || new Date().toISOString().split('T')[0],
+                  createdAt: txData.createdAt || Timestamp.now(),
+                  date: txData.date || Timestamp.now()
+                };
+
+                // Guardamos la copia globalmente
+                await setDoc(doc(db, `users/${user.uid}/investment_transactions`, subDoc.id), recoveredTx);
+                globalIds.add(subDoc.id);
+
+                // Ajustamos tu líquido automáticamente
+                if (isVenta) {
+                  saldoLiquidoReal += amt; // Aquí se suman los 62,50€ a tu bolsillo
+                } else {
+                  saldoLiquidoReal -= amt;
+                }
+                saldoModificado = true;
+              }
+            }
+          } catch (e) {} 
+        }
       }
 
-      const localGlobal = Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
-      let saldoLiquidoReal = data.disponibleGlobal !== undefined ? data.disponibleGlobal : localGlobal;
-      
-      if (localGlobal !== data.disponibleGlobal) {
-        saldoLiquidoReal = localGlobal;
+      // Si el escáner ha encontrado algo y sumado el dinero, lo guardamos para siempre
+      if (saldoModificado) {
+        saldoLiquidoReal = Math.max(0, saldoLiquidoReal);
         await setDoc(docRef, { disponibleGlobal: saldoLiquidoReal }, { merge: true });
+        localStorage.setItem('aio_total_invertido_diadia_v2', saldoLiquidoReal.toString());
       }
+
+      // 3. RECARGAMOS LOS MOVIMIENTOS DEFINITIVOS PARA MOSTRARLOS
+      const finalSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
+      const firebaseTxs = finalSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      firebaseTxs.sort((a, b) => new Date(b.dateString || b.date || 0).getTime() - new Date(a.dateString || a.date || 0).getTime());
+      setMovimientos(firebaseTxs);
+
+      const bInvertido = data.bolsaInvertido !== undefined ? Number(data.bolsaInvertido) : 200.00;
+      const bGanancias = data.bolsaGanancias !== undefined ? Number(data.bolsaGanancias) : 65.05;
 
       setDisponibleGlobal(saldoLiquidoReal);
-      setBolsaInvertido(data.bolsaInvertido !== undefined ? data.bolsaInvertido : 200.00);
-      setBolsaGanancias(data.bolsaGanancias !== undefined ? data.bolsaGanancias : 65.05);
-      setProyectoInvertido(stockWallapop);
-      setProyectoGanado(beneficioWallapop);
+      setBolsaInvertido(bInvertido);
+      setBolsaGanancias(bGanancias);
+      setProyectoInvertido(acumuladoStock);
+      setProyectoGanado(acumuladoGanancia);
+
+      // Rentabilidad real e invulnerable
+      const bNeto = bGanancias + acumuladoGanancia;
+      const capReal = bInvertido + acumuladoStock;
+      const roi = capReal > 0 ? (bNeto / capReal) * 100 : 0;
+
+      await setDoc(docRef, {
+        proyectoInvertido: acumuladoStock,
+        proyectoGanado: acumuladoGanancia,
+        rentabilidadAbsoluta: bNeto,
+        rentabilidadPorcentaje: roi
+      }, { merge: true });
 
     } catch (error) {
-      console.error("Error cargando datos estructurales de inversión:", error);
+      console.error("Error crítico en el rastreador de saldos:", error);
     } finally {
       setLoading(false);
     }
@@ -64,6 +139,10 @@ export const useInvestment = () => {
   useEffect(() => {
     cargarSaldos();
   }, [currentView]);
+
+  const handleRecalcularTodo = async () => {
+    await cargarSaldos();
+  };
 
   const guardarEnFirebase = async (nuevosSaldos: any) => {
     const user = auth.currentUser;
@@ -169,13 +248,10 @@ export const useInvestment = () => {
           const localTrans = JSON.parse(localStorage.getItem('transactions') || '[]');
           localStorage.setItem('transactions', JSON.stringify([txData, ...localTrans]));
           
-        } catch (e) {
-          console.error("Error enviando saldo a Día a Día:", e);
-        }
+        } catch (e) {}
       }
     }
-
-    cargarSaldos();
+    await cargarSaldos();
   };
 
   const handleEditarYReenviar = async (id: string, nuevoMonto: number, nuevoConcepto: string) => {
@@ -197,20 +273,12 @@ export const useInvestment = () => {
       }, { merge: true });
 
       const txData = {
-        id: id,
-        label: nuevoConcepto,
-        concept: nuevoConcepto,
-        title: nuevoConcepto,
-        amount: Math.abs(Number(nuevoMonto)),
-        type: 'income',
-        tipo: 'ingreso',
-        category: 'Inversión',
-        dateString: fechaLimpia,
-        date: Timestamp.now()
+        id: id, label: nuevoConcepto, concept: nuevoConcepto, title: nuevoConcepto,
+        amount: Math.abs(Number(nuevoMonto)), type: 'income', tipo: 'ingreso',
+        category: 'Inversión', dateString: fechaLimpia, date: Timestamp.now()
       };
 
       const monthDocRef = doc(db, `users/${user.uid}/finance_months/${currentMonthId}`);
-      
       const docSnap = await getDoc(monthDocRef);
       if (docSnap.exists()) {
         const currentData = docSnap.data();
@@ -223,11 +291,6 @@ export const useInvestment = () => {
       }
 
       await setDoc(doc(db, `users/${user.uid}/finance_months/${currentMonthId}/transactions`, id), txData);
-
-      const localTrans = JSON.parse(localStorage.getItem('transactions') || '[]');
-      const filteredLocal = localTrans.filter((tx: any) => tx.id !== id);
-      localStorage.setItem('transactions', JSON.stringify([txData, ...filteredLocal]));
-
       await cargarSaldos();
     } catch (error) {
       console.error("Error al editar y reenviar:", error);
@@ -251,16 +314,10 @@ export const useInvestment = () => {
       setLoading(true);
 
       let nGlob = disponibleGlobal;
-      let nPInv = proyectoInvertido;
-      let nPGan = proyectoGanado;
-
-      let pCompras = 0;
-      let pVentas = 0;
-      let pStock = 0;
+      let pCompras = 0, pVentas = 0, pStock = 0;
 
       const projDocRef = doc(db, `users/${user.uid}/projects`, projectId);
       const projSnap = await getDoc(projDocRef);
-      
       if (projSnap.exists()) {
         const pData = projSnap.data();
         pCompras = Number(pData.totalCompras || pData.comprasTotales || 0);
@@ -279,17 +336,13 @@ export const useInvestment = () => {
 
         if (oldType === 'venta') {
           nGlob -= oldAmount;
-          nPInv += oldCoste;
-          nPGan -= (oldAmount - oldCoste);
           pVentas -= oldAmount;
           pStock += oldCoste;
         } else {
           nGlob += oldAmount;
-          nPInv -= oldAmount;
           pCompras -= oldAmount;
           pStock -= oldAmount;
         }
-
         await deleteDoc(txDocRef);
         try { await deleteDoc(doc(db, `users/${user.uid}/projects/${projectId}/transactions`, idOperacion)); } catch(e){}
       }
@@ -299,18 +352,15 @@ export const useInvestment = () => {
 
       if (tipo === 'venta') {
         nGlob += exactAmount;
-        nPInv -= exactCoste;
-        nPGan += (exactAmount - exactCoste);
         pVentas += exactAmount;
         pStock -= exactCoste;
       } else {
         nGlob -= exactAmount;
-        nPInv += exactAmount;
         pCompras += exactAmount;
         pStock += exactAmount;
       }
 
-      nGlob = Math.max(0, nGlob); nPInv = Math.max(0, nPInv); pStock = Math.max(0, pStock);
+      nGlob = Math.max(0, nGlob); pStock = Math.max(0, pStock);
 
       const nuevoMovimiento = {
         id: idOperacion,
@@ -324,6 +374,7 @@ export const useInvestment = () => {
         createdAt: Timestamp.now()
       };
 
+      // 🛠️ ¡CORREGIDO! Ahora sí o sí la operación queda guardada en el historial general a la vez que en el proyecto
       await setDoc(doc(db, `users/${user.uid}/investment_transactions`, idOperacion), nuevoMovimiento);
       await setDoc(doc(db, `users/${user.uid}/projects/${projectId}/transactions`, idOperacion), nuevoMovimiento, { merge: true });
 
@@ -337,7 +388,7 @@ export const useInvestment = () => {
       }, { merge: true });
 
       await syncGlobalBalance(nGlob);
-      await handleRecalcularTodo();
+      await cargarSaldos();
     } catch (e) {
       console.error("Error guardando operación en proyecto:", e);
     } finally {
@@ -345,129 +396,21 @@ export const useInvestment = () => {
     }
   };
 
-  const handleRecalcularTodo = useCallback(async () => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    try {
-      setLoading(true);
-
-      const globalTxSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
-      const globalTxIds = new Set(globalTxSnap.docs.map(d => d.id));
-
-      const projSnap = await getDocs(collection(db, `users/${user.uid}/projects`));
-      let acumuladoStockProyectos = 0;
-      let acumuladoGananciaProyectos = 0;
-      let saldoLiquidoAFavor = 0;
-
-      for (const projectDoc of projSnap.docs) {
-        const projectId = projectDoc.id;
-        const pData = projectDoc.data();
-
-        const subTxSnap = await getDocs(collection(db, `users/${user.uid}/projects/${projectId}/transactions`));
-        
-        for (const subDoc of subTxSnap.docs) {
-          const subTx = subDoc.data();
-          const subTxId = subDoc.id;
-
-          if (!globalTxIds.has(subTxId)) {
-            const amt = Math.abs(Number(subTx.amount || 0));
-            const cost = Math.abs(Number(subTx.costeOriginal || 0));
-            const calculatedType = subTx.type || (Number(subTx.amount) < 0 ? 'compra' : 'venta');
-
-            const recoveredGlobalTx = {
-              id: subTxId,
-              amount: calculatedType === 'compra' ? -amt : amt,
-              label: subTx.label || (calculatedType === 'compra' ? `Compra De Stock` : `Venta De Artículo`),
-              type: calculatedType,
-              costeOriginal: calculatedType === 'venta' ? cost : 0,
-              projectId: projectId,
-              dateString: subTx.dateString || new Date().toISOString().split('T')[0],
-              date: subTx.date || Timestamp.now(),
-              createdAt: subTx.createdAt || Timestamp.now()
-            };
-
-            await setDoc(doc(db, `users/${user.uid}/investment_transactions`, subTxId), recoveredGlobalTx);
-            
-            if (calculatedType === 'venta') {
-              saldoLiquidoAFavor += amt;
-            } else {
-              saldoLiquidoAFavor -= amt;
-            }
-          }
-        }
-
-        acumuladoStockProyectos += Number(pData.stockActivo !== undefined ? pData.stockActivo : (pData.stockCoste !== undefined ? pData.stockCoste : 0));
-        acumuladoGananciaProyectos += Number(pData.beneficioNeto || 0);
-      }
-
-      const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
-      const docSnap = await getDoc(docRef);
-      const data = docSnap.exists() ? docSnap.data() : {};
-
-      const bInvertido = data.bolsaInvertido !== undefined ? Number(data.bolsaInvertido) : 200.00;
-      const bGanancias = data.bolsaGanancias !== undefined ? Number(data.bolsaGanancias) : 65.05;
-      const baseLiquidez = data.disponibleGlobal !== undefined ? Number(data.disponibleGlobal) : Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
-
-      let liqActual = baseLiquidez + saldoLiquidoAFavor;
-      if (liqActual < 0) liqActual = 0;
-
-      const beneficioNetoGlobal = bGanancias + acumuladoGananciaProyectos; 
-      const capitalDesembolsadoReal = bInvertido + acumuladoStockProyectos; 
-      const roiGlobalCalculado = capitalDesembolsadoReal > 0 ? (beneficioNetoGlobal / capitalDesembolsadoReal) * 100 : 0;
-
-      setDisponibleGlobal(liqActual);
-      setBolsaInvertido(bInvertido);
-      setBolsaGanancias(bGanancias);
-      setProyectoInvertido(acumuladoStockProyectos);
-      setProyectoGanado(acumuladoGananciaProyectos);
-
-      await setDoc(docRef, {
-        disponibleGlobal: liqActual,
-        proyectoInvertido: acumuladoStockProyectos,
-        proyectoGanado: acumuladoGananciaProyectos,
-        rentabilidadAbsoluta: beneficioNetoGlobal,
-        rentabilidadPorcentaje: roiGlobalCalculado
-      }, { merge: true });
-
-      const refreshSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
-      const freshList: any[] = refreshSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      freshList.sort((a, b) => new Date(b.dateString || b.date || 0).getTime() - new Date(a.dateString || a.date || 0).getTime());
-      setMovimientos(freshList);
-
-      localStorage.setItem('aio_total_invertido_diadia_v2', liqActual.toString());
-
-    } catch (e) {
-      console.error("Error en reconciliación automática de base de datos:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // 🚀 RESTAURADA: Función para pulgar la base de datos de basuras a 0.00€
   const handleLimpiarBasura = async () => {
     const user = auth.currentUser;
     if (!user) return;
-
     try {
       setLoading(true);
       const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
-      
       for (const d of transSnap.docs) {
         const tx = d.data();
-        const label = String(tx.label || '');
-        const amount = Number(tx.amount || 0);
-
-        if (amount === 0 || label.includes('Recalibración exitosa')) {
+        if (Number(tx.amount || 0) === 0 || String(tx.label || '').includes('Recalibración exitosa')) {
           await deleteDoc(d.ref);
         }
       }
-      
       localStorage.setItem('aio_inversion_movimientos_v2', JSON.stringify([]));
-      await handleRecalcularTodo();
-    } catch (e) {
-      console.error("Error ejecutando la purga de base de datos:", e);
-    } finally {
+      await cargarSaldos();
+    } catch (e) {} finally {
       setLoading(false);
     }
   };
@@ -483,9 +426,9 @@ export const useInvestment = () => {
       await syncGlobalBalance(disponibleGlobal + monto);
       const nInv = Math.max(0, bolsaInvertido - (costeOriginal || 0)); setBolsaInvertido(nInv);
       const nGan = bolsaGanancias + gananciaLimpia; setBolsaGanancias(nGan);
-      guardarEnFirebase({ nInv, bolsaGanancias: nGan });
+      guardarEnFirebase({ bolsaInvertido: nInv, bolsaGanancias: nGan });
     }
-    await handleRecalcularTodo();
+    await cargarSaldos();
   };
 
   const handleEjecutarProyecto = async (modo: 'comprar' | 'vender' | 'diadia' | 'balance', coste: number, venta?: number) => {
@@ -493,7 +436,7 @@ export const useInvestment = () => {
       await registrarMovimientoHistorial(-coste, 'Inversión en Proyectos');
       await syncGlobalBalance(Math.max(0, disponibleGlobal - coste));
     }
-    await handleRecalcularTodo();
+    await cargarSaldos();
   };
 
   const totalInvertidoCalculado = bolsaInvertido + proyectoInvertido;
@@ -503,6 +446,6 @@ export const useInvestment = () => {
     bolsaInvertido, bolsaGanancias, proyectoDisponible: 0, proyectoInvertido, proyectoGanado,
     handleTransferirGlobal, handleEjecutarBolsa, handleEjecutarProyecto, loading,
     movimientos, eliminarMovimiento, handleEditarYReenviar, handleGuardarOperacionProyecto, handleRecalcularTodo,
-    handleLimpiarBasura // <-- Vuelve a estar en su sitio sana y salva
+    handleLimpiarBasura
   };
 };

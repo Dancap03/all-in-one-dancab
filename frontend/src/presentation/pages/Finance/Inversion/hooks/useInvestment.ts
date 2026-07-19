@@ -16,66 +16,7 @@ export const useInvestment = () => {
 
   const [movimientos, setMovimientos] = useState<any[]>([]);
 
-  // 🚀 AUDITOR INVISIBLE: Compara Wallapop vs Historial y te devuelve el dinero que falta
-  const sincronizarFugasAutomatico = async (uid: string) => {
-    try {
-      // 1. ¿Cuánto dice Wallapop que has vendido en total?
-      const pDoc = await getDoc(doc(db, `users/${uid}/projects`, 'wallapop'));
-      if (!pDoc.exists()) return false;
-      
-      const pData = pDoc.data() as any;
-      const totalVentasProyecto = Number(pData.ventasTotales || pData.totalVentas || 0);
-
-      // 2. ¿Cuánto dinero de ventas hay realmente en tu historial global?
-      const txSnap = await getDocs(collection(db, `users/${uid}/investment_transactions`));
-      let ventasGlobalesRegistradas = 0;
-      
-      txSnap.forEach(d => {
-        const tx = d.data() as any;
-        const label = String(tx.label || '').toLowerCase();
-        const amt = Number(tx.amount || 0);
-        
-        // Sumamos todo lo que sea una venta de proyecto para compararlo
-        if (amt > 0 && (label.includes('venta de proyecto') || label.includes('venta de artí') || label.includes('venta de stock'))) {
-          ventasGlobalesRegistradas += amt;
-        }
-      });
-
-      // 3. Calculamos si el historial perdió operaciones (Ej: 157.50 - 95.00 = 62.50)
-      const diferencia = Math.round((totalVentasProyecto - ventasGlobalesRegistradas) * 100) / 100;
-
-      // Si falta dinero, el sistema lo crea y te lo inyecta solo
-      if (diferencia > 0) {
-        console.log(`Auditor: Faltan ${diferencia}€. Inyectando en la base de datos...`);
-        
-        // A) Creamos la transacción visible en tu historial
-        const newTxId = `mov-rescate-${Date.now()}`;
-        await setDoc(doc(db, `users/${uid}/investment_transactions`, newTxId), {
-          id: newTxId,
-          amount: diferencia,
-          label: 'Venta de proyecto completada', // El mismo nombre que tus otras ventas
-          type: 'venta',
-          dateString: new Date().toISOString().split('T')[0],
-          date: Timestamp.now(),
-          createdAt: Timestamp.now()
-        });
-
-        // B) Sumamos los euros reales a tu Saldo Disponible
-        const balRef = doc(db, `users/${uid}/investment_balances`, 'data');
-        const balSnap = await getDoc(balRef);
-        const balData = balSnap.data() as any;
-        const liqActual = Number(balData?.disponibleGlobal || 0);
-        
-        await setDoc(balRef, { disponibleGlobal: liqActual + diferencia }, { merge: true });
-        
-        return true; // Se realizó una inyección
-      }
-    } catch(e) {
-      console.error("Fallo en el auditor automático:", e);
-    }
-    return false;
-  };
-
+  // 🚀 AUDITOR INVENCIBLE: Cruza los totales de Wallapop con el Historial para detectar y rellenar fugas
   const cargarSaldos = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) return;
@@ -83,54 +24,121 @@ export const useInvestment = () => {
     try {
       setLoading(true);
 
-      // 🚀 Ejecutamos el auditor antes de cargar nada para que rescate tus 62,50€ si faltan
-      await sincronizarFugasAutomatico(user.uid);
-
-      // --- A PARTIR DE AQUÍ CARGA LOS DATOS YA CORREGIDOS ---
+      // 1. Obtener Liquidez y Configuración Base
       const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
       const docSnap = await getDoc(docRef);
-      const data = docSnap.exists() ? docSnap.data() as any : {};
+      let liquidoActual = docSnap.exists() && docSnap.data().disponibleGlobal !== undefined 
+            ? Number(docSnap.data().disponibleGlobal) 
+            : Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
 
+      // 2. Cargar todas las transacciones globales que el sistema "conoce"
+      const txSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
+      const globalTxs: any[] = txSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+
+      // 3. Obtener la verdad absoluta: El documento maestro de Wallapop
       const wallapopSnap = await getDoc(doc(db, `users/${user.uid}/projects`, 'wallapop'));
       let stockWallapop = 0; 
       let beneficioWallapop = 0;
+      let requiereInyeccion = false;
 
       if (wallapopSnap.exists()) {
         const wData = wallapopSnap.data() as any;
         stockWallapop = Number(wData.stockActivo !== undefined ? wData.stockActivo : (wData.stockCoste || 0));
         beneficioWallapop = Number(wData.beneficioNeto || 0);
+
+        const ventasRealesWallapop = Number(wData.ventasTotales || wData.totalVentas || 0);
+        const comprasRealesWallapop = Math.abs(Number(wData.comprasTotales || wData.totalCompras || 0));
+
+        let ventasEnHistorial = 0;
+        let comprasEnHistorial = 0;
+
+        // Sumamos cuánto dinero hay apuntado en el historial global relacionado con proyectos
+        globalTxs.forEach(tx => {
+          const amt = Number(tx.amount || 0);
+          const label = String(tx.label || '').toLowerCase();
+          const isProject = tx.projectId === 'wallapop' || 
+                            label.includes('proyecto') || 
+                            label.includes('stock') || 
+                            label.includes('artículo');
+
+          if (isProject) {
+            if (amt > 0) ventasEnHistorial += amt;
+            if (amt < 0) comprasEnHistorial += Math.abs(amt);
+          }
+        });
+
+        // 🚨 RESCATE DE VENTAS PERDIDAS (Ej: 157.50 - 95.00 = 62.50)
+        const dineroPerdidoVentas = Math.round((ventasRealesWallapop - ventasEnHistorial) * 100) / 100;
+        if (dineroPerdidoVentas > 0) {
+          const newId = `rescate-venta-${Date.now()}`;
+          const newTx = {
+            id: newId,
+            amount: dineroPerdidoVentas,
+            label: 'Venta de proyecto completada', // Nombre idéntico al de tus capturas
+            type: 'venta',
+            projectId: 'wallapop',
+            dateString: new Date().toISOString().split('T')[0],
+            createdAt: Timestamp.now(),
+            date: Timestamp.now()
+          };
+          await setDoc(doc(db, `users/${user.uid}/investment_transactions`, newId), newTx);
+          globalTxs.push(newTx);
+          liquidoActual += dineroPerdidoVentas; // SUMAMOS LOS 62,50 A TU BOLSILLO
+          requiereInyeccion = true;
+        }
+
+        // 🚨 RESCATE DE COMPRAS PERDIDAS
+        const dineroPerdidoCompras = Math.round((comprasRealesWallapop - comprasEnHistorial) * 100) / 100;
+        if (dineroPerdidoCompras > 0) {
+          const newId = `rescate-compra-${Date.now()}`;
+          const newTx = {
+            id: newId,
+            amount: -dineroPerdidoCompras,
+            label: 'Inversión en Proyectos', 
+            type: 'compra',
+            projectId: 'wallapop',
+            dateString: new Date().toISOString().split('T')[0],
+            createdAt: Timestamp.now(),
+            date: Timestamp.now()
+          };
+          await setDoc(doc(db, `users/${user.uid}/investment_transactions`, newId), newTx);
+          globalTxs.push(newTx);
+          liquidoActual -= dineroPerdidoCompras;
+          requiereInyeccion = true;
+        }
       }
 
-      let saldoLiquidoReal = data.disponibleGlobal !== undefined ? Number(data.disponibleGlobal) : Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
+      // 4. Si hubo inyecciones, actualizamos saldos y ordenamos historial
+      liquidoActual = Math.max(0, liquidoActual);
 
-      const transSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
-      const firebaseTxs: any[] = transSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      
-      firebaseTxs.sort((a, b) => new Date(b.dateString || b.date || 0).getTime() - new Date(a.dateString || a.date || 0).getTime());
-      
-      setMovimientos(firebaseTxs);
-      setDisponibleGlobal(saldoLiquidoReal);
-      setBolsaInvertido(data.bolsaInvertido !== undefined ? data.bolsaInvertido : 200.00);
-      setBolsaGanancias(data.bolsaGanancias !== undefined ? data.bolsaGanancias : 65.05);
-      setProyectoInvertido(stockWallapop);
-      setProyectoGanado(beneficioWallapop);
+      const bInvertido = docSnap.exists() && docSnap.data().bolsaInvertido !== undefined ? Number(docSnap.data().bolsaInvertido) : 200.00;
+      const bGanancias = docSnap.exists() && docSnap.data().bolsaGanancias !== undefined ? Number(docSnap.data().bolsaGanancias) : 65.05;
 
-      const beneficioNetoGlobal = (data.bolsaGanancias || 65.05) + beneficioWallapop; 
-      const capitalDesembolsadoReal = (data.bolsaInvertido || 200.00) + stockWallapop; 
+      const beneficioNetoGlobal = bGanancias + beneficioWallapop; 
+      const capitalDesembolsadoReal = bInvertido + stockWallapop; 
       const roiGlobalCalculado = capitalDesembolsadoReal > 0 ? (beneficioNetoGlobal / capitalDesembolsadoReal) * 100 : 0;
 
       await setDoc(docRef, {
-        disponibleGlobal: saldoLiquidoReal,
+        disponibleGlobal: liquidoActual,
         proyectoInvertido: stockWallapop,
         proyectoGanado: beneficioWallapop,
         rentabilidadAbsoluta: beneficioNetoGlobal,
         rentabilidadPorcentaje: roiGlobalCalculado
       }, { merge: true });
 
-      localStorage.setItem('aio_total_invertido_diadia_v2', saldoLiquidoReal.toString());
+      setDisponibleGlobal(liquidoActual);
+      setBolsaInvertido(bInvertido);
+      setBolsaGanancias(bGanancias);
+      setProyectoInvertido(stockWallapop);
+      setProyectoGanado(beneficioWallapop);
+
+      globalTxs.sort((a, b) => new Date(b.dateString || b.date || 0).getTime() - new Date(a.dateString || a.date || 0).getTime());
+      setMovimientos(globalTxs);
+      
+      localStorage.setItem('aio_total_invertido_diadia_v2', liquidoActual.toString());
 
     } catch (error) {
-      console.error("Error cargando datos estructurales:", error);
+      console.error("Error crítico en el Auditor de saldos:", error);
     } finally {
       setLoading(false);
     }
@@ -336,7 +344,7 @@ export const useInvestment = () => {
       const nuevoMovimiento = {
         id: idOperacion,
         amount: tipo === 'compra' ? -exactAmount : exactAmount,
-        label: tipo === 'compra' ? `Compra De Stock: ${label}` : `Venta de proyecto completada`, // Nombre estandarizado
+        label: tipo === 'compra' ? `Compra De Stock: ${label}` : `Venta De Artículo: ${label}`,
         type: tipo,
         costeOriginal: tipo === 'venta' ? exactCoste : 0,
         projectId: projectId,

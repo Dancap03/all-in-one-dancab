@@ -32,7 +32,7 @@ export const useInvestment = () => {
       let saldoLiquidoReal = data.disponibleGlobal !== undefined ? Number(data.disponibleGlobal) : Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
       let saldoModificado = false;
 
-      // 1. MAPEO DEL HISTORIAL GLOBAL (Para saber qué tenemos y qué nos falta)
+      // 1. MAPEO DEL HISTORIAL GLOBAL
       const globalTxRef = collection(db, `users/${user.uid}/investment_transactions`);
       const globalSnap = await getDocs(globalTxRef);
       const globalIds = new Set(globalSnap.docs.map(d => d.id));
@@ -46,7 +46,7 @@ export const useInvestment = () => {
       let acumuladoGanancia = 0;
 
       for (const pid of projectIds) {
-        // Obtenemos saldos oficiales del proyecto (Ej: Stock = 0, Beneficio = +23.69)
+        // Obtenemos saldos oficiales del proyecto
         const pDoc = await getDoc(doc(db, `users/${user.uid}/projects`, pid));
         if (pDoc.exists()) {
            const pd = pDoc.data();
@@ -54,7 +54,7 @@ export const useInvestment = () => {
            acumuladoGanancia += Number(pd.beneficioNeto || 0);
         }
 
-        // Rastrear operaciones huérfanas en las dos subcolecciones posibles
+        // Rastrear operaciones huérfanas en las dos subcolecciones
         const paths = [`transactions`, `operations`];
         for (const sub of paths) {
           try {
@@ -95,7 +95,7 @@ export const useInvestment = () => {
         }
       }
 
-      // Si el escáner ha encontrado algo y sumado el dinero, lo guardamos para siempre
+      // Si el escáner ha encontrado algo y sumado el dinero, lo guardamos
       if (saldoModificado) {
         saldoLiquidoReal = Math.max(0, saldoLiquidoReal);
         await setDoc(docRef, { disponibleGlobal: saldoLiquidoReal }, { merge: true });
@@ -104,7 +104,10 @@ export const useInvestment = () => {
 
       // 3. RECARGAMOS LOS MOVIMIENTOS DEFINITIVOS PARA MOSTRARLOS
       const finalSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
-      const firebaseTxs = finalSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      // 🛠️ AQUÍ ESTÁ LA CORRECCIÓN: Añadido ': any[]'
+      const firebaseTxs: any[] = finalSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
       firebaseTxs.sort((a, b) => new Date(b.dateString || b.date || 0).getTime() - new Date(a.dateString || a.date || 0).getTime());
       setMovimientos(firebaseTxs);
 
@@ -117,7 +120,7 @@ export const useInvestment = () => {
       setProyectoInvertido(acumuladoStock);
       setProyectoGanado(acumuladoGanancia);
 
-      // Rentabilidad real e invulnerable
+      // Rentabilidad real
       const bNeto = bGanancias + acumuladoGanancia;
       const capReal = bInvertido + acumuladoStock;
       const roi = capReal > 0 ? (bNeto / capReal) * 100 : 0;
@@ -374,7 +377,6 @@ export const useInvestment = () => {
         createdAt: Timestamp.now()
       };
 
-      // 🛠️ ¡CORREGIDO! Ahora sí o sí la operación queda guardada en el historial general a la vez que en el proyecto
       await setDoc(doc(db, `users/${user.uid}/investment_transactions`, idOperacion), nuevoMovimiento);
       await setDoc(doc(db, `users/${user.uid}/projects/${projectId}/transactions`, idOperacion), nuevoMovimiento, { merge: true });
 

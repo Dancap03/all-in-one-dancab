@@ -280,7 +280,7 @@ export const useInvestment = () => {
     }
   };
 
-  // 🚀 RASTREADOR OMNIPRESENTE: Escanea TODAS las carpetas buscando tu dinero perdido
+  // 🚀 RASTREADOR OMNIPRESENTE
   const handleRecalcularTodo = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) return;
@@ -288,9 +288,10 @@ export const useInvestment = () => {
     try {
       setLoading(true);
 
-      // Mapa de lo que ya tenemos en global
       const globalTxSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
-      const globalTxs = globalTxSnap.docs.map(d => ({id: d.id, ...d.data()}));
+      
+      // 🛠️ ¡CORREGIDO! Aquí está el any[] para que TS no llore por las fechas
+      const globalTxs: any[] = globalTxSnap.docs.map(d => ({id: d.id, ...d.data()}));
       const globalIds = new Set(globalTxs.map(t => t.id));
 
       const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
@@ -302,7 +303,7 @@ export const useInvestment = () => {
       const projCol = await getDocs(collection(db, `users/${user.uid}/projects`));
       let acumuladoStock = 0;
       let acumuladoGanancia = 0;
-      let dineroRescatado = 0; // Acumulador del dinero a devolver a tu saldo
+      let dineroRescatado = 0;
 
       for (const pDoc of projCol.docs) {
         const pid = pDoc.id;
@@ -311,7 +312,6 @@ export const useInvestment = () => {
         acumuladoStock += Number(pd.stockActivo !== undefined ? pd.stockActivo : (pd.stockCoste || 0));
         acumuladoGanancia += Number(pd.beneficioNeto || 0);
 
-        // 🚨 AQUÍ ESTABA LA FUGA: Escaneamos las DOS carpetas donde Wallapop pudo guardar la venta
         const carpetas = ['operations', 'transactions'];
         
         for (const carpeta of carpetas) {
@@ -320,7 +320,6 @@ export const useInvestment = () => {
             for (const sDoc of subSnap.docs) {
               
               if (!globalIds.has(sDoc.id)) {
-                // ¡ALERTA! Transacción fantasma encontrada (Tus 62,50€)
                 const sData = sDoc.data();
                 const amt = Math.abs(Number(sData.amount || 0));
                 const isVenta = String(sData.type) === 'venta' || String(sData.label).toLowerCase().includes('venta') || Number(sData.amount) > 0;
@@ -333,12 +332,10 @@ export const useInvestment = () => {
                   dateString: sData.dateString || new Date().toISOString().split('T')[0]
                 };
                 
-                // La resucitamos y la guardamos en el historial principal
                 await setDoc(doc(db, `users/${user.uid}/investment_transactions`, sDoc.id), rescuedTx);
                 globalTxs.push(rescuedTx);
-                globalIds.add(sDoc.id); // Evita duplicarla si estuviera en ambas carpetas
+                globalIds.add(sDoc.id);
 
-                // Y LO MÁS IMPORTANTE: Le sumamos esos euros exactos a tu saldo disponible
                 if (isVenta) {
                   dineroRescatado += amt;
                 } else {
@@ -346,11 +343,10 @@ export const useInvestment = () => {
                 }
               }
             }
-          } catch (e) {} // Ignorar si la subcarpeta no existe
+          } catch (e) {} 
         }
       }
 
-      // Sumamos la recompensa encontrada a tu líquido actual
       liquidoActual += dineroRescatado;
       liquidoActual = Math.max(0, liquidoActual);
       
@@ -361,7 +357,6 @@ export const useInvestment = () => {
       const capitalDesembolsadoReal = bInvertido + acumuladoStock; 
       const roiGlobalCalculado = capitalDesembolsadoReal > 0 ? (beneficioNetoGlobal / capitalDesembolsadoReal) * 100 : 0;
 
-      // Salvamos los balances limpios
       await setDoc(docRef, {
         disponibleGlobal: liquidoActual,
         proyectoInvertido: acumuladoStock,

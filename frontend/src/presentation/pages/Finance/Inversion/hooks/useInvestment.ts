@@ -16,7 +16,7 @@ export const useInvestment = () => {
 
   const [movimientos, setMovimientos] = useState<any[]>([]);
 
-  // 🚀 LA SOLUCIÓN SENCILLA: Juntar los historiales al vuelo y corregir el saldo
+  // 🚀 LA SOLUCIÓN SENCILLA: Resta matemática directa entre Wallapop y el Historial
   const cargarSaldos = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) return;
@@ -24,88 +24,105 @@ export const useInvestment = () => {
     try {
       setLoading(true);
 
-      // 1. Obtener balance maestro actual
+      // 1. Obtener todas las transacciones globales que el sistema "conoce"
+      const globalTxSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
+      const globalTxs: any[] = globalTxSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+
+      // 2. Obtener tu saldo líquido base actual
       const docRef = doc(db, `users/${user.uid}/investment_balances`, 'data');
       const docSnap = await getDoc(docRef);
-      const data = docSnap.exists() ? docSnap.data() : {};
-      let liquidoActual = data.disponibleGlobal !== undefined ? Number(data.disponibleGlobal) : Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
+      let liquidoActual = docSnap.exists() && docSnap.data().disponibleGlobal !== undefined 
+            ? Number(docSnap.data().disponibleGlobal) 
+            : Number(localStorage.getItem('aio_total_invertido_diadia_v2') || 0);
 
-      // 2. Obtener TODAS las transacciones globales
-      const globalTxSnap = await getDocs(collection(db, `users/${user.uid}/investment_transactions`));
-      const globalTxs: any[] = globalTxSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const globalIds = new Set(globalTxs.map(t => t.id));
-
-      // 3. JUNTAR EL HISTORIAL: Obtener TODAS las transacciones internas de Wallapop
-      const projectTxs: any[] = [];
-      try {
-        const txs1 = await getDocs(collection(db, `users/${user.uid}/projects/wallapop/transactions`));
-        txs1.forEach(d => projectTxs.push({ id: d.id, ...d.data() }));
-        const txs2 = await getDocs(collection(db, `users/${user.uid}/projects/wallapop/operations`));
-        txs2.forEach(d => projectTxs.push({ id: d.id, ...d.data() }));
-      } catch (e) {}
-
-      let dineroFaltanteLiquidez = 0;
-      let historialUnificado = [...globalTxs];
-
-      // 4. Cruzar datos de forma inteligente (Comprobando IDs y también importes exactos)
-      projectTxs.forEach(pTx => {
-        const amt = Math.abs(Number(pTx.amount || 0));
-        
-        // Primero miramos si ya está en el historial global por ID
-        let yaExiste = globalIds.has(pTx.id);
-
-        // Si el código antiguo le puso un ID diferente, lo buscamos por el importe (Ej: evita duplicar los 85.00€)
-        if (!yaExiste) {
-          yaExiste = globalTxs.some(gTx => {
-            const isProjectGlobal = gTx.projectId === 'wallapop' || String(gTx.label).toLowerCase().includes('proyecto');
-            return Math.abs(Number(gTx.amount || 0)) === amt && isProjectGlobal;
-          });
-        }
-
-        // Si definitivamente no está en el historial... ¡Encontramos los 62,50€!
-        if (!yaExiste) {
-          historialUnificado.push(pTx);
-          globalIds.add(pTx.id); // Evita procesarlo dos veces si estaba duplicado en subcarpetas
-
-          const isVenta = String(pTx.type) === 'venta' || String(pTx.label).toLowerCase().includes('venta') || Number(pTx.amount) > 0;
-          
-          if (isVenta) {
-            dineroFaltanteLiquidez += amt; // SUMAMOS A TU BOLSILLO
-          } else {
-            dineroFaltanteLiquidez -= amt;
-          }
-
-          // Lo re-guardamos en la base de datos global para curarlo para siempre
-          setDoc(doc(db, `users/${user.uid}/investment_transactions`, pTx.id), pTx).catch(()=>{});
-        }
-      });
-
-      // 5. Aplicar la corrección de dinero (Ej: 18.46 + 62.50 = 80.96)
-      if (dineroFaltanteLiquidez !== 0) {
-        liquidoActual += dineroFaltanteLiquidez;
-        liquidoActual = Math.max(0, liquidoActual);
-        await setDoc(docRef, { disponibleGlobal: liquidoActual }, { merge: true });
-        localStorage.setItem('aio_total_invertido_diadia_v2', liquidoActual.toString());
-      }
-
-      // 6. Obtener métricas de Wallapop
+      // 3. Cargar Wallapop para obtener los importes exactos
       const wallapopSnap = await getDoc(doc(db, `users/${user.uid}/projects`, 'wallapop'));
       let stockWallapop = 0; 
       let beneficioWallapop = 0;
+
       if (wallapopSnap.exists()) {
         const wData = wallapopSnap.data() as any;
         stockWallapop = Number(wData.stockActivo !== undefined ? wData.stockActivo : (wData.stockCoste || 0));
         beneficioWallapop = Number(wData.beneficioNeto || 0);
+
+        // Sacamos los números oficiales que marcan tus tarjetas (Ej: 157.50€ de ventas)
+        const ventasRealesWallapop = Number(wData.ventasTotales || wData.totalVentas || 0);
+        const comprasRealesWallapop = Math.abs(Number(wData.comprasTotales || wData.totalCompras || 0));
+
+        let ventasEnHistorial = 0;
+        let comprasEnHistorial = 0;
+
+        // Sumamos cuánto dinero hay apuntado actualmente en el historial global
+        globalTxs.forEach(tx => {
+          const amt = Number(tx.amount || 0);
+          const label = String(tx.label || '').toLowerCase();
+          const isProject = tx.projectId === 'wallapop' || 
+                            label.includes('proyecto') || 
+                            label.includes('stock') || 
+                            label.includes('artículo');
+
+          if (isProject) {
+            if (amt > 0) ventasEnHistorial += amt;
+            if (amt < 0) comprasEnHistorial += Math.abs(amt);
+          }
+        });
+
+        // 🚨 EL AUDITOR: Si Historial (95.00) no cuadra con Wallapop (157.50), calculamos la diferencia (62.50)
+        const dineroPerdidoVentas = Math.round((ventasRealesWallapop - ventasEnHistorial) * 100) / 100;
+        if (dineroPerdidoVentas > 0) {
+          const newId = `rescate-venta-${Date.now()}`;
+          const newTx = {
+            id: newId,
+            amount: dineroPerdidoVentas,
+            label: 'Venta de proyecto completada', 
+            type: 'venta',
+            projectId: 'wallapop',
+            dateString: new Date().toISOString().split('T')[0],
+            createdAt: Timestamp.now(),
+            date: Timestamp.now()
+          };
+          
+          // Lo añadimos al historial general automáticamente
+          await setDoc(doc(db, `users/${user.uid}/investment_transactions`, newId), newTx);
+          globalTxs.push(newTx);
+          
+          // SUMAMOS LOS 62,50€ DIRECTAMENTE A TU BOLSILLO DISPONIBLE
+          liquidoActual += dineroPerdidoVentas;
+        }
+
+        const dineroPerdidoCompras = Math.round((comprasRealesWallapop - comprasEnHistorial) * 100) / 100;
+        if (dineroPerdidoCompras > 0) {
+          const newId = `rescate-compra-${Date.now()}`;
+          const newTx = {
+            id: newId,
+            amount: -dineroPerdidoCompras,
+            label: 'Inversión en Proyectos', 
+            type: 'compra',
+            projectId: 'wallapop',
+            dateString: new Date().toISOString().split('T')[0],
+            createdAt: Timestamp.now(),
+            date: Timestamp.now()
+          };
+          await setDoc(doc(db, `users/${user.uid}/investment_transactions`, newId), newTx);
+          globalTxs.push(newTx);
+          liquidoActual -= dineroPerdidoCompras;
+        }
       }
 
-      const bInvertido = data.bolsaInvertido !== undefined ? Number(data.bolsaInvertido) : 200.00;
-      const bGanancias = data.bolsaGanancias !== undefined ? Number(data.bolsaGanancias) : 65.05;
+      // Aseguramos que no queden saldos negativos por fallos
+      liquidoActual = Math.max(0, liquidoActual);
+
+      // Cargar Bolsa
+      const bInvertido = docSnap.exists() && docSnap.data().bolsaInvertido !== undefined ? Number(docSnap.data().bolsaInvertido) : 200.00;
+      const bGanancias = docSnap.exists() && docSnap.data().bolsaGanancias !== undefined ? Number(docSnap.data().bolsaGanancias) : 65.05;
 
       const beneficioNetoGlobal = bGanancias + beneficioWallapop; 
       const capitalDesembolsadoReal = bInvertido + stockWallapop; 
       const roiGlobalCalculado = capitalDesembolsadoReal > 0 ? (beneficioNetoGlobal / capitalDesembolsadoReal) * 100 : 0;
 
+      // Guardamos la liquidez corregida (80.96€)
       await setDoc(docRef, {
+        disponibleGlobal: liquidoActual,
         proyectoInvertido: stockWallapop,
         proyectoGanado: beneficioWallapop,
         rentabilidadAbsoluta: beneficioNetoGlobal,
@@ -118,12 +135,14 @@ export const useInvestment = () => {
       setProyectoInvertido(stockWallapop);
       setProyectoGanado(beneficioWallapop);
 
-      // Ordenar y mostrar el historial unificado
-      historialUnificado.sort((a, b) => new Date(b.dateString || b.date || 0).getTime() - new Date(a.dateString || a.date || 0).getTime());
-      setMovimientos(historialUnificado);
+      // Ordenamos las transacciones sin errores de TypeScript
+      globalTxs.sort((a, b) => new Date(b.dateString || b.date || 0).getTime() - new Date(a.dateString || a.date || 0).getTime());
+      setMovimientos(globalTxs);
+      
+      localStorage.setItem('aio_total_invertido_diadia_v2', liquidoActual.toString());
 
     } catch (error) {
-      console.error("Error en sincronización:", error);
+      console.error("Error en sincronización matemática:", error);
     } finally {
       setLoading(false);
     }
